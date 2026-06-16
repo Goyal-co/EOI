@@ -38,8 +38,12 @@
   --radius-xl: 16px;
 }
 
+:root {
+  --font-inter: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 body {
-  font-family: var(--font-inter), 'Inter', -apple-system, sans-serif;
+  font-family: var(--font-inter);
   color: var(--color-foreground);
   background: var(--color-background);
   -webkit-font-smoothing: antialiased;

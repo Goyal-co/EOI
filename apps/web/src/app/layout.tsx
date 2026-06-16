@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+function getMetadataBase(): URL {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!raw) return new URL("http://localhost:3000");
+  try {
+    return new URL(raw);
+  } catch {
+    return new URL(`https://${raw}`);
+  }
+}
 
 export const metadata: Metadata = {
-  metadataBase: new URL(appUrl),
+  metadataBase: getMetadataBase(),
   title: {
     default: "Goyal Projects — EOI Platform",
     template: "%s | Goyal Projects",
@@ -21,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Goyal Projects — EOI Platform",
     description: "Luxury real estate Expression of Interest management platform",
-    url: appUrl,
+    url: getMetadataBase().toString(),
     siteName: "Goyal Projects",
     images: [{ url: "/og-image.svg", width: 1200, height: 630, alt: "Goyal Projects" }],
     locale: "en_IN",
@@ -33,7 +38,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased`}>
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>
