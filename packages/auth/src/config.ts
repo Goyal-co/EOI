@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma, isUniqueConstraintError } from "@goyal/db";
 import type { UserRole } from "@goyal/types";
 import { normalizeEmail } from "@goyal/types";
+import { authConfig } from "./auth.config";
 
 declare module "next-auth" {
   interface Session {
@@ -35,6 +36,7 @@ const googleConfigured = Boolean(
 );
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     ...(googleConfigured
       ? [
@@ -256,12 +258,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-  pages: {
-    signIn: "/login",
-    error: "/auth/error",
-  },
-  session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
-  trustHost: true,
 });
 
 export const isGoogleAuthConfigured = () => googleConfigured;

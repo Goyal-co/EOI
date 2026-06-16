@@ -1,6 +1,6 @@
-import { auth } from "@goyal/auth";
+import { auth } from "@goyal/auth/edge";
 import { NextResponse } from "next/server";
-import { canAccessRoute, isPublicRoute, getPortalForRole } from "@goyal/auth";
+import { canAccessRoute, isPublicRoute, getPortalForRole } from "@goyal/auth/rbac";
 import type { UserRole } from "@goyal/types";
 
 export default auth((req) => {
