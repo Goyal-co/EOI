@@ -1,0 +1,31 @@
+{
+  "name": "goyal-eoi-platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "build:web": "npm run db:generate && npm run build --workspace=@goyal/web",
+    "start:web": "npm run start:standalone --workspace=@goyal/web",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "postinstall": "npm run db:generate",
+    "db:generate": "turbo db:generate",
+    "db:migrate:deploy": "npm run db:migrate:deploy --workspace=@goyal/db",
+    "db:push": "turbo db:push",
+    "db:seed": "turbo db:seed",
+    "db:studio": "cd packages/db && npx prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

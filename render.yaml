@@ -1,0 +1,84 @@
+# Render Blueprint — Goyal EOI Platform
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After first deploy, set secret env vars in the Render dashboard:
+# AUTH_SECRET, PII_ENCRYPTION_KEY, BREVO_API_KEY, GOOGLE_CLIENT_ID/SECRET,
+# BLOB_READ_WRITE_TOKEN (Vercel Blob), REDIS_URL (Upstash), EMAIL_FROM, etc.
+#
+# See .env.cloud.example for recommended managed services.
+
+databases:
+  - name: goyal-eoi-db
+    plan: basic-256mb
+    databaseName: goyal_eoi
+    user: goyal
+    ipAllowList: []
+
+services:
+  # ── Web app (Node standalone) ──────────────────────────────────────────────
+  - type: web
+    name: goyal-eoi-web
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: .
+    buildCommand: >-
+      npm ci &&
+      npm run db:generate &&
+      npm run build --workspace=@goyal/web
+    preDeployCommand: npm run db:migrate:deploy
+    startCommand: npm run start:web
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: goyal-eoi-db
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: PII_ENCRYPTION_KEY
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: Goyal Projects
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false
+
+  # ── Hourly email retry cron ────────────────────────────────────────────────
+  - type: cron
+    name: goyal-eoi-email-retry
+    runtime: node
+    region: singapore
+    schedule: "0 * * * *"
+    buildCommand: "true"
+    startCommand: >-
+      node -e "fetch(process.env.NEXT_PUBLIC_APP_URL+'/api/cron/email-retry',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_SECRET}}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>console.log(JSON.stringify(d))).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - key: CRON_SECRET
+        fromService:
+          name: goyal-eoi-web
+          type: web
+          envVarKey: CRON_SECRET
+      - key: NEXT_PUBLIC_APP_URL
+        fromService:
+          name: goyal-eoi-web
+          type: web
+          envVarKey: NEXT_PUBLIC_APP_URL

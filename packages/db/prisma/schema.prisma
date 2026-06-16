@@ -1,0 +1,455 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CHANNEL_PARTNER
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum CPStatus {
+  PENDING
+  APPROVED
+  BLOCKED
+}
+
+enum ProjectEOIStatus {
+  OPEN
+  CLOSED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  UPCOMING
+}
+
+enum LeadStatus {
+  LEAD_REGISTERED
+  CUSTOMER_PENDING
+  EOI_SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum SiteVisitStatus {
+  NOT_SCHEDULED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum EOIStatus {
+  PENDING_SUBMISSION
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CORRECTION_REQUESTED
+  CLOSED
+}
+
+enum DocumentType {
+  CHEQUE
+  PAN
+  AADHAAR
+  RERA_CERT
+  VISITING_CARD
+  BROCHURE
+  COST_SHEET
+  FLOOR_PLAN
+  GALLERY
+  BANNER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ApprovalActionType {
+  APPROVE
+  REJECT
+  REQUEST_CORRECTION
+}
+
+enum NotificationType {
+  NEW_EOI_SUBMITTED
+  APPROVAL_PENDING
+  CP_REGISTERED
+  CORRECTION_REQUESTED
+  PROJECT_STATUS_UPDATED
+  EOI_APPROVED
+  EOI_REJECTED
+  EOI_INVITATION
+  CUSTOMER_SUBMITTED_EOI
+  CP_APPROVED
+  CUSTOMER_CONFIRMATION
+  CUSTOMER_REJECTED_CP
+}
+
+enum CustomerJourneyStatus {
+  ACTIVE
+  CONFIRMATION_PENDING
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CORRECTION_PENDING
+  LEAD_CONFIRMED
+}
+
+enum LeadIntent {
+  EOI
+  LEAD_ONLY
+}
+
+enum ConfirmationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  passwordHash  String?
+  googleId      String?    @unique
+  role          UserRole
+  status        UserStatus @default(ACTIVE)
+  name          String?
+  image         String?
+  preferences   Json?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  adminProfile  Admin?
+  cpProfile     ChannelPartner?
+  customerProfile Customer?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  approvalActions ApprovalAction[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([role])
+  @@index([email])
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model ChannelPartner {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String?
+  mobile        String?
+  reraNumber    String
+  panNumber     String?
+  gstNumber     String?
+  officeAddress String?
+  city          String?
+  status        CPStatus @default(PENDING)
+  blockReason   String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  leads         Lead[]
+  eois          EOI[]
+  projectAccess CPProjectAccess[]
+  documents     Document[]
+
+  @@index([status])
+  @@index([reraNumber])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String?
+  mobile    String?
+  panNumber String?
+  aadhaarEncrypted String?
+  dob       DateTime?
+  gender    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads     Lead[]
+  eois      EOI[]
+}
+
+model Project {
+  id             String           @id @default(cuid())
+  name           String
+  location       String
+  startingPrice  Decimal          @db.Decimal(15, 2)
+  possessionDate DateTime?
+  description    String?          @db.Text
+  amenities      String[]
+  faqs           Json?
+  eoiStatus      ProjectEOIStatus @default(OPEN)
+  status         ProjectStatus    @default(ACTIVE)
+  bannerUrl      String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  assets         ProjectAsset[]
+  leads          Lead[]
+  eois           EOI[]
+  cpAccess       CPProjectAccess[]
+  eoiRules       EOIRule[]
+
+  @@index([status])
+  @@index([eoiStatus])
+}
+
+model ProjectAsset {
+  id        String       @id @default(cuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      DocumentType
+  fileName  String
+  fileUrl   String
+  fileSize  Int?
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  @@index([projectId, type])
+}
+
+model CPProjectAccess {
+  id        String         @id @default(cuid())
+  cpId      String
+  cp        ChannelPartner @relation(fields: [cpId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([cpId, projectId])
+}
+
+model Lead {
+  id              String          @id @default(cuid())
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id])
+  cpId            String
+  cp              ChannelPartner  @relation(fields: [cpId], references: [id])
+  customerName    String
+  customerEmail   String
+  customerMobile  String
+  configuration   String?
+  budget          String?
+  city            String?
+  notes           String?         @db.Text
+  fosName         String?
+  siteVisitStatus SiteVisitStatus @default(NOT_SCHEDULED)
+  leadStatus      LeadStatus      @default(LEAD_REGISTERED)
+  journeyStatus   CustomerJourneyStatus @default(ACTIVE)
+  intentType      LeadIntent      @default(EOI)
+  confirmationStatus ConfirmationStatus?
+  confirmationSentAt DateTime?
+  confirmationRespondedAt DateTime?
+  inviteToken     String?         @unique
+  inviteExpiresAt DateTime?
+  invitedAt       DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  eoi             EOI?
+
+  @@index([cpId])
+  @@index([projectId])
+  @@index([leadStatus])
+  @@index([journeyStatus])
+  @@index([intentType])
+  @@index([inviteToken])
+  @@index([customerEmail, projectId, cpId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model EOI {
+  id                String    @id @default(cuid())
+  leadId            String    @unique
+  lead              Lead      @relation(fields: [leadId], references: [id])
+  customerId        String?
+  customer          Customer? @relation(fields: [customerId], references: [id])
+  projectId         String
+  project           Project   @relation(fields: [projectId], references: [id])
+  cpId              String
+  cp                ChannelPartner @relation(fields: [cpId], references: [id])
+  status            EOIStatus @default(PENDING_SUBMISSION)
+  referenceNumber   String?   @unique
+  confirmationNumber String?  @unique
+  chequeNumber      String?
+  chequeUploaded    Boolean   @default(false)
+  formData          Json?
+  adminRemarks      String?   @db.Text
+  rejectionReason   String?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  documents         Document[]
+  approvalActions   ApprovalAction[]
+
+  @@index([status])
+  @@index([cpId])
+  @@index([projectId])
+  @@index([customerId])
+}
+
+model Document {
+  id         String         @id @default(cuid())
+  eoiId      String?
+  eoi        EOI?           @relation(fields: [eoiId], references: [id], onDelete: Cascade)
+  cpId       String?
+  cp         ChannelPartner? @relation(fields: [cpId], references: [id])
+  type       DocumentType
+  fileName   String
+  fileUrl    String
+  fileSize   Int?
+  mimeType   String?
+  status     DocumentStatus @default(PENDING)
+  uploadedAt DateTime       @default(now())
+
+  @@index([eoiId, type])
+  @@index([cpId])
+}
+
+model ApprovalAction {
+  id        String             @id @default(cuid())
+  eoiId     String
+  eoi       EOI                @relation(fields: [eoiId], references: [id], onDelete: Cascade)
+  adminId   String
+  admin     User               @relation(fields: [adminId], references: [id])
+  action    ApprovalActionType
+  reason    String?
+  remarks   String?            @db.Text
+  createdAt DateTime           @default(now())
+
+  @@index([eoiId])
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  title      String
+  body       String           @db.Text
+  read       Boolean          @default(false)
+  entityType String?
+  entityId   String?
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  type      String   @unique
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EOIRule {
+  id               String  @id @default(cuid())
+  projectId        String
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  minBudget        Decimal? @db.Decimal(15, 2)
+  requiredDocuments String[]
+  autoApproveRules Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId])
+}
+
+model EmailLog {
+  id         String              @id @default(cuid())
+  to         String
+  subject    String
+  type       String?
+  status     EmailDeliveryStatus @default(PENDING)
+  providerId String?
+  error      String?             @db.Text
+  retryCount Int                 @default(0)
+  entityType String?
+  entityId   String?
+  html       String?             @db.Text
+  createdAt  DateTime            @default(now())
+  sentAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([entityType, entityId])
+}
+
+model SystemSettings {
+  id            String   @id @default("default")
+  profile       Json?
+  notifications Json?
+  eoiRules      Json?
+  permissions   Json?
+  updatedAt     DateTime @updatedAt
+}

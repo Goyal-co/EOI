@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+/* Scan shared UI package so Tailwind generates classes used in @goyal/ui components */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+@theme {
+  /* Brand colors */
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-foreground: #1A2332;
+  --color-navy: #1A2332;
+  --color-navy-light: #2D3A4F;
+  --color-muted: #64748B;
+  --color-muted-foreground: #64748B;
+  --color-gold: #C9A84C;
+  --color-gold-hover: #B8943F;
+  --color-gold-light: #F5EDD6;
+  --color-blue-50: #F5F8FF;
+  --color-blue-100: #E8F0FE;
+  --color-blue-200: #D0E2FC;
+  --color-blue-500: #3B82F6;
+  --color-blue-600: #2563EB;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-border: #E2E8F0;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(26, 35, 50, 0.08);
+  --shadow-card-hover: 0 8px 32px rgba(26, 35, 50, 0.12);
+  --shadow-navbar: 0 1px 3px rgba(26, 35, 50, 0.06);
+  --shadow-modal: 0 20px 60px rgba(26, 35, 50, 0.15);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+body {
+  font-family: var(--font-inter), 'Inter', -apple-system, sans-serif;
+  color: var(--color-foreground);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* Typography scale */
+@utility text-page-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  letter-spacing: -0.025em;
+}
+
+@utility text-section-title {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+@utility text-caption {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-muted-foreground);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-from-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.slide-in-from-right { animation: slide-in-from-right 0.3s ease-out; }
+.slide-in-from-left { animation: slide-in-from-left 0.3s ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoom-in-95 {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes zoom-out-95 {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+.animate-in { animation-fill-mode: both; }
+.fade-in { animation: fade-in 0.2s ease-out; }
+.fade-out { animation: fade-out 0.2s ease-out; }
+
+[data-state="open"].animate-in.fade-in,
+[data-state="open"].data-\[state\=open\]\:fade-in-0 {
+  animation: fade-in 0.2s ease-out;
+}
+
+[data-state="closed"].animate-out.fade-out,
+[data-state="closed"].data-\[state\=closed\]\:fade-out-0 {
+  animation: fade-out 0.2s ease-out;
+}
+
+[data-state="open"].data-\[state\=open\]\:zoom-in-95 {
+  animation: zoom-in-95 0.2s ease-out;
+}
+
+[data-state="closed"].data-\[state\=closed\]\:zoom-out-95 {
+  animation: zoom-out-95 0.2s ease-out;
+}
