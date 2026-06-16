@@ -37,6 +37,10 @@ services:
         fromDatabase:
           name: goyal-eoi-db
           property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: goyal-eoi-db
+          property: connectionString
       - key: AUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL
