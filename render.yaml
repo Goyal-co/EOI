@@ -62,12 +62,12 @@ services:
       - key: BLOB_READ_WRITE_TOKEN
         sync: false
 
-  # ── Hourly email retry cron ────────────────────────────────────────────────
+  # ── Daily email retry cron (midnight UTC) ───────────────────────────────────
   - type: cron
     name: goyal-eoi-email-retry
     runtime: node
     region: singapore
-    schedule: "0 * * * *"
+    schedule: "0 0 * * *"
     buildCommand: "true"
     startCommand: >-
       node -e "fetch(process.env.NEXT_PUBLIC_APP_URL+'/api/cron/email-retry',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_SECRET}}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>console.log(JSON.stringify(d))).catch(e=>{console.error(e);process.exit(1)})"
