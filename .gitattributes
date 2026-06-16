@@ -1,0 +1,2 @@
+# Prisma migration SQL must be UTF-8 (not UTF-16). UTF-16 causes "embedded null" on Neon.
+packages/db/prisma/migrations/**/*.sql text eol=lf
