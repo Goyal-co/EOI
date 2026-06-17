@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     await sendEmailWithLog({
       to: parsed.data.email,
-      subject: "Reset your password — Goyal Projects",
+      subject: "Reset your password — Goyal & Co. | Hariyana Group",
       html: `<p>Click <a href="${baseUrl}/partner/reset-password/${token}">here</a> to reset your password. Link expires in 1 hour.</p>`,
       type: "PASSWORD_RESET",
     });

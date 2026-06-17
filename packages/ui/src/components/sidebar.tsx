@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "../lib/utils";
+import { brand } from "../tokens";
 import { ChevronLeft, LogOut, X, type LucideIcon } from "lucide-react";
 import { Portal } from "./portal";
 
@@ -34,7 +35,7 @@ export interface SidebarProps {
 function SidebarInner({
   items,
   logo,
-  title = "Goyal Projects",
+  title = brand.appName,
   subtitle,
   collapsed = false,
   onToggleCollapse,

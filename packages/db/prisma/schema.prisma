@@ -211,6 +211,7 @@ model Project {
   id             String           @id @default(cuid())
   name           String
   location       String
+  locationLink   String?
   startingPrice  Decimal          @db.Decimal(15, 2)
   possessionDate DateTime?
   description    String?          @db.Text

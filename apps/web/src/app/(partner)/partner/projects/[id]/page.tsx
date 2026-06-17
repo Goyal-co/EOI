@@ -23,6 +23,7 @@ interface Project {
   id: string;
   name: string;
   location: string;
+  locationLink?: string | null;
   startingPrice: number;
   eoiStatus: string;
   status: string;
@@ -112,8 +113,17 @@ export default function ProjectDetailPage() {
             <StatusBadge status={project.eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} />
           </div>
           <div className="flex items-center gap-4 text-sm text-white/80">
-            <span className="flex items-center gap-1"><MapPin className="h-4 w-4" />{project.location}</span>
-            <span className="font-medium text-gold">From {formatCurrency(project.startingPrice)}</span>
+            <span className="flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              {project.locationLink ? (
+                <a href={project.locationLink} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  {project.location}
+                </a>
+              ) : (
+                project.location
+              )}
+            </span>
+            <span className="font-medium text-gold">From {formatCurrency(project.startingPrice)} / sqft</span>
           </div>
         </div>
       </div>
@@ -150,8 +160,8 @@ export default function ProjectDetailPage() {
             </Card>
             <Card className="p-6 space-y-4">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Starting Price</p>
-                <p className="text-xl font-bold text-gold mt-1">{formatCurrency(project.startingPrice)}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Price per sqft</p>
+                <p className="text-xl font-bold text-gold mt-1">{formatCurrency(project.startingPrice)} / sqft</p>
               </div>
               {project.possessionDate && (
                 <div>

@@ -74,7 +74,18 @@ function CustomerProjectContent() {
           <p className="text-2xl font-bold">{project.name}</p>
           <p className="text-sm text-white/80 flex items-center gap-1 mt-1">
             <MapPin className="h-4 w-4" />
-            {project.location}
+            {(project as { locationLink?: string | null }).locationLink ? (
+              <a
+                href={(project as { locationLink?: string }).locationLink!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline"
+              >
+                {project.location}
+              </a>
+            ) : (
+              project.location
+            )}
           </p>
         </div>
       </div>
@@ -88,7 +99,7 @@ function CustomerProjectContent() {
         }
         actions={
           <span className="font-medium text-gold whitespace-nowrap">
-            Starting {formatCurrency(project.startingPrice)}
+            {formatCurrency(project.startingPrice)} / sqft
           </span>
         }
       />
@@ -150,12 +161,23 @@ function CustomerProjectContent() {
                   <p className="text-muted-foreground">Location</p>
                   <p className="font-medium text-foreground flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5" />
-                    {project.location}
+                    {(project as { locationLink?: string | null }).locationLink ? (
+                      <a
+                        href={(project as { locationLink?: string }).locationLink!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {project.location}
+                      </a>
+                    ) : (
+                      project.location
+                    )}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Starting Price</p>
-                  <p className="font-medium text-gold">{formatCurrency(project.startingPrice)}</p>
+                  <p className="text-muted-foreground">Price per sqft</p>
+                  <p className="font-medium text-gold">{formatCurrency(project.startingPrice)} / sqft</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">EOI Status</p>

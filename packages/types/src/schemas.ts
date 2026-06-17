@@ -38,8 +38,13 @@ export const projectFaqSchema = z.object({
 export const projectSchema = z.object({
   name: z.string().min(2, "Project name is required"),
   location: z.string().min(2, "Location is required"),
-  startingPrice: z.number().positive("Starting price must be positive"),
-  possessionDate: z.string().min(1, "Possession date is required"),
+  locationLink: z
+    .string()
+    .url("Location link must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  startingPrice: z.number().positive("Price per sqft must be positive"),
+  possessionDate: z.string().optional(),
   description: z.string().optional(),
   amenities: z.array(z.string()).optional(),
   faqs: z.array(projectFaqSchema).optional(),

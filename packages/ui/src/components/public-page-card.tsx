@@ -1,4 +1,5 @@
 import { cn } from "../lib/utils";
+import { brand } from "../tokens";
 
 export interface PublicPageCardProps {
   children: React.ReactNode;
@@ -17,7 +18,7 @@ export function PublicPageCard({ children, title, description, className }: Publ
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-gold to-gold-hover text-white font-bold text-sm">
                 G
               </div>
-              <span className="font-semibold text-foreground">Goyal Projects</span>
+              <span className="font-semibold text-foreground">{brand.appName}</span>
             </div>
             {title && <h1 className="text-page-title">{title}</h1>}
             {description && <p className="text-caption mt-2">{description}</p>}

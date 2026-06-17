@@ -40,7 +40,7 @@ function stepsBlock(steps: string[]): string {
 }
 
 export function cpRegistrationAckEmailHtml(params: { cpName: string; email: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">Registration Received</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p>Thank you for registering as a Channel Partner with Goyal Projects.</p><p>Your account (<strong>${params.email}</strong>) is pending admin approval. You will receive login credentials once approved.</p></div></div>`;
+  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">Registration Received</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p>Thank you for registering as a Channel Partner with Goyal & Co. | Hariyana Group.</p><p>Your account (<strong>${params.email}</strong>) is pending admin approval. You will receive login credentials once approved.</p></div></div>`;
 }
 
 export function cpCredentialsEmailHtml(params: { cpName: string; email: string; loginUrl: string }) {
@@ -68,7 +68,7 @@ export function customerConfirmationEmailHtml(params: {
   return `
     <div style="${baseStyle}">
       <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal Projects</h1>
+        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
         <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Expression of Interest — Step 1 of 3</p>
       </div>
       <div style="${paddingBlock()}">
@@ -114,7 +114,7 @@ export function invitationEmailHtml(params: {
   return `
     <div style="${baseStyle}">
       <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal Projects</h1>
+        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
         <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Expression of Interest — Step 2 of 3</p>
       </div>
       <div style="${paddingBlock()}">
@@ -272,7 +272,7 @@ export function leadOnlyAcceptedEmailHtml(params: {
   return `
     <div style="${baseStyle}">
       <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal Projects</h1>
+        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
         <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Interest Confirmed</p>
       </div>
       <div style="${paddingBlock()}">
@@ -299,8 +299,8 @@ export function leadOnlyAcceptedEmailHtml(params: {
 
 /** Placeholder HTML for DB email templates (admin-editable) */
 export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
-  CP_REGISTRATION_ACK: "Registration Received — Goyal Projects",
-  CP_APPROVED: "Your CP Account is Approved — Goyal Projects",
+  CP_REGISTRATION_ACK: "Registration Received — Goyal & Co. | Hariyana Group",
+  CP_APPROVED: "Your CP Account is Approved — Goyal & Co. | Hariyana Group",
   CUSTOMER_CONFIRMATION: "Confirm Channel Partner Association — {{projectName}}",
   EOI_INVITATION: "Complete Your EOI — {{projectName}}",
   LEAD_ONLY_ACCEPTED: "Interest confirmed — {{projectName}}",
@@ -308,7 +308,7 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   EOI_APPROVED: "EOI Approved — {{projectName}}",
   EOI_REJECTED: "EOI Update — {{projectName}}",
   CORRECTION_REQUESTED: "Action Required — {{projectName}}",
-  CP_REGISTERED: "New CP Registration — Goyal Projects",
+  CP_REGISTERED: "New CP Registration — Goyal & Co. | Hariyana Group",
   CUSTOMER_SUBMITTED_EOI: "Customer EOI Submitted — {{projectName}}",
   CUSTOMER_REJECTED_CP: "Customer Declined Association — {{projectName}}",
 };

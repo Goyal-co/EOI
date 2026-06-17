@@ -15,8 +15,8 @@ function getMetadataBase(): URL {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   title: {
-    default: "Goyal Projects — EOI Platform",
-    template: "%s | Goyal Projects",
+    default: "Goyal Hariyana Projects — EOI Platform",
+    template: "%s | Goyal Hariyana Projects",
   },
   description: "Luxury real estate Expression of Interest management platform for channel partners and customers.",
   icons: {
@@ -24,11 +24,11 @@ export const metadata: Metadata = {
     apple: "/logo.svg",
   },
   openGraph: {
-    title: "Goyal Projects — EOI Platform",
+    title: "Goyal Hariyana Projects — EOI Platform",
     description: "Luxury real estate Expression of Interest management platform",
     url: getMetadataBase().toString(),
-    siteName: "Goyal Projects",
-    images: [{ url: "/og-image.svg", width: 1200, height: 630, alt: "Goyal Projects" }],
+    siteName: "Goyal Hariyana Projects",
+    images: [{ url: "/og-image.svg", width: 1200, height: 630, alt: "Goyal Hariyana Projects" }],
     locale: "en_IN",
     type: "website",
   },

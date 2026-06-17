@@ -1,6 +1,6 @@
-# Goyal Projects — EOI Platform
+# Goyal Hariyana Projects — EOI Platform
 
-Production-grade Expression of Interest (EOI) management platform for Goyal Projects with three portals: **Admin**, **Channel Partner (CP)**, and **Customer**.
+Production-grade Expression of Interest (EOI) management platform for Goyal Hariyana Projects with three portals: **Admin**, **Channel Partner (CP)**, and **Customer**.
 
 ## Architecture
 

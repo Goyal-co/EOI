@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DataTable, StatusBadge, Button, Modal, Input, Select, Textarea, useToast, PageHeader, FormField, FileUpload,
@@ -10,6 +10,12 @@ import { Plus, Pencil, Trash2, X, FolderOpen } from "lucide-react";
 import { useAdminProjects } from "@/lib/hooks";
 import type { DocumentType } from "@goyal/types";
 import { uploadViaPresign } from "@/lib/uploads/client-upload";
+
+const DRAFT_ADD_KEY = "goyal-admin-project-draft-add";
+const draftEditKey = (id: string) => `goyal-admin-project-draft-edit:${id}`;
+const assetsContextKey = (id: string) => `goyal-admin-assets-context:${id}`;
+const galleryQueueKey = (id: string) => `goyal-admin-gallery-queue:${id}`;
+const TWENTY_MB = 20 * 1024 * 1024;
 
 interface Project {
   id: string;
@@ -33,6 +39,21 @@ interface ProjectAsset {
   fileSize?: number;
 }
 
+interface ProjectForm {
+  name: string;
+  location: string;
+  locationLink: string;
+  startingPrice: string;
+  possessionDate: string;
+  description: string;
+  eoiStatus: string;
+  status: string;
+  amenities: string[];
+  amenityInput: string;
+  faqs: Array<{ question: string; answer: string }>;
+  eoiRule: { minBudget: string; requiredDocuments: string[]; docInput: string };
+}
+
 const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "BROCHURE", label: "Brochure" },
   { type: "FLOOR_PLAN", label: "Floor Plan" },
@@ -41,19 +62,41 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "BANNER", label: "Banner" },
 ];
 
-const emptyForm = {
+const emptyForm: ProjectForm = {
   name: "",
   location: "",
+  locationLink: "",
   startingPrice: "",
   possessionDate: "",
   description: "",
   eoiStatus: "OPEN",
   status: "ACTIVE",
-  amenities: [] as string[],
+  amenities: [],
   amenityInput: "",
-  faqs: [] as Array<{ question: string; answer: string }>,
-  eoiRule: { minBudget: "", requiredDocuments: [] as string[], docInput: "" },
+  faqs: [],
+  eoiRule: { minBudget: "", requiredDocuments: [], docInput: "" },
 };
+
+function loadDraft(key: string): ProjectForm | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as ProjectForm) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(key: string, form: ProjectForm) {
+  if (typeof window === "undefined") return;
+  const { amenityInput, eoiRule, ...persist } = form;
+  localStorage.setItem(key, JSON.stringify({ ...persist, amenityInput: "", eoiRule: { ...eoiRule, docInput: "" } }));
+}
+
+function clearDraft(key: string) {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(key);
+}
 
 export default function AdminProjectsPage() {
   const { data, isLoading } = useAdminProjects();
@@ -66,14 +109,60 @@ export default function AdminProjectsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [selected, setSelected] = useState<Project | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<ProjectForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [assets, setAssets] = useState<ProjectAsset[]>([]);
   const [uploads, setUploads] = useState<Record<string, UploadedFile | null>>({});
+  const [assetsResumeBanner, setAssetsResumeBanner] = useState<{ projectId: string; projectName: string } | null>(null);
+  const [galleryQueueNames, setGalleryQueueNames] = useState<string[]>([]);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeDraftKey = editOpen && selected ? draftEditKey(selected.id) : addOpen ? DRAFT_ADD_KEY : null;
+
+  useEffect(() => {
+    if (!activeDraftKey || (!addOpen && !editOpen)) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => saveDraft(activeDraftKey, form), 500);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, [form, activeDraftKey, addOpen, editOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    for (const project of projects) {
+      const ctx = localStorage.getItem(assetsContextKey(project.id));
+      if (ctx) {
+        try {
+          const parsed = JSON.parse(ctx) as { projectId: string; projectName: string };
+          setAssetsResumeBanner({ projectId: parsed.projectId, projectName: parsed.projectName });
+          break;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }, [projects]);
+
+  const openAdd = useCallback(() => {
+    const draft = loadDraft(DRAFT_ADD_KEY);
+    setForm(draft ?? emptyForm);
+    setSelected(null);
+    setAddOpen(true);
+    if (draft) {
+      addToast({ type: "info", title: "Restored unsaved draft" });
+    }
+  }, [addToast]);
 
   const openEdit = async (project: Project) => {
     setSelected(project);
     setEditOpen(true);
+    const draft = loadDraft(draftEditKey(project.id));
+    if (draft) {
+      setForm(draft);
+      addToast({ type: "info", title: "Restored unsaved draft" });
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/projects/${project.id}`);
       if (!res.ok) throw new Error("Failed to load project");
@@ -82,6 +171,7 @@ export default function AdminProjectsPage() {
       setForm({
         name: full.name,
         location: full.location,
+        locationLink: full.locationLink || "",
         startingPrice: String(full.startingPrice),
         possessionDate: full.possessionDate ? new Date(full.possessionDate).toISOString().split("T")[0] : "",
         description: full.description || "",
@@ -105,7 +195,19 @@ export default function AdminProjectsPage() {
   const openAssets = async (project: Project) => {
     setSelected(project);
     setAssetsOpen(true);
+    setAssetsResumeBanner(null);
+    localStorage.setItem(
+      assetsContextKey(project.id),
+      JSON.stringify({ projectId: project.id, projectName: project.name, openedAt: Date.now() })
+    );
     try {
+      const queueRaw = localStorage.getItem(galleryQueueKey(project.id));
+      if (queueRaw) {
+        const names = JSON.parse(queueRaw) as string[];
+        setGalleryQueueNames(names);
+      } else {
+        setGalleryQueueNames([]);
+      }
       const res = await fetch(`/api/admin/projects/${project.id}/assets`);
       if (!res.ok) throw new Error("Failed to load assets");
       setAssets(await res.json());
@@ -113,6 +215,21 @@ export default function AdminProjectsPage() {
       addToast({ type: "error", title: "Load failed", message: (e as Error).message });
       setAssetsOpen(false);
     }
+  };
+
+  const resumeAssets = (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (project) openAssets(project);
+  };
+
+  const discardDraft = () => {
+    if (activeDraftKey) clearDraft(activeDraftKey);
+    if (editOpen && selected) {
+      openEdit(selected);
+    } else {
+      setForm(emptyForm);
+    }
+    addToast({ type: "info", title: "Draft discarded" });
   };
 
   const openDelete = (project: Project) => {
@@ -126,8 +243,9 @@ export default function AdminProjectsPage() {
       const payload = {
         name: form.name,
         location: form.location,
+        locationLink: form.locationLink || undefined,
         startingPrice: Number(form.startingPrice),
-        possessionDate: form.possessionDate,
+        possessionDate: form.possessionDate || undefined,
         description: form.description || undefined,
         eoiStatus: form.eoiStatus,
         status: form.status,
@@ -152,6 +270,8 @@ export default function AdminProjectsPage() {
 
       await qc.invalidateQueries({ queryKey: ["admin", "projects"] });
       addToast({ type: "success", title: isEdit ? "Project updated" : "Project created" });
+      if (isEdit && selected) clearDraft(draftEditKey(selected.id));
+      else clearDraft(DRAFT_ADD_KEY);
       setAddOpen(false);
       setEditOpen(false);
       setForm(emptyForm);
@@ -182,10 +302,19 @@ export default function AdminProjectsPage() {
 
   const handleAssetUpload = async (type: DocumentType, file: File) => {
     if (!selected) return;
-    setUploads((prev) => ({
-      ...prev,
-      [type]: { name: file.name, size: file.size, status: "uploading", progress: 0 },
-    }));
+
+    if (type === "GALLERY") {
+      setGalleryQueueNames((prev) => {
+        const next = [...prev, file.name];
+        localStorage.setItem(galleryQueueKey(selected.id), JSON.stringify(next));
+        return next;
+      });
+    } else {
+      setUploads((prev) => ({
+        ...prev,
+        [type]: { name: file.name, size: file.size, status: "uploading", progress: 0 },
+      }));
+    }
 
     try {
       const uploaded = await uploadViaPresign(file, type);
@@ -204,10 +333,26 @@ export default function AdminProjectsPage() {
 
       const asset = await assetRes.json();
       setAssets((prev) => [asset, ...prev]);
-      setUploads((prev) => ({ ...prev, [type]: { name: file.name, size: file.size, status: "success", progress: 100 } }));
-      addToast({ type: "success", title: "Asset uploaded" });
+
+      if (type === "GALLERY") {
+        setGalleryQueueNames((prev) => {
+          const next = prev.filter((n) => n !== file.name);
+          if (next.length) {
+            localStorage.setItem(galleryQueueKey(selected.id), JSON.stringify(next));
+          } else {
+            localStorage.removeItem(galleryQueueKey(selected.id));
+          }
+          return next;
+        });
+        addToast({ type: "success", title: "Gallery image uploaded", message: file.name });
+      } else {
+        setUploads((prev) => ({ ...prev, [type]: { name: file.name, size: file.size, status: "success", progress: 100 } }));
+        addToast({ type: "success", title: "Asset uploaded" });
+      }
     } catch (e) {
-      setUploads((prev) => ({ ...prev, [type]: { name: file.name, size: file.size, status: "error", progress: 0 } }));
+      if (type !== "GALLERY") {
+        setUploads((prev) => ({ ...prev, [type]: { name: file.name, size: file.size, status: "error", progress: 0 } }));
+      }
       addToast({ type: "error", title: "Upload failed", message: (e as Error).message });
     }
   };
@@ -224,6 +369,16 @@ export default function AdminProjectsPage() {
     }
   };
 
+  const closeAssetsModal = (open: boolean) => {
+    setAssetsOpen(open);
+    if (!open && selected) {
+      localStorage.removeItem(assetsContextKey(selected.id));
+    }
+  };
+
+  const maxSizeForType = (type: DocumentType) =>
+    type === "BROCHURE" || type === "FLOOR_PLAN" ? TWENTY_MB : 10 * 1024 * 1024;
+
   const formFields = (
     <div className="space-y-4">
       <FormField label="Project Name" required htmlFor="project-name">
@@ -232,11 +387,20 @@ export default function AdminProjectsPage() {
       <FormField label="Location" required htmlFor="project-location">
         <Input id="project-location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} required />
       </FormField>
-      <FormField label="Starting Price (₹)" required htmlFor="project-price">
+      <FormField label="Location Link" htmlFor="project-location-link">
+        <Input
+          id="project-location-link"
+          type="url"
+          value={form.locationLink}
+          onChange={(e) => setForm({ ...form, locationLink: e.target.value })}
+          placeholder="https://maps.google.com/..."
+        />
+      </FormField>
+      <FormField label="Price per sqft (₹)" required htmlFor="project-price">
         <Input id="project-price" type="number" value={form.startingPrice} onChange={(e) => setForm({ ...form, startingPrice: e.target.value })} required />
       </FormField>
-      <FormField label="Possession Date" required htmlFor="project-possession">
-        <Input id="project-possession" type="date" value={form.possessionDate} onChange={(e) => setForm({ ...form, possessionDate: e.target.value })} required />
+      <FormField label="Possession Date" htmlFor="project-possession">
+        <Input id="project-possession" type="date" value={form.possessionDate} onChange={(e) => setForm({ ...form, possessionDate: e.target.value })} />
       </FormField>
       <FormField label="EOI Status" htmlFor="project-eoi-status">
         <Select
@@ -413,17 +577,39 @@ export default function AdminProjectsPage() {
     </div>
   );
 
+  const modalFooter = (isEdit: boolean) => (
+    <>
+      <Button variant="ghost" onClick={discardDraft}>Discard draft</Button>
+      <Button variant="outline" onClick={() => (isEdit ? setEditOpen(false) : setAddOpen(false))}>Cancel</Button>
+      <Button loading={saving} onClick={() => handleSave(isEdit)}>
+        {isEdit ? "Save Changes" : "Create Project"}
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Projects"
         description="Manage real estate projects and EOI settings"
         actions={
-          <Button onClick={() => { setForm(emptyForm); setAddOpen(true); }}>
+          <Button onClick={openAdd}>
             <Plus className="h-4 w-4" /> Add Project
           </Button>
         }
       />
+
+      {assetsResumeBanner && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+          <span>
+            Resume managing assets for <strong>{assetsResumeBanner.projectName}</strong>?
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAssetsResumeBanner(null)}>Dismiss</Button>
+            <Button size="sm" onClick={() => resumeAssets(assetsResumeBanner.projectId)}>Resume</Button>
+          </div>
+        </div>
+      )}
 
       <DataTable
         columns={[
@@ -454,45 +640,37 @@ export default function AdminProjectsPage() {
         )}
       />
 
-      <Modal
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        title="Add Project"
-        size="lg"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button loading={saving} onClick={() => handleSave(false)}>Create Project</Button>
-          </>
-        }
-      >
+      <Modal open={addOpen} onOpenChange={setAddOpen} title="Add Project" size="lg" footer={modalFooter(false)}>
         {formFields}
       </Modal>
 
-      <Modal
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        title="Edit Project"
-        size="lg"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button loading={saving} onClick={() => handleSave(true)}>Save Changes</Button>
-          </>
-        }
-      >
+      <Modal open={editOpen} onOpenChange={setEditOpen} title="Edit Project" size="lg" footer={modalFooter(true)}>
         {formFields}
       </Modal>
 
-      <Modal open={assetsOpen} onOpenChange={setAssetsOpen} title={`Manage Assets — ${selected?.name}`} size="lg">
+      <Modal open={assetsOpen} onOpenChange={closeAssetsModal} title={`Manage Assets — ${selected?.name}`} size="lg">
         <div className="space-y-6">
+          {galleryQueueNames.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Interrupted gallery upload — re-select: {galleryQueueNames.join(", ")}
+            </div>
+          )}
           {ASSET_TYPES.map(({ type, label }) => (
             <div key={type}>
               <p className="text-sm font-medium mb-2">{label}</p>
               <FileUpload
                 accept={type === "BANNER" || type === "GALLERY" ? "image/*" : ".pdf,.doc,.docx"}
-                file={uploads[type] || null}
+                maxSize={maxSizeForType(type)}
+                multiple={type === "GALLERY"}
+                file={type === "GALLERY" ? null : uploads[type] || null}
                 onUpload={(file) => handleAssetUpload(type, file)}
+                onSizeError={(file, max) =>
+                  addToast({
+                    type: "error",
+                    title: "File too large",
+                    message: `${file.name} exceeds ${Math.round(max / (1024 * 1024))}MB limit`,
+                  })
+                }
               />
             </div>
           ))}

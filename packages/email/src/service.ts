@@ -11,7 +11,7 @@ function getBrevoApiKey(): string | undefined {
 
 function getSender(): { name: string; email: string } {
   const from = optionsFromEnv();
-  const fromName = process.env.EMAIL_FROM_NAME?.trim() || "Goyal Projects";
+  const fromName = process.env.EMAIL_FROM_NAME?.trim() || "Goyal & Co. | Hariyana Group";
 
   const bracketMatch = from.match(/^(.+?)\s*<([^>]+)>$/);
   if (bracketMatch) {

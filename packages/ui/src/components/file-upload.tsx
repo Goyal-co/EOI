@@ -17,8 +17,10 @@ export interface FileUploadProps {
   label?: string;
   accept?: string;
   maxSize?: number;
+  multiple?: boolean;
   file?: UploadedFile | null;
   onUpload: (file: File) => void;
+  onSizeError?: (file: File, maxSize: number) => void;
   onRemove?: () => void;
   onPreview?: () => void;
   disabled?: boolean;
@@ -28,8 +30,10 @@ export function FileUpload({
   label,
   accept = ".pdf,.jpg,.jpeg,.png",
   maxSize = 5 * 1024 * 1024,
+  multiple = false,
   file,
   onUpload,
+  onSizeError,
   onRemove,
   onPreview,
   disabled,
@@ -37,12 +41,18 @@ export function FileUpload({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = React.useState(false);
 
-  const handleFile = (f: File) => {
-    if (f.size > maxSize) return;
-    onUpload(f);
+  const handleFiles = (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    for (const f of files) {
+      if (f.size > maxSize) {
+        onSizeError?.(f, maxSize);
+        continue;
+      }
+      onUpload(f);
+    }
   };
 
-  if (file?.status === "success") {
+  if (!multiple && file?.status === "success") {
     return (
       <div className="space-y-1.5">
         {label && <p className="text-sm font-medium text-foreground">{label}</p>}
@@ -67,7 +77,7 @@ export function FileUpload({
     );
   }
 
-  if (file?.status === "uploading") {
+  if (!multiple && file?.status === "uploading") {
     return (
       <div className="space-y-1.5">
         {label && <p className="text-sm font-medium text-foreground">{label}</p>}
@@ -104,8 +114,7 @@ export function FileUpload({
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          const f = e.dataTransfer.files[0];
-          if (f) handleFile(f);
+          if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
         }}
         onClick={() => !disabled && inputRef.current?.click()}
         role="button"
@@ -113,17 +122,20 @@ export function FileUpload({
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
       >
         <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-        <p className="text-sm text-foreground font-medium">Drop file here or click to upload</p>
+        <p className="text-sm text-foreground font-medium">
+          {multiple ? "Drop files here or click to upload" : "Drop file here or click to upload"}
+        </p>
         <p className="text-xs text-muted-foreground mt-1">Max {(maxSize / 1024 / 1024).toFixed(0)}MB — {accept}</p>
         <input
           ref={inputRef}
           type="file"
           accept={accept}
+          multiple={multiple}
           className="hidden"
           disabled={disabled}
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
+            if (e.target.files?.length) handleFiles(e.target.files);
+            e.target.value = "";
           }}
         />
       </div>

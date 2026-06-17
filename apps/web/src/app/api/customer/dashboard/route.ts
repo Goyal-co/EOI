@@ -29,6 +29,7 @@ function mapEoiEntry(eoi: {
     id: string;
     name: string;
     location: string;
+    locationLink?: string | null;
     startingPrice: unknown;
     possessionDate: Date | null;
     bannerUrl: string | null;
@@ -58,6 +59,7 @@ function mapEoiEntry(eoi: {
       id: eoi.project.id,
       name: eoi.project.name,
       location: eoi.project.location,
+      locationLink: eoi.project.locationLink,
       startingPrice: Number(eoi.project.startingPrice),
       possessionDate: eoi.project.possessionDate,
       bannerUrl: resolvedBannerUrl ?? eoi.project.bannerUrl,

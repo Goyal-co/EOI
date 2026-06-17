@@ -10,6 +10,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:create-admin": "tsx scripts/create-admin.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

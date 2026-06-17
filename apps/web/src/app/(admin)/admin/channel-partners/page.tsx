@@ -106,6 +106,29 @@ export default function AdminChannelPartnersPage() {
     );
   };
 
+  const allProjectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const allSelected = projects.length > 0 && selectedProjectIds.length === projects.length;
+
+  const selectAllProjects = () => setSelectedProjectIds(allProjectIds);
+  const clearAllProjects = () => setSelectedProjectIds([]);
+
+  const projectSelectionHeader = (
+    <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
+      <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => (allSelected ? clearAllProjects() : selectAllProjects())}
+          className="rounded"
+        />
+        {allSelected ? "Clear all" : "Select all"}
+      </label>
+      <span className="text-xs text-muted-foreground">
+        {selectedProjectIds.length} of {projects.length} selected
+      </span>
+    </div>
+  );
+
   const handleApprove = async () => {
     if (!cpToApprove) return;
     setActionLoading(cpToApprove.id);
@@ -306,6 +329,7 @@ export default function AdminChannelPartnersPage() {
             <p className="text-sm text-muted-foreground">No active projects available.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
+              {projectSelectionHeader}
               {projects.map((project) => (
                 <label
                   key={project.id}
@@ -386,6 +410,7 @@ export default function AdminChannelPartnersPage() {
             <p className="text-sm text-muted-foreground">No active projects available.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
+              {projectSelectionHeader}
               {projects.map((project) => (
                 <label
                   key={project.id}

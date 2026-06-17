@@ -1,6 +1,6 @@
 "use client";
 
-import { AppShell, LogoutConfirmModal } from "@goyal/ui";
+import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
 import {
   LayoutDashboard, Building2, UserCheck, FileText, Bell, User, Settings,
 } from "lucide-react";
@@ -32,7 +32,7 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
       <AppShell
         sidebar={{
           items: sidebarItems,
-          title: "Goyal Projects",
+          title: brand.appName,
           subtitle: "Partner Portal",
           profile: {
             name: session?.user?.name || "Partner",

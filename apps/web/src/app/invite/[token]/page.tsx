@@ -81,7 +81,7 @@ export default function InvitePage() {
                 {data.project.location}
               </div>
               <p className="text-gold font-semibold mt-2">
-                Starting {formatCurrency(Number(data.project.startingPrice))}
+                {formatCurrency(Number(data.project.startingPrice))} / sqft
               </p>
             </div>
           </div>

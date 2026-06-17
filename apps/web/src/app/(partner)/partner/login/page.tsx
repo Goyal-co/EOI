@@ -87,9 +87,9 @@ export default function PartnerLoginPage() {
       portalLabel="Partner Portal"
       subtitle="Grow Your Business with Premium Projects"
       stats={[
-        { label: "Projects", value: "12+" },
-        { label: "Partners", value: "200+" },
-        { label: "EOIs", value: "1K+" },
+        { label: "Projects", value: "250+" },
+        { label: "Years", value: "53+" },
+        { label: "Customers", value: "30k+" },
       ]}
     >
       <h2 className="text-page-title">Welcome back</h2>

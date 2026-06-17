@@ -183,7 +183,7 @@ function CustomerDashboardContent() {
             <p className="font-medium text-foreground">{cpName}</p>
           </div>
           <p className="text-sm text-muted-foreground">
-            Starting from {formatCurrency(project.startingPrice)}
+            From {formatCurrency(project.startingPrice)} / sqft
           </p>
         </CardContent>
       </Card>

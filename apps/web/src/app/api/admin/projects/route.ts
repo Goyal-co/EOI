@@ -1,6 +1,12 @@
 import { prisma } from "@goyal/db";
 import { projectSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { resolveProjectBannerUrl } from "@/lib/project-banner";
+
+function normalizeLocationLink(value: string | undefined): string | null {
+  if (!value?.trim()) return null;
+  return value.trim();
+}
 
 export async function GET() {
   const { error } = await withAuth(["ADMIN"]);
@@ -14,19 +20,25 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  return apiResponse(projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    location: p.location,
-    status: p.status,
-    eoiStatus: p.eoiStatus,
-    startingPrice: Number(p.startingPrice),
-    possessionDate: p.possessionDate,
-    eoiCount: p._count.eois,
-    activeCPs: p._count.cpAccess,
-    closures: p.eois.length,
-    createdAt: p.createdAt,
-  })));
+  return apiResponse(
+    await Promise.all(
+      projects.map(async (p) => ({
+        id: p.id,
+        name: p.name,
+        location: p.location,
+        locationLink: p.locationLink,
+        status: p.status,
+        eoiStatus: p.eoiStatus,
+        startingPrice: Number(p.startingPrice),
+        possessionDate: p.possessionDate,
+        bannerUrl: await resolveProjectBannerUrl(p.bannerUrl),
+        eoiCount: p._count.eois,
+        activeCPs: p._count.cpAccess,
+        closures: p.eois.length,
+        createdAt: p.createdAt,
+      }))
+    )
+  );
 }
 
 export async function POST(req: Request) {
@@ -41,6 +53,7 @@ export async function POST(req: Request) {
   const project = await prisma.project.create({
     data: {
       ...parsed.data,
+      locationLink: normalizeLocationLink(parsed.data.locationLink),
       amenities: parsed.data.amenities || [],
       faqs: parsed.data.faqs || [],
       possessionDate: parsed.data.possessionDate ? new Date(parsed.data.possessionDate) : null,

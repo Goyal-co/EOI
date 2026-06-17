@@ -40,7 +40,7 @@ export function AuthLayout({
             {subtitle}
           </h2>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
-            Streamline expression of interest management across channel partners, customers, and your admin team.
+            Streamline expression of interest across channel partners & customers.
           </p>
         </div>
         {stats && stats.length > 0 && (

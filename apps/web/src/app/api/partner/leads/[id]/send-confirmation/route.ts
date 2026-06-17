@@ -58,7 +58,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const sms = getSMSProvider();
     await sms.sendSMS(
       lead.customerMobile,
-      `Goyal Projects: ${lead.cp.user.name} invites you to confirm your interest in ${lead.project.name}. Check your email for the confirmation link.`
+      `Goyal Hariyana Projects: ${lead.cp.user.name} invites you to confirm your interest in ${lead.project.name}. Check your email for the confirmation link.`
     );
   }
 

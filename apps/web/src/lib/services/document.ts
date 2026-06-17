@@ -32,6 +32,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   COST_SHEET: ["application/pdf"],
   FLOOR_PLAN: ["image/jpeg", "image/png", "application/pdf"],
   BANNER: ["image/jpeg", "image/png", "image/webp"],
+  GALLERY: ["image/jpeg", "image/png", "image/webp"],
 };
 
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
@@ -41,6 +42,15 @@ const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
 };
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+const MAX_SIZE_BY_TYPE: Partial<Record<DocumentType, number>> = {
+  BROCHURE: 20 * 1024 * 1024,
+  FLOOR_PLAN: 20 * 1024 * 1024,
+};
+
+export function getMaxFileSizeForType(type: DocumentType): number {
+  return MAX_SIZE_BY_TYPE[type] ?? MAX_FILE_SIZE;
+}
 
 export class DocumentService {
   static sanitizeFileName(fileName: string): string {
@@ -58,7 +68,11 @@ export class DocumentService {
   static validateFile(type: DocumentType, mimeType: string, size: number): string | null {
     const allowed = ALLOWED_TYPES[type];
     if (!allowed?.includes(mimeType)) return `Invalid file type for ${type}`;
-    if (size <= 0 || size > MAX_FILE_SIZE) return "File exceeds 10MB limit";
+    const maxSize = getMaxFileSizeForType(type);
+    if (size <= 0 || size > maxSize) {
+      const limitMb = Math.round(maxSize / (1024 * 1024));
+      return `File exceeds ${limitMb}MB limit`;
+    }
     return null;
   }
 

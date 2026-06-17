@@ -65,7 +65,7 @@ export function ProjectCard({
         </div>
         {startingPrice && (
           <p className="text-sm font-medium text-gold mt-2">
-            Starting {formatCurrency(startingPrice)}
+            {formatCurrency(startingPrice)} / sqft
           </p>
         )}
         {(totalLeads !== undefined || totalEois !== undefined) && (

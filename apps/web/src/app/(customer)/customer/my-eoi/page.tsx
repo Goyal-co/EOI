@@ -61,7 +61,7 @@ function buildTimelineSteps(status: EOIStatus, eoi: {
       title: status === "CORRECTION_REQUESTED" ? "Corrections Required" : "Under Admin Review",
       description: status === "CORRECTION_REQUESTED"
         ? "Please update your EOI and re-submit"
-        : "Goyal Projects team is reviewing your application",
+        : "Goyal Hariyana Projects team is reviewing your application",
       status: getStepStatus(2, current),
       remarks: status === "CORRECTION_REQUESTED" ? eoi.adminRemarks || undefined : undefined,
     },

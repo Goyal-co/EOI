@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       const sms = getSMSProvider();
       await sms.sendSMS(
         lead.customerMobile,
-        `Goyal Projects: ${lead.cp.user.name} invites you to confirm your interest in ${lead.project.name}. Check your email for the confirmation link.`
+        `Goyal Hariyana Projects: ${lead.cp.user.name} invites you to confirm your interest in ${lead.project.name}. Check your email for the confirmation link.`
       );
     }
   }

@@ -45,6 +45,6 @@ export const spacing = {
 } as const;
 
 export const brand = {
-  appName: "Goyal Projects",
+  appName: "Goyal Hariyana Projects",
   tagline: "Expression of Interest Management",
 } as const;

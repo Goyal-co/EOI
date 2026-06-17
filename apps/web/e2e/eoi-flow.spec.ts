@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Goyal EOI Platform — Critical Flow", () => {
+test.describe("Goyal Hariyana Projects — Critical Flow", () => {
   test("root redirects guests to customer login", async ({ page }) => {
     await page.goto("/");
     await page.waitForURL("**/customer/login**", { timeout: 10_000 });
-    await expect(page.getByText(/Goyal/i).first()).toBeVisible();
+    await expect(page.getByText(/Hariyana|Goyal/i).first()).toBeVisible();
   });
 
   test("admin login and dashboard access", async ({ page }) => {
@@ -27,7 +27,7 @@ test.describe("Goyal EOI Platform — Critical Flow", () => {
 
   test("invitation page loads with demo token", async ({ page }) => {
     await page.goto("/invite/demo-invite-token-123");
-    await expect(page.getByText(/Goyal/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Hariyana|Goyal/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("admin can navigate to approvals page", async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe("Goyal EOI Platform — Critical Flow", () => {
     await page.waitForURL("**/partner**", { timeout: 15_000 });
 
     await page.goto("/partner/projects");
-    await expect(page.getByText(/Project|Goyal/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Project|Hariyana|Goyal/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("partner can navigate to leads page", async ({ page }) => {

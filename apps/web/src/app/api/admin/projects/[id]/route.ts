@@ -2,6 +2,13 @@ import { prisma } from "@goyal/db";
 import { adminProjectPatchSchema, projectEoiRuleSchema } from "@goyal/types";
 import { NotificationService, isAdminNotificationEnabled } from "@goyal/email";
 import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { resolveProjectBannerUrl } from "@/lib/project-banner";
+
+function normalizeLocationLink(value: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (!value.trim()) return null;
+  return value.trim();
+}
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
@@ -12,7 +19,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   include: { assets: true, eoiRules: true },
   });
   if (!project) return apiError("Project not found", 404);
-  return apiResponse(project);
+  return apiResponse({
+    ...project,
+    startingPrice: Number(project.startingPrice),
+    bannerUrl: await resolveProjectBannerUrl(project.bannerUrl),
+  });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +43,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     where: { id },
     data: {
       ...parsed.data,
-      possessionDate: parsed.data.possessionDate ? new Date(parsed.data.possessionDate) : undefined,
+      locationLink: normalizeLocationLink(parsed.data.locationLink),
+      possessionDate:
+        parsed.data.possessionDate === undefined
+          ? undefined
+          : parsed.data.possessionDate
+            ? new Date(parsed.data.possessionDate)
+            : null,
     },
   });
 

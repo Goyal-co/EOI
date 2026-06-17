@@ -18,6 +18,7 @@
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace=@goyal/db",
     "db:push": "turbo db:push",
     "db:seed": "turbo db:seed",
+    "db:create-admin": "npm run db:create-admin --workspace=@goyal/db",
     "db:studio": "cd packages/db && npx prisma studio"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AppShell, LogoutConfirmModal } from "@goyal/ui";
+import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
 import {
   LayoutDashboard, Building2, Users, UserCheck, FileText,
   CheckCircle, BarChart3, Bell, Settings, ScrollText,
@@ -36,7 +36,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       <AppShell
         sidebar={{
           items: sidebarItems,
-          title: "Goyal Projects",
+          title: brand.appName,
           subtitle: "Admin Portal",
           profile: {
             name: session?.user?.name || "Admin",

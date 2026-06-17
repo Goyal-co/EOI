@@ -89,7 +89,7 @@ export class NotificationService {
       "CP_REGISTRATION_ACK",
       { cpName: params.cpName, email: params.cpEmail },
       {
-        subject: "Registration Received — Goyal Projects",
+        subject: "Registration Received — Goyal & Co. | Hariyana Group",
         html: cpRegistrationAckEmailHtml({ cpName: params.cpName, email: params.cpEmail }),
       },
     );
@@ -111,7 +111,7 @@ export class NotificationService {
       "CP_APPROVED",
       { cpName: params.cpName, email: params.cpEmail, loginUrl: params.loginUrl },
       {
-        subject: "Your CP Account is Approved — Goyal Projects",
+        subject: "Your CP Account is Approved — Goyal & Co. | Hariyana Group",
         html: cpCredentialsEmailHtml({
           cpName: params.cpName,
           email: params.cpEmail,
@@ -552,7 +552,7 @@ export class NotificationService {
       "CP_REGISTERED",
       { cpName: params.cpName, companyName: params.companyName || "" },
       {
-        subject: "New CP Registration — Goyal Projects",
+        subject: "New CP Registration — Goyal & Co. | Hariyana Group",
         html: cpRegisteredEmailHtml(params),
       },
     );

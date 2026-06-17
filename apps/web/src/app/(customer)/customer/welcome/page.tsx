@@ -48,7 +48,7 @@ export default function CustomerWelcomePage() {
     {
       id: "approval",
       title: "Admin Review & Approval",
-      description: "Your EOI will be reviewed by the Goyal Projects team",
+      description: "Your EOI will be reviewed by the Goyal Hariyana Projects team",
       status: ["APPROVED", "REJECTED", "CLOSED"].includes(eoiStatus)
         ? ("completed" as const)
         : ["SUBMITTED", "UNDER_REVIEW"].includes(eoiStatus)
