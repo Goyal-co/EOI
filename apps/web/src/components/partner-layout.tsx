@@ -2,7 +2,7 @@
 
 import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
 import {
-  LayoutDashboard, Building2, UserCheck, FileText, Bell, User, Settings,
+  LayoutDashboard, Building2, UserCheck, FileText,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -15,9 +15,6 @@ const sidebarItems = [
   { label: "Projects", href: "/partner/projects", icon: Building2 },
   { label: "My Leads", href: "/partner/leads", icon: UserCheck },
   { label: "My EOIs", href: "/partner/eois", icon: FileText },
-  { label: "Notifications", href: "/partner/notifications", icon: Bell },
-  { label: "Profile", href: "/partner/profile", icon: User },
-  { label: "Settings", href: "/partner/settings", icon: Settings },
 ];
 
 export function PartnerLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +35,7 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
             name: session?.user?.name || "Partner",
             role: "Channel Partner",
           },
+          onSettingsClick: () => router.push("/partner/settings"),
           onLogout: () => setLogoutOpen(true),
         }}
         navbar={{
@@ -48,6 +46,9 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
           onSearchSelect: search.onSelect,
           notificationCount: notifData?.unreadCount || 0,
           onNotificationsClick: () => router.push("/partner/notifications"),
+          profileName: session?.user?.name || "Partner",
+          profileRole: "Channel Partner",
+          onProfileClick: () => router.push("/partner/profile"),
           onHelpClick: () => {
             window.location.href = "mailto:support@goyalprojects.com";
           },

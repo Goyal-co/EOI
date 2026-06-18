@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ProjectCard, CardSkeleton, EmptyState, PageHeader } from "@goyal/ui";
 import { usePartnerProjects } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
+import { PunchLeadModal } from "@/components/punch-lead-modal";
 
 interface Project {
   id: string;
@@ -21,6 +22,7 @@ export default function PartnerProjectsPage() {
   const { data, isLoading } = usePartnerProjects();
   const projects = (data as Project[] | undefined) || [];
   const [eoiModal, setEoiModal] = useState({ open: false, projectId: "", projectName: "" });
+  const [punchModal, setPunchModal] = useState({ open: false, projectId: "", projectName: "" });
 
   return (
     <div className="space-y-6">
@@ -48,7 +50,8 @@ export default function PartnerProjectsPage() {
               totalLeads={project.myLeads}
               onViewDetails={() => router.push(`/partner/projects/${project.id}`)}
               onViewBrochure={() => router.push(`/partner/projects/${project.id}?tab=brochure`)}
-              onSubmitEOI={() => setEoiModal({ open: true, projectId: project.id, projectName: project.name })}
+              onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
+              onPunchLead={project.eoiStatus !== "OPEN" ? () => setPunchModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
             />
           ))}
         </div>
@@ -59,6 +62,12 @@ export default function PartnerProjectsPage() {
         onOpenChange={(open) => setEoiModal((prev) => ({ ...prev, open }))}
         projectId={eoiModal.projectId}
         projectName={eoiModal.projectName}
+      />
+      <PunchLeadModal
+        open={punchModal.open}
+        onOpenChange={(open) => setPunchModal((prev) => ({ ...prev, open }))}
+        projectId={punchModal.projectId}
+        projectName={punchModal.projectName}
       />
     </div>
   );

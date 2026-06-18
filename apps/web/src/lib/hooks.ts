@@ -107,7 +107,7 @@ export function useCustomerEOI(eoiId?: string | null) {
       rejectionReason?: string | null;
       confirmationNumber?: string | null;
       lead?: { customerName: string; customerEmail: string; customerMobile: string; configuration?: string; budget?: string; city?: string };
-      project?: { name: string };
+      project?: { name: string; eoiRules?: { requiredDocuments?: string[] }[] };
       documents?: Document[];
       approvalActions?: { id?: string; action: string; remarks?: string; createdAt: string }[];
     } | null>(`/api/customer/eoi${query}`),

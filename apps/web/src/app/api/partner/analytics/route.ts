@@ -54,6 +54,9 @@ export async function GET() {
     eoiLeadsTotal,
     currentEoiLeadsTotal,
     previousEoiLeadsTotal,
+    eoiPendingSubmitted,
+    currentEoiPendingSubmitted,
+    previousEoiPendingSubmitted,
   ] = await Promise.all([
     prisma.lead.findMany({
       where: cpFilter,
@@ -98,6 +101,9 @@ export async function GET() {
     prisma.lead.count({ where: { ...cpFilter, intentType: "EOI" } }),
     prisma.lead.count({ where: { ...cpFilter, intentType: "EOI", createdAt: currentRange } }),
     prisma.lead.count({ where: { ...cpFilter, intentType: "EOI", createdAt: previousRange } }),
+    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } } }),
+    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] }, updatedAt: currentRange } }),
+    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] }, updatedAt: previousRange } }),
   ]);
 
   const allLeads = await prisma.lead.findMany({ where: cpFilter, select: { journeyStatus: true, confirmationSentAt: true } });
@@ -106,8 +112,14 @@ export async function GET() {
     return acc;
   }, {} as Record<string, number>);
 
+  const eoiPendingCustomer = (journeyCounts.DRAFT || 0) + eoiPendingSubmitted;
+
   return apiResponse({
     totalLeads: { value: totalLeads, growth: computeGrowth(currentTotalLeads, previousTotalLeads) },
+    eoiPendingCustomer: {
+      value: eoiPendingCustomer,
+      growth: computeGrowth((currentDraft || 0) + (currentEoiPendingSubmitted || 0), (previousDraft || 0) + (previousEoiPendingSubmitted || 0)),
+    },
     confirmationPending: {
       value: journeyCounts.CONFIRMATION_PENDING || 0,
       growth: computeGrowth(currentConfirmationPending, previousConfirmationPending),

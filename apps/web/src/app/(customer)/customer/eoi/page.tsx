@@ -1,12 +1,18 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   MultiStepForm, Input, Select, Textarea, LoadingSkeleton, EmptyState, PageHeader, useToast,
 } from "@goyal/ui";
-import { useCustomerEOI } from "@/lib/hooks";
+import { useCustomerEOI, useCustomerDocuments } from "@/lib/hooks";
 import { customerPath, useCustomerEoiId } from "@/components/customer/project-switcher";
+import { CustomerDocumentUploads, type CustomerDocumentRecord } from "@/components/customer/customer-document-uploads";
+import {
+  resolveRequiredDocumentTypes,
+  formatMissingDocumentLabels,
+  CUSTOMER_EOI_DOCUMENT_TYPES,
+} from "@/lib/required-documents";
 import type {
   EOIPersonalDetails, EOIAddress, EOIUnitPreference, EOIBankDetails,
 } from "@goyal/types";
@@ -16,10 +22,13 @@ const STEPS = [
   { id: "address", title: "Address", description: "Current address and occupation" },
   { id: "unitPreference", title: "Unit Preference", description: "Preferred configuration and budget" },
   { id: "bankDetails", title: "Bank Details", description: "EOI cheque information" },
+  { id: "documents", title: "Documents", description: "Upload PAN, Aadhaar, and EOI cheque" },
   { id: "review", title: "Review", description: "Review and submit your EOI" },
 ];
 
 const STEP_KEYS = ["personal", "address", "unitPreference", "bankDetails"] as const;
+const DOCUMENTS_STEP = 4;
+const REVIEW_STEP = 5;
 
 type FormData = {
   personal: Partial<EOIPersonalDetails>;
@@ -40,9 +49,22 @@ function CustomerEOIContent() {
   const { addToast } = useToast();
   const eoiId = useCustomerEoiId();
   const { data: eoi, isLoading } = useCustomerEOI(eoiId);
+  const { data: documentsData } = useCustomerDocuments(eoiId);
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+
+  const documents = (documentsData || eoi?.documents || []) as CustomerDocumentRecord[];
+
+  const requiredDocTypes = useMemo(() => {
+    const rule = (eoi?.project as { eoiRules?: { requiredDocuments?: string[] }[] } | undefined)
+      ?.eoiRules?.[0];
+    if (rule?.requiredDocuments?.length) {
+      const resolved = resolveRequiredDocumentTypes(rule.requiredDocuments);
+      if (resolved.length > 0) return resolved;
+    }
+    return [...CUSTOMER_EOI_DOCUMENT_TYPES];
+  }, [eoi]);
 
   useEffect(() => {
     if (eoi?.formData) {
@@ -88,18 +110,23 @@ function CustomerEOIContent() {
     }));
   };
 
+  const getMissingRequiredDocs = () => {
+    const uploaded = new Set(documents.map((d) => d.type));
+    return requiredDocTypes.filter((t) => !uploaded.has(t));
+  };
+
   const saveStep = async (submit = false) => {
     setSaving(true);
-    const stepKey = currentStep < 4 ? STEP_KEYS[currentStep] : "review";
-    const data = currentStep < 4 ? formData[STEP_KEYS[currentStep]] : formData;
+    const stepKey = currentStep < 4 ? STEP_KEYS[currentStep] : "bankDetails";
+    const data = currentStep < 4 ? formData[STEP_KEYS[currentStep]] : formData.bankDetails;
 
     const eoiQuery = eoiId ? `?eoiId=${encodeURIComponent(eoiId)}` : "";
     const res = await fetch(`/api/customer/eoi${eoiQuery}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        step: stepKey === "review" ? "bankDetails" : stepKey,
-        data: stepKey === "review" ? formData.bankDetails : data,
+        step: submit ? "bankDetails" : stepKey,
+        data,
         submit,
       }),
     });
@@ -120,10 +147,35 @@ function CustomerEOIContent() {
   };
 
   const handleNext = async () => {
-    if (currentStep === 4) {
+    if (currentStep === DOCUMENTS_STEP) {
+      const missing = getMissingRequiredDocs();
+      if (missing.length > 0) {
+        addToast({
+          type: "error",
+          title: "Documents required",
+          message: `Please upload: ${formatMissingDocumentLabels(missing)}`,
+        });
+        return;
+      }
+      setCurrentStep(REVIEW_STEP);
+      return;
+    }
+
+    if (currentStep === REVIEW_STEP) {
+      const missing = getMissingRequiredDocs();
+      if (missing.length > 0) {
+        addToast({
+          type: "error",
+          title: "Documents required",
+          message: `Please upload: ${formatMissingDocumentLabels(missing)}`,
+        });
+        setCurrentStep(DOCUMENTS_STEP);
+        return;
+      }
       await saveStep(true);
       return;
     }
+
     const ok = await saveStep(false);
     if (ok) setCurrentStep((s) => s + 1);
   };
@@ -173,8 +225,8 @@ function CustomerEOIContent() {
         currentStep={currentStep}
         onNext={handleNext}
         onPrevious={currentStep > 0 ? handlePrevious : undefined}
-        onSaveDraft={() => saveStep(false)}
-        isLastStep={currentStep === 4}
+        onSaveDraft={() => (currentStep <= 3 ? saveStep(false) : undefined)}
+        isLastStep={currentStep === REVIEW_STEP}
         loading={saving}
       >
         {currentStep === 0 && (
@@ -239,12 +291,26 @@ function CustomerEOIContent() {
             <Input label="Account Holder Name" value={formData.bankDetails.accountHolderName || ""} onChange={(e) => updateField("bankDetails", "accountHolderName", e.target.value)} required />
             <Input label="Cheque Number" value={formData.bankDetails.chequeNumber || ""} onChange={(e) => updateField("bankDetails", "chequeNumber", e.target.value)} required />
             <p className="sm:col-span-2 text-xs text-muted-foreground">
-              Please ensure your EOI cheque details match the documents you will upload.
+              Upload your cancelled cheque image in the next step.
             </p>
           </div>
         )}
 
-        {currentStep === 4 && (
+        {currentStep === DOCUMENTS_STEP && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload all required documents now. You can replace them later from the Documents section if your EOI needs corrections.
+            </p>
+            <CustomerDocumentUploads
+              eoiId={eoiId}
+              documents={documents}
+              requiredTypes={requiredDocTypes}
+              compact
+            />
+          </div>
+        )}
+
+        {currentStep === REVIEW_STEP && (
           <div className="space-y-6 text-sm">
             {(["personal", "address", "unitPreference", "bankDetails"] as const).map((section) => (
               <div key={section}>
@@ -263,8 +329,22 @@ function CustomerEOIContent() {
                 </div>
               </div>
             ))}
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Documents</h3>
+              <div className="rounded-lg bg-blue-50 p-4 space-y-1">
+                {requiredDocTypes.map((type) => {
+                  const doc = documents.find((d) => d.type === type);
+                  return (
+                    <p key={type} className={doc ? "text-foreground" : "text-red-600"}>
+                      {doc ? "✓" : "✗"} {type === "PAN" ? "PAN Card" : type === "AADHAAR" ? "Aadhaar Card" : "EOI Cheque"}
+                      {doc ? ` — ${doc.fileName}` : " — not uploaded"}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
             <p className="text-muted-foreground">
-              By submitting, you confirm all details are accurate. You can upload supporting documents after submission.
+              By submitting, you confirm all details and documents are accurate.
             </p>
           </div>
         )}

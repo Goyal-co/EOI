@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
-  DataTable, StatusBadge, Card, CardSkeleton, EmptyState, formatDate, cn, PageHeader,
+  DataTable, StatusBadge, Card, CardSkeleton, EmptyState, formatDate, cn, PageHeader, Input,
 } from "@goyal/ui";
 import { LayoutGrid, List } from "lucide-react";
 import { usePartnerEOIs } from "@/lib/hooks";
@@ -13,14 +13,28 @@ interface EOI {
   createdAt: string;
   submittedAt?: string;
   confirmationNumber?: string;
+  referenceNumber?: string;
   lead: { customerName: string; customerEmail: string };
   project: { name: string };
 }
 
 export default function PartnerEOIsPage() {
   const { data, isLoading } = usePartnerEOIs();
-  const eois = (data as EOI[] | undefined) || [];
+  const allEois = (data as EOI[] | undefined) || [];
   const [view, setView] = useState<"cards" | "table">("cards");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const eois = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allEois;
+    return allEois.filter((eoi) =>
+      eoi.lead.customerName.toLowerCase().includes(q) ||
+      eoi.lead.customerEmail.toLowerCase().includes(q) ||
+      eoi.project.name.toLowerCase().includes(q) ||
+      eoi.confirmationNumber?.toLowerCase().includes(q) ||
+      eoi.referenceNumber?.toLowerCase().includes(q)
+    );
+  }, [allEois, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -28,19 +42,27 @@ export default function PartnerEOIsPage() {
         title="My EOIs"
         description="Track expression of interest submissions"
         actions={
-          <div className="flex gap-1 rounded-lg border border-border p-1">
-            <button
-              onClick={() => setView("cards")}
-              className={cn("p-2 rounded-md transition-colors", view === "cards" ? "bg-blue-50 text-foreground" : "text-muted-foreground")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setView("table")}
-              className={cn("p-2 rounded-md transition-colors", view === "table" ? "bg-blue-50 text-foreground" : "text-muted-foreground")}
-            >
-              <List className="h-4 w-4" />
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              placeholder="Search EOIs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 sm:w-56"
+            />
+            <div className="flex gap-1 rounded-lg border border-border p-1">
+              <button
+                onClick={() => setView("cards")}
+                className={cn("p-2 rounded-md transition-colors", view === "cards" ? "bg-blue-50 text-foreground" : "text-muted-foreground")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setView("table")}
+                className={cn("p-2 rounded-md transition-colors", view === "table" ? "bg-blue-50 text-foreground" : "text-muted-foreground")}
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         }
       />
@@ -50,7 +72,10 @@ export default function PartnerEOIsPage() {
           {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       ) : eois.length === 0 ? (
-        <EmptyState title="No EOIs yet" description="Submit an EOI from a project page to get started" />
+        <EmptyState
+          title={searchQuery ? "No matching EOIs" : "No EOIs yet"}
+          description={searchQuery ? "Try a different search term" : "Submit an EOI from a project page to get started"}
+        />
       ) : view === "cards" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {eois.map((eoi) => (
@@ -83,11 +108,12 @@ export default function PartnerEOIsPage() {
             )},
             { key: "project", header: "Project", render: (row) => row.project.name },
             { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-            { key: "confirmationNumber", header: "Confirmation", render: (row) => row.confirmationNumber || "—" },
             { key: "createdAt", header: "Created", render: (row) => formatDate(row.createdAt) },
-            { key: "submittedAt", header: "Submitted", render: (row) => row.submittedAt ? formatDate(row.submittedAt) : "—" },
+            { key: "confirmationNumber", header: "Confirmation #", render: (row) => row.confirmationNumber || "—" },
           ]}
           data={eois}
+          loading={isLoading}
+          emptyTitle="No EOIs found"
         />
       )}
     </div>

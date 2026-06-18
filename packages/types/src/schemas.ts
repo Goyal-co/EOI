@@ -217,7 +217,7 @@ export const projectEoiRuleSchema = z.object({
 export const adminProjectPatchSchema = projectSchema.partial();
 
 export const customerEoiStepSchema = z.object({
-  step: z.enum(["personal", "address", "unitPreference", "bankDetails", "review"]),
+  step: z.enum(["personal", "address", "unitPreference", "bankDetails", "documents", "review"]),
   data: z.record(z.unknown()),
   submit: z.boolean().optional(),
 });

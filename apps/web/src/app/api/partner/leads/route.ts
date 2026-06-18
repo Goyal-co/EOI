@@ -17,6 +17,21 @@ export async function GET(req: Request) {
   const projectId = searchParams.get("projectId");
   const status = searchParams.get("status");
   const intentType = searchParams.get("intentType");
+  const search = searchParams.get("search")?.trim();
+  const fromDate = searchParams.get("fromDate");
+  const toDate = searchParams.get("toDate");
+
+  const createdAtFilter: { gte?: Date; lte?: Date } = {};
+  if (fromDate) {
+    const from = new Date(fromDate);
+    from.setHours(0, 0, 0, 0);
+    createdAtFilter.gte = from;
+  }
+  if (toDate) {
+    const to = new Date(toDate);
+    to.setHours(23, 59, 59, 999);
+    createdAtFilter.lte = to;
+  }
 
   const leads = await prisma.lead.findMany({
     where: {
@@ -24,6 +39,16 @@ export async function GET(req: Request) {
       ...(projectId ? { projectId } : {}),
       ...(status ? { journeyStatus: status as never } : {}),
       ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
+      ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
+      ...(search
+        ? {
+            OR: [
+              { customerName: { contains: search, mode: "insensitive" } },
+              { customerEmail: { contains: search, mode: "insensitive" } },
+              { customerMobile: { contains: search } },
+            ],
+          }
+        : {}),
     },
     include: {
       project: { select: { name: true, eoiStatus: true } },

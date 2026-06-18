@@ -3,7 +3,7 @@
 import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
 import {
   LayoutDashboard, Building2, Users, UserCheck, FileText,
-  CheckCircle, BarChart3, Bell, Settings, ScrollText,
+  CheckCircle, BarChart3, ScrollText,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -20,8 +20,6 @@ const sidebarItems = [
   { label: "Approvals", href: "/admin/approvals", icon: CheckCircle },
   { label: "Audit Log", href: "/admin/audit", icon: ScrollText },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { label: "Notifications", href: "/admin/notifications", icon: Bell },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -42,16 +40,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             name: session?.user?.name || "Admin",
             role: "Administrator",
           },
+          onSettingsClick: () => router.push("/admin/settings"),
           onLogout: () => setLogoutOpen(true),
         }}
         navbar={{
-          searchPlaceholder: "Search projects, leads, EOIs...",
+          searchPlaceholder: "Search projects, partners, EOIs...",
           searchQuery: search.query,
           onSearchChange: search.setQuery,
           searchResults: search.results,
           onSearchSelect: search.onSelect,
           notificationCount: notifData?.unreadCount || 0,
           onNotificationsClick: () => router.push("/admin/notifications"),
+          profileName: session?.user?.name || "Admin",
+          profileRole: "Administrator",
+          onProfileClick: () => router.push("/admin/settings"),
           onQuickAction: () => router.push("/admin/projects"),
           quickActionLabel: "Add Project",
         }}

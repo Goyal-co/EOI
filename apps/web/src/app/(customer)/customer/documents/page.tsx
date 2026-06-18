@@ -2,92 +2,32 @@
 
 import { Suspense, useState } from "react";
 import {
-  Card, CardContent, CardHeader, CardTitle, FileUpload, StatusBadge,
-  LoadingSkeleton, EmptyState, Modal, Button, formatDate, PageHeader, useToast,
+  LoadingSkeleton, EmptyState, Modal, Button, PageHeader, useToast,
 } from "@goyal/ui";
-import type { UploadedFile } from "@goyal/ui";
 import { useCustomerDocuments } from "@/lib/hooks";
-import { useQueryClient } from "@tanstack/react-query";
-import type { DocumentType } from "@goyal/types";
 import { useCustomerEoiId } from "@/components/customer/project-switcher";
-import { uploadViaPresign } from "@/lib/uploads/client-upload";
+import {
+  CustomerDocumentUploads,
+  type CustomerDocumentRecord,
+} from "@/components/customer/customer-document-uploads";
 import { getPresignedUrlForPreview, isImageFileName, openPresignedAsset } from "@/lib/files/open-asset";
 
-const DOC_TYPES: { type: DocumentType; label: string }[] = [
-  { type: "PAN", label: "PAN Card" },
-  { type: "AADHAAR", label: "Aadhaar Card" },
-  { type: "CHEQUE", label: "EOI Cheque" },
-];
-
-interface DocumentRecord {
-  id: string;
-  type: DocumentType;
-  fileName: string;
-  fileUrl: string;
-  fileSize?: number;
-  status: string;
-  uploadedAt: string;
-}
-
 function CustomerDocumentsContent() {
-  const qc = useQueryClient();
   const { addToast } = useToast();
   const eoiId = useCustomerEoiId();
-  const docsQuery = eoiId ? `?eoiId=${encodeURIComponent(eoiId)}` : "";
   const { data: documents, isLoading } = useCustomerDocuments(eoiId);
-  const [uploads, setUploads] = useState<Record<string, UploadedFile | null>>({});
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>("");
 
-  const docs = (documents as DocumentRecord[]) || [];
+  const docs = (documents as CustomerDocumentRecord[]) || [];
 
-  const getDocForType = (type: DocumentType) =>
-    docs.find((d) => d.type === type);
-
-  const handlePreview = async (doc: DocumentRecord) => {
+  const handlePreview = async (doc: CustomerDocumentRecord) => {
     try {
       const url = await getPresignedUrlForPreview(`/api/customer/documents/${doc.id}/download`);
       setPreviewFileName(doc.fileName);
       setPreviewUrl(url);
     } catch {
       addToast({ type: "error", title: "Preview failed", message: "Could not load document." });
-    }
-  };
-
-  const handleUpload = async (type: DocumentType, file: File) => {
-    setUploads((prev) => ({
-      ...prev,
-      [type]: { name: file.name, size: file.size, status: "uploading", progress: 0 },
-    }));
-
-    try {
-      const uploaded = await uploadViaPresign(file, type);
-
-      await fetch(`/api/customer/documents${docsQuery}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          fileName: uploaded.fileName,
-          fileUrl: uploaded.fileUrl,
-          fileSize: uploaded.fileSize,
-          mimeType: uploaded.mimeType,
-        }),
-      });
-
-      setUploads((prev) => ({
-        ...prev,
-        [type]: { name: file.name, size: file.size, status: "success", url: uploaded.fileUrl },
-      }));
-
-      qc.invalidateQueries({ queryKey: ["customer", "documents"] });
-    } catch {
-      setUploads((prev) => ({ ...prev, [type]: null }));
-      addToast({
-        type: "error",
-        title: "Upload failed",
-        message: "Please try again.",
-      });
     }
   };
 
@@ -103,52 +43,16 @@ function CustomerDocumentsContent() {
     <div className="space-y-6">
       <PageHeader
         title="Documents"
-        description="Upload and manage your EOI supporting documents."
+        description="Upload and manage your EOI supporting documents. Re-upload here if your EOI was sent back for corrections."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {DOC_TYPES.map(({ type, label }) => {
-          const existing = getDocForType(type);
-          const upload = uploads[type];
+      <CustomerDocumentUploads
+        eoiId={eoiId}
+        documents={docs}
+        onPreview={handlePreview}
+      />
 
-          return (
-            <Card key={type}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{label}</CardTitle>
-                  {existing && <StatusBadge status={existing.status} />}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <FileUpload
-                  label={label}
-                  file={
-                    upload ||
-                    (existing
-                      ? {
-                          name: existing.fileName,
-                          size: existing.fileSize || 0,
-                          status: "success" as const,
-                          url: existing.fileUrl,
-                        }
-                      : null)
-                  }
-                  onUpload={(f) => handleUpload(type, f)}
-                  onRemove={() => setUploads((prev) => ({ ...prev, [type]: null }))}
-                  onPreview={existing ? () => handlePreview(existing) : undefined}
-                />
-                {existing && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Uploaded {formatDate(existing.uploadedAt)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {docs.length === 0 && !Object.values(uploads).some(Boolean) && (
+      {docs.length === 0 && (
         <EmptyState
           title="No Documents Yet"
           description="Upload your PAN, Aadhaar, and EOI cheque to complete your application."

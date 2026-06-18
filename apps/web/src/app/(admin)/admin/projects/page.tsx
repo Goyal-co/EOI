@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, X, FolderOpen } from "lucide-react";
 import { useAdminProjects } from "@/lib/hooks";
 import type { DocumentType } from "@goyal/types";
 import { uploadViaPresign } from "@/lib/uploads/client-upload";
+import { CUSTOMER_DOCUMENT_LABELS, CUSTOMER_EOI_DOCUMENT_TYPES } from "@/lib/required-documents";
 
 const DRAFT_ADD_KEY = "goyal-admin-project-draft-add";
 const draftEditKey = (id: string) => `goyal-admin-project-draft-edit:${id}`;
@@ -485,10 +486,15 @@ export default function AdminProjectsPage() {
           />
         </FormField>
         <div className="flex gap-2">
-          <Input
+          <Select
             value={form.eoiRule.docInput}
             onChange={(e) => setForm({ ...form, eoiRule: { ...form.eoiRule, docInput: e.target.value } })}
-            placeholder="Required document (e.g. PAN)"
+            options={[
+              { value: "", label: "Select required document" },
+              ...CUSTOMER_EOI_DOCUMENT_TYPES
+                .filter((t) => !form.eoiRule.requiredDocuments.includes(t))
+                .map((t) => ({ value: t, label: CUSTOMER_DOCUMENT_LABELS[t] })),
+            ]}
           />
           <Button
             type="button"
@@ -511,7 +517,7 @@ export default function AdminProjectsPage() {
         <div className="flex flex-wrap gap-2">
           {form.eoiRule.requiredDocuments.map((d) => (
             <span key={d} className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs">
-              {d}
+              {CUSTOMER_DOCUMENT_LABELS[d as keyof typeof CUSTOMER_DOCUMENT_LABELS] || d}
               <button type="button" onClick={() => setForm({
                 ...form,
                 eoiRule: { ...form.eoiRule, requiredDocuments: form.eoiRule.requiredDocuments.filter((x) => x !== d) },

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
 import {
-  LayoutDashboard, Building2, FileText, FolderOpen, Bell, User,
+  LayoutDashboard, Building2, FileText, FolderOpen,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -16,8 +16,6 @@ const sidebarItems = [
   { label: "Project Details", href: "/customer/project", icon: Building2 },
   { label: "My EOI", href: "/customer/my-eoi", icon: FileText },
   { label: "Documents", href: "/customer/documents", icon: FolderOpen },
-  { label: "Notifications", href: "/customer/notifications", icon: Bell },
-  { label: "Profile", href: "/customer/profile", icon: User },
 ];
 
 export function CustomerLayout({ children }: { children: React.ReactNode }) {
@@ -38,23 +36,27 @@ export function CustomerLayout({ children }: { children: React.ReactNode }) {
             name: session?.user?.name || "Customer",
             role: "Customer",
           },
+          onSettingsClick: () => router.push("/customer/profile"),
           onLogout: () => setLogoutOpen(true),
         }}
         navbar={{
-          searchPlaceholder: "Search...",
+          searchPlaceholder: "Search project, EOI...",
           searchQuery: search.query,
           onSearchChange: search.setQuery,
           searchResults: search.results,
           onSearchSelect: search.onSelect,
           notificationCount: notifData?.unreadCount || 0,
           onNotificationsClick: () => router.push("/customer/notifications"),
+          profileName: session?.user?.name || "Customer",
+          profileRole: "Customer",
+          onProfileClick: () => router.push("/customer/profile"),
+          showDate: false,
           onHelpClick: () => {
             window.location.href = "mailto:support@goyalprojects.com";
           },
-          showDate: false,
+          children: <CustomerProjectSwitcher />,
         }}
       >
-        <CustomerProjectSwitcher />
         {children}
       </AppShell>
 

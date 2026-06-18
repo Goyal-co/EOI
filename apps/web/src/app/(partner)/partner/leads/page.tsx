@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  DataTable, Drawer, StatusBadge, Select, Button, formatDate, useToast, PageHeader,
+  DataTable, Drawer, StatusBadge, Select, Button, Input, formatDate, useToast, PageHeader, LoadingSkeleton,
 } from "@goyal/ui";
 import { Mail, Phone, MapPin, Copy, Send } from "lucide-react";
 import { usePartnerLeads, usePartnerProjects } from "@/lib/hooks";
@@ -32,15 +33,30 @@ interface Project {
   name: string;
 }
 
-export default function PartnerLeadsPage() {
+function PartnerLeadsContent() {
+  const searchParams = useSearchParams();
   const [projectFilter, setProjectFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
   const [intentFilter, setIntentFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
   const { addToast } = useToast();
   const qc = useQueryClient();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const status = searchParams.get("status");
+    if (status) setStatusFilter(status);
+  }, [searchParams]);
 
   useEffect(() => {
     fetch("/api/partner/settings")
@@ -54,8 +70,11 @@ export default function PartnerLeadsPage() {
     if (projectFilter) f.projectId = projectFilter;
     if (statusFilter) f.status = statusFilter;
     if (intentFilter) f.intentType = intentFilter;
+    if (debouncedSearch) f.search = debouncedSearch;
+    if (fromDate) f.fromDate = fromDate;
+    if (toDate) f.toDate = toDate;
     return f;
-  }, [projectFilter, statusFilter, intentFilter]);
+  }, [projectFilter, statusFilter, intentFilter, debouncedSearch, fromDate, toDate]);
 
   const { data, isLoading } = usePartnerLeads(filters);
   const { data: projects } = usePartnerProjects();
@@ -132,7 +151,14 @@ export default function PartnerLeadsPage() {
         emptyDescription="Submit an EOI to register your first lead"
         onRowClick={setSelectedLead}
         filters={
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-3 w-full">
+            <Input
+              placeholder="Search by name, email, or mobile..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+            <div className="flex flex-wrap gap-3">
             <Select
               label=""
               value={projectFilter}
@@ -171,11 +197,33 @@ export default function PartnerLeadsPage() {
               ]}
               className="w-40"
             />
-            {(projectFilter || statusFilter || intentFilter) && (
-              <Button variant="ghost" size="sm" onClick={() => { setProjectFilter(""); setStatusFilter(""); setIntentFilter(""); }}>
+            <Input
+              type="date"
+              label=""
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-40"
+            />
+            <Input
+              type="date"
+              label=""
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-40"
+            />
+            {(projectFilter || statusFilter || intentFilter || debouncedSearch || fromDate || toDate) && (
+              <Button variant="ghost" size="sm" onClick={() => {
+                setProjectFilter("");
+                setStatusFilter("");
+                setIntentFilter("");
+                setSearchQuery("");
+                setFromDate("");
+                setToDate("");
+              }}>
                 Clear filters
               </Button>
             )}
+            </div>
           </div>
         }
       />
@@ -269,5 +317,13 @@ export default function PartnerLeadsPage() {
         )}
       </Drawer>
     </div>
+  );
+}
+
+export default function PartnerLeadsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton rows={8} />}>
+      <PartnerLeadsContent />
+    </Suspense>
   );
 }

@@ -5,7 +5,9 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthLayout, Button } from "@goyal/ui";
-import { AlertCircle, Building2, FileCheck, Shield } from "lucide-react";
+import { AlertCircle, Building2, FileCheck, Shield, Users } from "lucide-react";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 const ERROR_MESSAGES: Record<string, string> = {
   AccessDenied:
@@ -46,13 +48,22 @@ export default function CustomerLoginContent() {
   return (
     <AuthLayout
       portalLabel="Customer Portal"
-      subtitle="Your private portal for EOI submission & project materials"
+      backgroundImage={LOGIN_BG}
+      subtitle="Welcome to your exclusive portal"
+      highlightSubtitle="exclusive portal"
+      description="Access all your project information, submissions and documents in one secure place."
+      stats={[
+        { label: "Years of Legacy", value: "53+", icon: Building2 },
+        { label: "Completed Projects", value: "250+", icon: Building2 },
+        { label: "Loyal Customers", value: "30k+", icon: Users },
+      ]}
+      legacyCard={{
+        title: "A Legacy Built on Trust",
+        body: "For over five decades, Goyal & Co. | Hariyana Group has been delivering excellence in real estate with unwavering commitment to quality, transparency & customer satisfaction.",
+      }}
+      formCardTitle="Sign in to continue"
+      formCardSubtitle="Use the Google account linked to your invitation email."
     >
-      <h2 className="text-page-title">Sign in to continue</h2>
-      <p className="text-caption mb-4 mt-1">
-        Use the Google account linked to your invitation email.
-      </p>
-
       <ul className="mb-6 space-y-2 rounded-lg bg-blue-50/80 p-4">
         {TRUST_POINTS.map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -73,9 +84,7 @@ export default function CustomerLoginContent() {
         <div className="mb-6 rounded-lg border border-border bg-blue-50 p-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Google sign-in not configured</p>
           <p className="mt-1">
-            Add <code className="text-xs">GOOGLE_CLIENT_ID</code> and{" "}
-            <code className="text-xs">GOOGLE_CLIENT_SECRET</code> to{" "}
-            <code className="text-xs">apps/web/.env.local</code>, then restart the dev server.
+            Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to your environment, then restart the server.
           </p>
         </div>
       )}

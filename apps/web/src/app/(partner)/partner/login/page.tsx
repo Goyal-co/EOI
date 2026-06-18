@@ -5,7 +5,9 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Building2, FileText, Users, Shield } from "lucide-react";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 export default function PartnerLoginPage() {
   const [email, setEmail] = useState("");
@@ -85,23 +87,31 @@ export default function PartnerLoginPage() {
   return (
     <AuthLayout
       portalLabel="Partner Portal"
+      backgroundImage={LOGIN_BG}
       subtitle="Grow Your Business with Premium Projects"
-      stats={[
-        { label: "Projects", value: "250+" },
-        { label: "Years", value: "53+" },
-        { label: "Customers", value: "30k+" },
+      highlightSubtitle="Premium Projects"
+      description="Partner with one of Bangalore's most trusted developers and access projects & marketing resources in one place."
+      features={[
+        { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
+        { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
+        { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
       ]}
+      stats={[
+        { label: "Years of Legacy", value: "53+" },
+        { label: "Projects Delivered", value: "250+" },
+        { label: "Happy Customers", value: "30k+" },
+      ]}
+      formCardTitle="Partner Login"
+      formCardSubtitle="Authorized Channel Partners Only"
+      formCardIcon={Shield}
     >
-      <h2 className="text-page-title">Welcome back</h2>
-      <p className="text-caption mb-8 mt-1">Sign in to your partner account</p>
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="partner@company.com"
+          placeholder="Enter your email"
           required
         />
         <div className="relative">
@@ -123,9 +133,9 @@ export default function PartnerLoginPage() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-end">
           <Link href="/partner/forgot-password" className="text-sm text-blue-600 hover:underline">
-            Forgot password?
+            Forgot Password?
           </Link>
         </div>
 
@@ -135,9 +145,9 @@ export default function PartnerLoginPage() {
       </form>
 
       <p className="text-center text-sm text-muted-foreground mt-6">
-        Don&apos;t have an account?{" "}
+        Interested in becoming a Channel Partner?{" "}
         <Link href="/partner/register" className="text-blue-600 font-medium hover:underline">
-          Register as Partner
+          Contact Us &gt;
         </Link>
       </p>
     </AuthLayout>

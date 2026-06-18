@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "../lib/utils";
 import { brand } from "../tokens";
-import { ChevronLeft, LogOut, X, type LucideIcon } from "lucide-react";
+import { ChevronLeft, LogOut, Settings, X, type LucideIcon } from "lucide-react";
 import { Portal } from "./portal";
 
 export interface SidebarItem {
@@ -27,6 +27,7 @@ export interface SidebarProps {
     avatar?: string;
   };
   onLogout?: () => void;
+  onSettingsClick?: () => void;
   className?: string;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -41,6 +42,7 @@ function SidebarInner({
   onToggleCollapse,
   profile,
   onLogout,
+  onSettingsClick,
   onNavigate,
   showClose,
   onClose,
@@ -132,6 +134,20 @@ function SidebarInner({
               </div>
             )}
           </div>
+          {onSettingsClick && (
+            <button
+              type="button"
+              onClick={onSettingsClick}
+              aria-label="Settings"
+              className={cn(
+                "mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground",
+                collapsed && "justify-center"
+              )}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              {!collapsed && "Settings"}
+            </button>
+          )}
           {onLogout && (
             <button
               type="button"

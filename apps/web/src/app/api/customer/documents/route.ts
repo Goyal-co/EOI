@@ -36,6 +36,13 @@ export async function POST(req: Request) {
   const exists = await DocumentService.objectExists(parsed.data.fileUrl);
   if (!exists) return apiError("Uploaded file not found. Please upload again.", 400);
 
+  const existing = await prisma.document.findFirst({
+    where: { eoiId: eoi.id, type: parsed.data.type },
+  });
+  if (existing) {
+    await DocumentService.deleteDocument(existing.id);
+  }
+
   const doc = await DocumentService.saveDocument({
     ...parsed.data,
     eoiId: eoi.id,

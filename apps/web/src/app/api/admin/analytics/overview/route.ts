@@ -1,6 +1,7 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse } from "@/lib/api";
 import { computeGrowth, getPeriodWindows, dateRangeFilter } from "@/lib/analytics/growth";
+import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
 export async function GET() {
   const { error } = await withAuth(["ADMIN"]);
@@ -155,23 +156,25 @@ export async function GET() {
     };
   });
 
-  const projectPerformance = projects.map((p) => {
-    const leadOnlyCount = p.leads.filter((l) => l.intentType === "LEAD_ONLY").length;
-    const eoiLeadCount = p.leads.filter((l) => l.intentType === "EOI").length;
-    return {
-      id: p.id,
-      name: p.name,
-      location: p.location,
-      eoiStatus: p.eoiStatus,
-      bannerUrl: p.bannerUrl,
-      totalLeads: p._count.leads,
-      totalEois: p._count.eois,
-      leadOnlyCount,
-      eoiLeadCount,
-      totalClosures: p.eois.length,
-      conversionRate: p._count.leads > 0 ? Math.round((p.eois.length / p._count.leads) * 100) : 0,
-    };
-  });
+  const projectPerformance = await Promise.all(
+    projects.map(async (p) => {
+      const leadOnlyCount = p.leads.filter((l) => l.intentType === "LEAD_ONLY").length;
+      const eoiLeadCount = p.leads.filter((l) => l.intentType === "EOI").length;
+      return {
+        id: p.id,
+        name: p.name,
+        location: p.location,
+        eoiStatus: p.eoiStatus,
+        bannerUrl: await resolveProjectBannerUrl(p.bannerUrl),
+        totalLeads: p._count.leads,
+        totalEois: p._count.eois,
+        leadOnlyCount,
+        eoiLeadCount,
+        totalClosures: p.eois.length,
+        conversionRate: p._count.leads > 0 ? Math.round((p.eois.length / p._count.leads) * 100) : 0,
+      };
+    })
+  );
 
   return apiResponse({
     stats: {

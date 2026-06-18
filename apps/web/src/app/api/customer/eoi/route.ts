@@ -6,6 +6,10 @@ import { encryptFormData } from "@/lib/services/form-data-pii";
 import { getSystemSettings } from "@/lib/services/system-settings";
 
 import { resolveCustomerEoi } from "@/lib/customer/eoi-resolver";
+import {
+  resolveRequiredDocumentTypes,
+  formatMissingDocumentLabels,
+} from "@/lib/required-documents";
 
 const EDITABLE_STATUSES = ["DRAFT", "PENDING_SUBMISSION", "CORRECTION_REQUESTED"];
 const LOCKED_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "CLOSED"];
@@ -25,7 +29,7 @@ export async function GET(req: Request) {
     where: { id: eoi.id },
     include: {
       lead: true,
-      project: true,
+      project: { include: { eoiRules: true } },
       documents: true,
       approvalActions: { orderBy: { createdAt: "desc" } },
     },
@@ -122,11 +126,15 @@ export async function PUT(req: Request) {
     }
 
     const projectRule = eoi.project.eoiRules[0];
-    if (projectRule?.requiredDocuments?.length) {
+    const requiredTypes = projectRule?.requiredDocuments?.length
+      ? resolveRequiredDocumentTypes(projectRule.requiredDocuments)
+      : [];
+
+    if (requiredTypes.length > 0) {
       const uploadedTypes = new Set(eoi.documents.map((d) => d.type));
-      const missing = projectRule.requiredDocuments.filter((t) => !uploadedTypes.has(t as never));
+      const missing = requiredTypes.filter((t) => !uploadedTypes.has(t));
       if (missing.length > 0) {
-        return apiError(`Missing required documents: ${missing.join(", ")}`);
+        return apiError(`Missing required documents: ${formatMissingDocumentLabels(missing)}`);
       }
     }
 

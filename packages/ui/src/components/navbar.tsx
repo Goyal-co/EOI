@@ -17,6 +17,9 @@ export interface NavbarProps {
   onQuickAction?: () => void;
   quickActionLabel?: string;
   showDate?: boolean;
+  profileName?: string;
+  profileRole?: string;
+  onProfileClick?: () => void;
   onMenuClick?: () => void;
   children?: React.ReactNode;
 }
@@ -34,6 +37,9 @@ export function Navbar({
   onQuickAction,
   quickActionLabel = "Add Project",
   showDate = true,
+  profileName,
+  profileRole,
+  onProfileClick,
   onMenuClick,
   children,
 }: NavbarProps) {
@@ -116,6 +122,23 @@ export function Navbar({
                   {notificationCount}
                 </span>
               )}
+            </button>
+          )}
+
+          {onProfileClick && profileName && (
+            <button
+              type="button"
+              onClick={onProfileClick}
+              aria-label="Profile"
+              className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-600">
+                {profileName.charAt(0)}
+              </div>
+              <div className="hidden text-left sm:block">
+                <p className="max-w-[120px] truncate text-sm font-medium text-foreground">{profileName}</p>
+                {profileRole && <p className="max-w-[120px] truncate text-[10px] text-gold">{profileRole}</p>}
+              </div>
             </button>
           )}
 

@@ -6,7 +6,7 @@ import {
   StatCard, ProjectCard, CardSkeleton, DataTable, JourneyStatusBadge, formatDate, PageHeader,
 } from "@goyal/ui";
 import {
-  UserCheck, FileText, CheckCircle, XCircle, Clock, Send, FileEdit, UserPlus,
+  UserCheck, FileText, CheckCircle, XCircle, Clock, Send,
 } from "lucide-react";
 import { usePartnerAnalytics, usePartnerProjects } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
@@ -14,15 +14,11 @@ import { PunchLeadModal } from "@/components/punch-lead-modal";
 
 interface PartnerAnalytics {
   totalLeads: { value: number; growth: number };
+  eoiPendingCustomer: { value: number; growth: number };
   confirmationPending: { value: number; growth: number };
-  confirmationSent: { value: number; growth: number };
-  draft: { value: number; growth: number };
   submittedEOIs: { value: number; growth: number };
   approvedEOIs: { value: number; growth: number };
   rejectedEOIs: { value: number; growth: number };
-  leadOnlyTotal?: { value: number; growth: number };
-  leadOnlyPending?: { value: number; growth: number };
-  leadOnlyConfirmed?: { value: number; growth: number };
   recentLeads?: Array<{
     id: string;
     customerName: string;
@@ -42,16 +38,12 @@ interface Project {
 }
 
 const KPI_CONFIG = [
-  { key: "totalLeads" as const, title: "Total Leads", icon: UserCheck },
-  { key: "leadOnlyTotal" as const, title: "Lead-Only Total", icon: UserPlus },
-  { key: "leadOnlyPending" as const, title: "Lead-Only Pending", icon: Clock },
-  { key: "leadOnlyConfirmed" as const, title: "Lead-Only Confirmed", icon: CheckCircle },
-  { key: "confirmationPending" as const, title: "Confirmation Pending", icon: Clock },
-  { key: "confirmationSent" as const, title: "Confirmation Sent", icon: Send },
-  { key: "draft" as const, title: "Draft", icon: FileEdit },
-  { key: "submittedEOIs" as const, title: "Submitted EOIs", icon: FileText },
-  { key: "approvedEOIs" as const, title: "Approved EOIs", icon: CheckCircle },
-  { key: "rejectedEOIs" as const, title: "Rejected EOIs", icon: XCircle },
+  { key: "totalLeads" as const, title: "Total Leads", icon: UserCheck, href: "/partner/leads" },
+  { key: "submittedEOIs" as const, title: "EOI's Submitted", icon: FileText, href: "/partner/eois" },
+  { key: "eoiPendingCustomer" as const, title: "EOI's Pending (Customer)", icon: Clock, href: "/partner/leads?status=DRAFT" },
+  { key: "confirmationPending" as const, title: "EOI's Confirmation Pending (Admin)", icon: Send, href: "/partner/leads?status=CONFIRMATION_PENDING" },
+  { key: "approvedEOIs" as const, title: "Approved EOI's", icon: CheckCircle, href: "/partner/eois" },
+  { key: "rejectedEOIs" as const, title: "Rejected EOI's", icon: XCircle, href: "/partner/eois" },
 ];
 
 export default function PartnerDashboardPage() {
@@ -80,18 +72,18 @@ export default function PartnerDashboardPage() {
         description="Overview of your partner activity"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {analyticsLoading ? (
-          Array.from({ length: 7 }).map((_, i) => <CardSkeleton key={i} />)
+          Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)
         ) : (
-          KPI_CONFIG.map(({ key, title, icon }) => (
+          KPI_CONFIG.map(({ key, title, icon, href }) => (
             <StatCard
               key={key}
               title={title}
               value={stats?.[key]?.value ?? 0}
               icon={icon}
               growth={stats?.[key]?.growth}
-              onClick={() => router.push("/partner/leads")}
+              onClick={() => router.push(href)}
             />
           ))
         )}
