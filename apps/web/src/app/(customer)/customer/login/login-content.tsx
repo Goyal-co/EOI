@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { AuthLayout, Button } from "@goyal/ui";
 import { AlertCircle, Building2, FileCheck, Shield, Users } from "lucide-react";
 
@@ -61,7 +60,7 @@ export default function CustomerLoginContent() {
         title: "A Legacy Built on Trust",
         body: "For over five decades, Goyal & Co. | Hariyana Group has been delivering excellence in real estate with unwavering commitment to quality, transparency & customer satisfaction.",
       }}
-      formCardTitle="Sign in to continue"
+      formCardTitle="Log in to continue"
       formCardSubtitle="Use the Google account linked to your invitation email."
     >
       <ul className="mb-6 space-y-2 rounded-lg bg-blue-50/80 p-4">
@@ -108,17 +107,6 @@ export default function CustomerLoginContent() {
       <p className="mt-6 text-center text-xs text-muted-foreground">
         Use the same email address your Channel Partner registered for you.
         You must accept the confirmation email before signing in.
-      </p>
-
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Partner or admin?{" "}
-        <Link href="/partner/login" className="font-medium text-blue-600 hover:underline">
-          Partner login
-        </Link>
-        {" · "}
-        <Link href="/login" className="font-medium text-blue-600 hover:underline">
-          Admin login
-        </Link>
       </p>
     </AuthLayout>
   );

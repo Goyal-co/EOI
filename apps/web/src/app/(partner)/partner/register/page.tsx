@@ -141,7 +141,7 @@ export default function PartnerRegisterPage() {
 
       <p className="text-center text-sm text-muted-foreground mt-8">
         Already have an account?{" "}
-        <Link href="/partner/login" className="text-blue-600 font-medium hover:underline">Sign in</Link>
+        <Link href="/partner/login" className="text-blue-600 font-medium hover:underline">Log In</Link>
       </p>
     </AuthLayout>
   );

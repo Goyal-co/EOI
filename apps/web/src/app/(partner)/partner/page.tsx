@@ -39,11 +39,11 @@ interface Project {
 
 const KPI_CONFIG = [
   { key: "totalLeads" as const, title: "Total Leads", icon: UserCheck, href: "/partner/leads" },
-  { key: "submittedEOIs" as const, title: "EOI's Submitted", icon: FileText, href: "/partner/eois" },
+  { key: "submittedEOIs" as const, title: "EOI's Submitted", icon: FileText, href: "/partner/eois?status=submitted" },
   { key: "eoiPendingCustomer" as const, title: "EOI's Pending (Customer)", icon: Clock, href: "/partner/leads?status=DRAFT" },
-  { key: "confirmationPending" as const, title: "EOI's Confirmation Pending (Admin)", icon: Send, href: "/partner/leads?status=CONFIRMATION_PENDING" },
-  { key: "approvedEOIs" as const, title: "Approved EOI's", icon: CheckCircle, href: "/partner/eois" },
-  { key: "rejectedEOIs" as const, title: "Rejected EOI's", icon: XCircle, href: "/partner/eois" },
+  { key: "confirmationPending" as const, title: "EOI's Confirmation Pending", icon: Send, href: "/partner/leads?status=CONFIRMATION_PENDING" },
+  { key: "approvedEOIs" as const, title: "Approved EOI's", icon: CheckCircle, href: "/partner/eois?status=APPROVED" },
+  { key: "rejectedEOIs" as const, title: "Rejected EOI's", icon: XCircle, href: "/partner/eois?status=REJECTED" },
 ];
 
 export default function PartnerDashboardPage() {

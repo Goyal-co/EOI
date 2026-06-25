@@ -78,10 +78,11 @@ export function usePartnerLeads(filters?: Record<string, string>) {
   });
 }
 
-export function usePartnerEOIs() {
+export function usePartnerEOIs(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return useQuery({
-    queryKey: ["partner", "eois"],
-    queryFn: () => fetcher<PartnerEOI[]>("/api/partner/eois"),
+    queryKey: ["partner", "eois", status || "all"],
+    queryFn: () => fetcher<PartnerEOI[]>(`/api/partner/eois${query}`),
   });
 }
 
@@ -105,6 +106,7 @@ export function useCustomerEOI(eoiId?: string | null) {
       approvedAt?: string | null;
       adminRemarks?: string | null;
       rejectionReason?: string | null;
+      referenceNumber?: string | null;
       confirmationNumber?: string | null;
       lead?: { customerName: string; customerEmail: string; customerMobile: string; configuration?: string; budget?: string; city?: string };
       project?: { name: string; eoiRules?: { requiredDocuments?: string[] }[] };

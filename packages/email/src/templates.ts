@@ -1,54 +1,65 @@
 import { getAppBaseUrl } from "./urls";
+import {
+  wrapEmail,
+  emailHeader,
+  emailHero,
+  emailBody,
+  projectCard,
+  detailsGrid,
+  numberedSteps,
+  primaryButton,
+  secondaryButton,
+  buttonRow,
+  infoBox,
+  linkFallback,
+  emailSupportBlock,
+  emailStatsBlock,
+  emailFooter,
+} from "./email-layout";
 
-const baseStyle = `
-  font-family: 'Inter', -apple-system, sans-serif;
-  max-width: 600px; margin: 0 auto; background: #ffffff;
-`;
+const NAVY = "#1A2332";
+const GOLD = "#C9A84C";
+const MUTED = "#64748B";
 
-const headerStyle = `
-  background: linear-gradient(135deg, #1A2332 0%, #2D3A4F 100%);
-  padding: 32px; text-align: center;
-`;
-
-const buttonStyle = `
-  display: inline-block; padding: 12px 32px;
-  background: #C9A84C; color: white; text-decoration: none;
-  border-radius: 8px; font-weight: 600; margin: 8px 4px;
-`;
-
-const rejectButtonStyle = `
-  display: inline-block; padding: 12px 32px;
-  background: #64748B; color: white; text-decoration: none;
-  border-radius: 8px; font-weight: 600; margin: 8px 4px;
-`;
-
-function linkFallback(url: string, label: string): string {
-  return `
-    <p style="color: #64748B; font-size: 13px; margin: 16px 0 4px;">${label}:</p>
-    <p style="color: #2563EB; font-size: 13px; word-break: break-all; margin: 0 0 16px;">
-      <a href="${url}" style="color: #2563EB;">${url}</a>
-    </p>
-  `;
-}
-
-function stepsBlock(steps: string[]): string {
-  return `
-    <ol style="color: #64748B; line-height: 1.8; padding-left: 20px; margin: 16px 0;">
-      ${steps.map((s) => `<li style="margin-bottom: 6px;">${s}</li>`).join("")}
-    </ol>
-  `;
+function formatApprovalDate(date?: string | Date): string {
+  if (!date) {
+    return new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  }
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 }
 
 export function cpRegistrationAckEmailHtml(params: { cpName: string; email: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">Registration Received</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p>Thank you for registering as a Channel Partner with Goyal & Co. | Hariyana Group.</p><p>Your account (<strong>${params.email}</strong>) is pending admin approval. You will receive login credentials once approved.</p></div></div>`;
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Registration Received", "Received", "info"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
+      <p style="margin:0 0 12px;color:${MUTED};">Thank you for registering as a Channel Partner with Goyal & Co. | Hariyana Group.</p>
+      <p style="margin:0;color:${MUTED};">Your account (<strong style="color:${NAVY};">${params.email}</strong>) is pending admin approval. You will receive login credentials once approved.</p>
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function cpCredentialsEmailHtml(params: { cpName: string; email: string; loginUrl: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">Account Approved</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p>Your Channel Partner account has been approved.</p><p><strong>Login Email:</strong> ${params.email}</p><p>Use the password you set during registration.</p><div style="text-align: center; margin: 24px 0;"><a href="${params.loginUrl}" style="${buttonStyle}">Go to Partner Dashboard</a></div>${linkFallback(params.loginUrl, "Partner login link")}</div></div>`;
-}
-
-function paddingBlock() {
-  return "padding: 32px;";
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Account Approved", "Approved", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
+      <p style="margin:0 0 12px;color:${MUTED};">Your Channel Partner account has been approved.</p>
+      <p style="margin:0 0 4px;color:${MUTED};"><strong style="color:${NAVY};">Login Email:</strong> ${params.email}</p>
+      <p style="margin:0;color:${MUTED};">Use the password you set during registration.</p>
+      <div style="text-align:center;">${primaryButton("Go to Partner Dashboard", params.loginUrl)}</div>
+      ${linkFallback(params.loginUrl, "Partner login link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function customerConfirmationEmailHtml(params: {
@@ -62,41 +73,36 @@ export function customerConfirmationEmailHtml(params: {
   rejectUrl: string;
 }) {
   const emailNote = params.customerEmail
-    ? `<p style="color: #64748B; font-size: 14px;">This invitation was sent to <strong style="color: #1A2332;">${params.customerEmail}</strong>. Please use the same email when you sign in later.</p>`
+    ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This invitation was sent to <a href="mailto:${params.customerEmail}" style="color:#2563EB;">${params.customerEmail}</a>. Please use the same email when you sign in later.</p>`
     : "";
 
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
-        <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Expression of Interest — Step 1 of 3</p>
-      </div>
-      <div style="${paddingBlock()}">
-        <p style="color: #1A2332; font-size: 16px;">Dear ${params.customerName},</p>
-        <p style="color: #64748B; line-height: 1.6;">
-          <strong style="color: #1A2332;">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an Expression of Interest (EOI) at:
-        </p>
-        <div style="background: #F5F8FF; border-radius: 12px; padding: 24px; margin: 24px 0;">
-          <h2 style="color: #1A2332; margin: 0 0 8px;">${params.projectName}</h2>
-          <p style="color: #64748B; margin: 0;">${params.projectLocation}</p>
-        </div>
-        ${emailNote}
-        <p style="color: #64748B; line-height: 1.6;">Please confirm whether you would like to proceed with this Channel Partner. After you accept, you will receive a second email with your personal EOI link.</p>
-        ${stepsBlock([
-          "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
-          "Check your inbox for the EOI invitation email with your project link.",
-          "Sign in with Google using the same email address and complete your EOI form.",
-        ])}
-        <div style="text-align: center; margin: 32px 0;">
-          <a href="${params.acceptUrl}" style="${buttonStyle}">Accept &amp; Continue</a>
-          <a href="${params.rejectUrl}" style="${rejectButtonStyle}">Decline</a>
-        </div>
-        ${linkFallback(params.acceptUrl, "Accept association link")}
-        ${linkFallback(params.rejectUrl, "Decline association link")}
-        <p style="color: #94A3B8; font-size: 12px; margin-top: 24px;">If you did not expect this email, you can safely decline or ignore it.</p>
-      </div>
-    </div>
-  `;
+  return wrapEmail([
+    emailHeader("Expression of Interest &nbsp;|&nbsp; Step 1 of 3"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong style="color:${GOLD};">${params.customerName}</strong>,</p>
+      <p style="margin:0;color:${MUTED};">
+        <strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an Expression of Interest (EOI) at:
+      </p>
+      ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
+      ${emailNote}
+      <p style="margin:0 0 8px;color:${MUTED};">Please confirm whether you would like to proceed with this Channel Partner. After you accept, you will receive a second email with your personal EOI link.</p>
+      ${numberedSteps([
+        "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
+        "Check your inbox for the EOI invitation email with your project link.",
+        "Sign in with Google using the same email address and complete your EOI form.",
+      ])}
+      ${buttonRow([
+        { label: "Accept & Continue", href: params.acceptUrl, variant: "primary" },
+        { label: "Decline", href: params.rejectUrl, variant: "secondary" },
+      ])}
+      ${linkFallback(params.acceptUrl, "Accept association link")}
+      ${linkFallback(params.rejectUrl, "Decline association link")}
+      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this email, you can safely decline or ignore it.</p>
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function invitationEmailHtml(params: {
@@ -111,44 +117,38 @@ export function invitationEmailHtml(params: {
 }) {
   const loginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
 
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
-        <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Expression of Interest — Step 2 of 3</p>
-      </div>
-      <div style="${paddingBlock()}">
-        <p style="color: #1A2332; font-size: 16px;">Dear ${params.customerName},</p>
-        <p style="color: #64748B; line-height: 1.6;">
-          Thank you for confirming your association with <strong style="color: #1A2332;">${params.cpName}</strong>.
-          You can now complete your Expression of Interest for:
-        </p>
-        <div style="background: #F5F8FF; border-radius: 12px; padding: 24px; margin: 24px 0;">
-          <h2 style="color: #1A2332; margin: 0 0 8px;">${params.projectName}</h2>
-          <p style="color: #64748B; margin: 0;">${params.projectLocation}</p>
-          <p style="color: #C9A84C; font-weight: 600; margin: 12px 0 0;">Starting ${params.startingPrice}</p>
-        </div>
-        <p style="color: #64748B; font-size: 14px;">
-          Sign in with Google using <strong style="color: #1A2332;">${params.customerEmail}</strong> — the email your Channel Partner registered for you.
-        </p>
-        ${stepsBlock([
-          "Open your EOI invitation link below.",
-          "Click <strong>Continue with Google</strong> and sign in with your registered email.",
-          "Complete personal details, address, unit preference, and bank information.",
-          "Upload PAN, Aadhaar, and cheque documents, then submit your EOI.",
-        ])}
-        <div style="text-align: center; margin: 32px 0;">
-          <a href="${params.inviteUrl}" style="${buttonStyle}">Open My EOI Invitation</a>
-        </div>
-        ${linkFallback(params.inviteUrl, "Your EOI invitation link")}
-        <p style="color: #64748B; font-size: 14px; text-align: center;">Already signed in before?</p>
-        <div style="text-align: center; margin: 8px 0 24px;">
-          <a href="${loginUrl}" style="${rejectButtonStyle}">Go to Customer Login</a>
-        </div>
-        ${linkFallback(loginUrl, "Customer login link")}
-      </div>
-    </div>
-  `;
+  return wrapEmail([
+    emailHeader("Expression of Interest &nbsp;|&nbsp; Step 2 of 3"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0;color:${MUTED};">
+        Thank you for confirming your association with <strong style="color:${NAVY};">${params.cpName}</strong>.
+        You can now complete your Expression of Interest for:
+      </p>
+      ${projectCard({
+        projectName: params.projectName,
+        projectLocation: params.projectLocation,
+        startingPrice: params.startingPrice,
+      })}
+      <p style="margin:0;font-size:14px;color:${MUTED};">
+        Sign in with Google using <strong style="color:${NAVY};">${params.customerEmail}</strong> — the email your Channel Partner registered for you.
+      </p>
+      ${numberedSteps([
+        "Open your EOI invitation link below.",
+        "Click <strong>Continue with Google</strong> and sign in with your registered email.",
+        "Complete personal details, address, unit preference, and bank information.",
+        "Upload PAN, Aadhaar, and cheque documents, then submit your EOI.",
+      ])}
+      <div style="text-align:center;">${primaryButton("Open My EOI Invitation", params.inviteUrl)}</div>
+      ${linkFallback(params.inviteUrl, "Your EOI invitation link")}
+      <p style="margin:16px 0 8px;font-size:14px;color:${MUTED};text-align:center;">Already signed in before?</p>
+      <div style="text-align:center;">${secondaryButton("Go to Customer Login", loginUrl)}</div>
+      ${linkFallback(loginUrl, "Customer login link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function eoiSubmittedEmailHtml(params: {
@@ -158,47 +158,59 @@ export function eoiSubmittedEmailHtml(params: {
   customerPortalUrl?: string;
 }) {
   const portalUrl = params.customerPortalUrl || `${getAppBaseUrl()}/customer`;
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">EOI Submitted Successfully</h1></div>
-      <div style="${paddingBlock()}">
-        <p>Dear ${params.customerName},</p>
-        <p>Your Expression of Interest for <strong>${params.projectName}</strong> has been submitted successfully.</p>
-        <div style="background: #F5F8FF; border-radius: 12px; padding: 20px; margin: 20px 0;">
-          <p style="margin: 0; color: #64748B;">EOI Reference Number</p>
-          <p style="margin: 8px 0 0; font-size: 20px; font-weight: 700; color: #1A2332;">${params.referenceNumber}</p>
-        </div>
-        <p style="color: #64748B;">Status: <strong>Pending Admin Review</strong>. We will notify you once your EOI is reviewed.</p>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${portalUrl}" style="${buttonStyle}">View My EOI Status</a>
-        </div>
-        ${linkFallback(portalUrl, "Customer portal link")}
-      </div>
-    </div>
-  `;
+
+  return wrapEmail([
+    emailHeader(),
+    emailHero("EOI Submitted", "Submitted", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0 0 16px;color:${MUTED};">Your Expression of Interest for <strong style="color:${NAVY};">${params.projectName}</strong> has been submitted successfully.</p>
+      ${detailsGrid([
+        { label: "Project", value: params.projectName, icon: "&#127970;" },
+        { label: "Reference Number", value: params.referenceNumber, icon: "&#128196;" },
+        { label: "Status", value: "Pending Review", icon: "&#9203;" },
+      ])}
+      <p style="margin:0;color:${MUTED};">We will notify you once your EOI is reviewed by our team.</p>
+      <div style="text-align:center;">${primaryButton("View My EOI Status", portalUrl)}</div>
+      ${linkFallback(portalUrl, "Customer portal link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function eoiApprovedEmailHtml(params: {
   customerName: string;
   projectName: string;
   confirmationNumber: string;
+  approvedDate?: string;
   customerPortalUrl?: string;
 }) {
   const portalUrl = params.customerPortalUrl || `${getAppBaseUrl()}/customer`;
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}"><h1 style="color: #C9A84C; margin: 0;">EOI Approved</h1></div>
-      <div style="${paddingBlock()}">
-        <p>Dear ${params.customerName},</p>
-        <p>Congratulations! Your EOI for <strong>${params.projectName}</strong> has been approved.</p>
-        <p>Confirmation Number: <strong>${params.confirmationNumber}</strong></p>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${portalUrl}" style="${buttonStyle}">View Confirmation</a>
-        </div>
-        ${linkFallback(portalUrl, "Customer portal link")}
-      </div>
-    </div>
-  `;
+  const approvedOn = formatApprovalDate(params.approvedDate);
+
+  return wrapEmail([
+    emailHeader(),
+    emailHero("EOI Approved", "Approved", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;text-align:center;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0 0 16px;text-align:center;color:${MUTED};">
+        Congratulations! Your EOI for <strong style="color:${GOLD};">${params.projectName}</strong> has been approved.
+      </p>
+      ${detailsGrid([
+        { label: "Project", value: params.projectName, icon: "&#127970;" },
+        { label: "Confirmation Number", value: params.confirmationNumber, icon: "&#128196;" },
+        { label: "Approved On", value: approvedOn, icon: "&#128197;" },
+      ])}
+      <p style="margin:0;text-align:center;color:${MUTED};">You can login to the customer portal to view your EOI details and track next steps.</p>
+      <div style="text-align:center;">${primaryButton("View Confirmation", portalUrl)}</div>
+      ${linkFallback(portalUrl, "Customer portal link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function eoiRejectedEmailHtml(params: {
@@ -209,20 +221,21 @@ export function eoiRejectedEmailHtml(params: {
   customerPortalUrl?: string;
 }) {
   const portalUrl = params.customerPortalUrl || `${getAppBaseUrl()}/customer`;
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}"><h1 style="color: #EF4444; margin: 0;">EOI Update</h1></div>
-      <div style="${paddingBlock()}">
-        <p>Dear ${params.customerName}, your EOI for <strong>${params.projectName}</strong> was not approved.</p>
-        <p><strong>Reason:</strong> ${params.reason}</p>
-        ${params.remarks ? `<p><strong>Remarks:</strong> ${params.remarks}</p>` : ""}
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${portalUrl}" style="${buttonStyle}">View Details</a>
-        </div>
-        ${linkFallback(portalUrl, "Customer portal link")}
-      </div>
-    </div>
-  `;
+
+  return wrapEmail([
+    emailHeader(),
+    emailHero("EOI Update", undefined, "warning"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0 0 16px;color:${MUTED};">Your EOI for <strong style="color:${NAVY};">${params.projectName}</strong> was not approved.</p>
+      ${infoBox(`<strong>Reason:</strong> ${params.reason}${params.remarks ? `<br/><br/><strong>Remarks:</strong> ${params.remarks}` : ""}`, "warning")}
+      <div style="text-align:center;">${primaryButton("View Details", portalUrl)}</div>
+      ${linkFallback(portalUrl, "Customer portal link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function correctionRequestedEmailHtml(params: {
@@ -232,35 +245,80 @@ export function correctionRequestedEmailHtml(params: {
   eoiFormUrl?: string;
 }) {
   const formUrl = params.eoiFormUrl || `${getAppBaseUrl()}/customer/eoi`;
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}"><h1 style="color: #F59E0B; margin: 0;">Action Required — Update Your EOI</h1></div>
-      <div style="${paddingBlock()}">
-        <p>Dear ${params.customerName},</p>
-        <p>Corrections are needed for your EOI at <strong>${params.projectName}</strong> before it can be approved.</p>
-        <div style="background: #FFFBEB; border-radius: 12px; padding: 20px; margin: 20px 0; border: 1px solid #FDE68A;">
-          <p style="margin: 0; color: #92400E;">${params.remarks}</p>
-        </div>
-        <p style="color: #64748B;">Please sign in and update your EOI form with the requested corrections.</p>
-        <div style="text-align: center; margin: 24px 0;">
-          <a href="${formUrl}" style="${buttonStyle}">Update My EOI Form</a>
-        </div>
-        ${linkFallback(formUrl, "EOI form link")}
-      </div>
-    </div>
-  `;
+
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Action Required", "Required", "warning"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0 0 16px;color:${MUTED};">Corrections are needed for your EOI at <strong style="color:${NAVY};">${params.projectName}</strong> before it can be approved.</p>
+      ${infoBox(params.remarks, "warning")}
+      <p style="margin:0;color:${MUTED};">Please sign in and update your EOI form with the requested corrections.</p>
+      <div style="text-align:center;">${primaryButton("Update My EOI Form", formUrl)}</div>
+      ${linkFallback(formUrl, "EOI form link")}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function cpRegisteredEmailHtml(params: { cpName: string; companyName?: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C;">New CP Registration</h1></div><div style="${paddingBlock()}"><p>${params.cpName}${params.companyName ? ` from ${params.companyName}` : ""} has registered and awaits approval.</p></div></div>`;
+  return wrapEmail([
+    emailHeader(),
+    emailHero("New CP Registration", "Registration", "info"),
+    emailBody(`
+      <p style="margin:0;color:${MUTED};">
+        <strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` from ${params.companyName}` : ""} has registered and awaits approval.
+      </p>
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
-export function cpCustomerSubmittedEmailHtml(params: { cpName: string; customerName: string; projectName: string; referenceNumber: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #C9A84C;">Customer EOI Submitted</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p><strong>${params.customerName}</strong> submitted an EOI for ${params.projectName}.</p><p>Reference: ${params.referenceNumber}</p></div></div>`;
+export function cpCustomerSubmittedEmailHtml(params: {
+  cpName: string;
+  customerName: string;
+  projectName: string;
+  referenceNumber: string;
+}) {
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Customer EOI Submitted", "Submitted", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
+      <p style="margin:0 0 16px;color:${MUTED};"><strong style="color:${NAVY};">${params.customerName}</strong> submitted an EOI for ${params.projectName}.</p>
+      ${detailsGrid([
+        { label: "Project", value: params.projectName, icon: "&#127970;" },
+        { label: "Reference", value: params.referenceNumber, icon: "&#128196;" },
+        { label: "Status", value: "Submitted", icon: "&#9203;" },
+      ])}
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
-export function cpCustomerRejectedEmailHtml(params: { cpName: string; customerName: string; projectName: string }) {
-  return `<div style="${baseStyle}"><div style="${headerStyle}"><h1 style="color: #EF4444;">Customer Declined Association</h1></div><div style="${paddingBlock()}"><p>Dear ${params.cpName},</p><p><strong>${params.customerName}</strong> has declined the Channel Partner association for <strong>${params.projectName}</strong>.</p><p>No further action is required on this lead.</p></div></div>`;
+export function cpCustomerRejectedEmailHtml(params: {
+  cpName: string;
+  customerName: string;
+  projectName: string;
+}) {
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Customer Declined Association", undefined, "warning"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
+      <p style="margin:0 0 12px;color:${MUTED};"><strong style="color:${NAVY};">${params.customerName}</strong> has declined the Channel Partner association for <strong style="color:${NAVY};">${params.projectName}</strong>.</p>
+      <p style="margin:0;color:${MUTED};">No further action is required on this lead.</p>
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 export function leadOnlyAcceptedEmailHtml(params: {
@@ -269,32 +327,26 @@ export function leadOnlyAcceptedEmailHtml(params: {
   projectName: string;
   projectLocation: string;
 }) {
-  return `
-    <div style="${baseStyle}">
-      <div style="${headerStyle}">
-        <h1 style="color: #C9A84C; margin: 0; font-size: 24px;">Goyal & Co. | Hariyana Group</h1>
-        <p style="color: #ffffff; margin: 8px 0 0; opacity: 0.8;">Interest Confirmed</p>
-      </div>
-      <div style="${paddingBlock()}">
-        <p style="color: #1A2332; font-size: 16px;">Dear ${params.customerName},</p>
-        <p style="color: #64748B; line-height: 1.6;">
-          Thank you for confirming your interest in <strong style="color: #1A2332;">${params.projectName}</strong>
-          with Channel Partner <strong style="color: #1A2332;">${params.cpName}</strong>.
-        </p>
-        <div style="background: #F5F8FF; border-radius: 12px; padding: 24px; margin: 24px 0;">
-          <h2 style="color: #1A2332; margin: 0 0 8px;">${params.projectName}</h2>
-          <p style="color: #64748B; margin: 0;">${params.projectLocation}</p>
-        </div>
-        <p style="color: #64748B; line-height: 1.6;">
-          Your interest has been registered. Our team and your Channel Partner will reach out with next steps.
-          No further action is required from you at this time.
-        </p>
-        <p style="color: #94A3B8; font-size: 12px; margin-top: 24px;">
-          EOI is currently closed for this project. This confirmation records your interest only.
-        </p>
-      </div>
-    </div>
-  `;
+  return wrapEmail([
+    emailHeader("Interest Confirmed"),
+    emailHero("Interest Confirmed", "Confirmed", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
+      <p style="margin:0;color:${MUTED};">
+        Thank you for confirming your interest in <strong style="color:${NAVY};">${params.projectName}</strong>
+        with Channel Partner <strong style="color:${NAVY};">${params.cpName}</strong>.
+      </p>
+      ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
+      <p style="margin:0;color:${MUTED};">
+        Your interest has been registered. Our team and your Channel Partner will reach out with next steps.
+        No further action is required from you at this time.
+      </p>
+      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">EOI is currently closed for this project. This confirmation records your interest only.</p>
+    `),
+    emailSupportBlock(),
+    emailStatsBlock(),
+    emailFooter(),
+  ]);
 }
 
 /** Placeholder HTML for DB email templates (admin-editable) */
@@ -359,6 +411,7 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
     confirmationNumber: "{{confirmationNumber}}",
+    approvedDate: "{{approvedDate}}",
     customerPortalUrl: "{{customerPortalUrl}}",
   }),
   EOI_REJECTED: eoiRejectedEmailHtml({

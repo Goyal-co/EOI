@@ -15,6 +15,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "gold"
   OPEN: { label: "EOI Open", variant: "success" },
   CLOSED_PROJECT: { label: "EOI Closed", variant: "error" },
   PENDING: { label: "Pending", variant: "warning" },
+  VERIFIED: { label: "Verified", variant: "success" },
   BLOCKED: { label: "Blocked", variant: "error" },
   ACCEPTED: { label: "Accepted", variant: "success" },
   NOT_SCHEDULED: { label: "Not Scheduled", variant: "outline" },

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  DataTable, StatusBadge, Card, CardSkeleton, EmptyState, formatDate, cn, PageHeader, Input,
+  DataTable, StatusBadge, Card, CardSkeleton, EmptyState, formatDate, cn, PageHeader, Input, LoadingSkeleton,
 } from "@goyal/ui";
 import { LayoutGrid, List } from "lucide-react";
 import { usePartnerEOIs } from "@/lib/hooks";
@@ -18,8 +19,10 @@ interface EOI {
   project: { name: string };
 }
 
-export default function PartnerEOIsPage() {
-  const { data, isLoading } = usePartnerEOIs();
+function PartnerEOIsContent() {
+  const searchParams = useSearchParams();
+  const statusFilter = searchParams.get("status") || undefined;
+  const { data, isLoading } = usePartnerEOIs(statusFilter);
   const allEois = (data as EOI[] | undefined) || [];
   const [view, setView] = useState<"cards" | "table">("cards");
   const [searchQuery, setSearchQuery] = useState("");
@@ -117,5 +120,13 @@ export default function PartnerEOIsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function PartnerEOIsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton rows={6} />}>
+      <PartnerEOIsContent />
+    </Suspense>
   );
 }

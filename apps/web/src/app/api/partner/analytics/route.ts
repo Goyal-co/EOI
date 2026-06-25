@@ -19,6 +19,7 @@ export async function GET() {
   const currentRange = dateRangeFilter(currentStart, currentEnd);
   const previousRange = dateRangeFilter(previousStart, previousEnd);
   const cpFilter = { cpId };
+  const eoiFilter = { cpId };
 
   const [
     leads,
@@ -27,36 +28,25 @@ export async function GET() {
     previousTotalLeads,
     currentConfirmationPending,
     previousConfirmationPending,
-    currentConfirmationSent,
-    previousConfirmationSent,
-    currentDraft,
-    previousDraft,
-    currentSubmitted,
-    previousSubmitted,
-    currentApproved,
-    previousApproved,
-    currentRejected,
-    previousRejected,
-    currentActive,
-    previousActive,
-    totalProjects,
-    currentProjects,
-    previousProjects,
-    leadOnlyTotal,
-    currentLeadOnlyTotal,
-    previousLeadOnlyTotal,
-    leadOnlyPending,
-    currentLeadOnlyPending,
-    previousLeadOnlyPending,
-    leadOnlyConfirmed,
-    currentLeadOnlyConfirmed,
-    previousLeadOnlyConfirmed,
-    eoiLeadsTotal,
-    currentEoiLeadsTotal,
-    previousEoiLeadsTotal,
-    eoiPendingSubmitted,
-    currentEoiPendingSubmitted,
-    previousEoiPendingSubmitted,
+    currentDraftLeads,
+    previousDraftLeads,
+    currentCorrectionPending,
+    previousCorrectionPending,
+    submittedEOIs,
+    currentSubmittedEOIs,
+    previousSubmittedEOIs,
+    approvedEOIs,
+    currentApprovedEOIs,
+    previousApprovedEOIs,
+    rejectedEOIs,
+    currentRejectedEOIs,
+    previousRejectedEOIs,
+    eoiPendingCustomer,
+    currentEoiPendingCustomer,
+    previousEoiPendingCustomer,
+    confirmationPending,
+    currentEoiConfirmationPending,
+    previousEoiConfirmationPending,
   ] = await Promise.all([
     prisma.lead.findMany({
       where: cpFilter,
@@ -74,71 +64,96 @@ export async function GET() {
     prisma.lead.count({ where: { ...cpFilter, createdAt: previousRange } }),
     prisma.lead.count({ where: { ...cpFilter, journeyStatus: "CONFIRMATION_PENDING", createdAt: currentRange } }),
     prisma.lead.count({ where: { ...cpFilter, journeyStatus: "CONFIRMATION_PENDING", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, confirmationSentAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, confirmationSentAt: previousRange } }),
     prisma.lead.count({ where: { ...cpFilter, journeyStatus: "DRAFT", createdAt: currentRange } }),
     prisma.lead.count({ where: { ...cpFilter, journeyStatus: "DRAFT", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "SUBMITTED", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "SUBMITTED", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "APPROVED", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "APPROVED", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "REJECTED", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "REJECTED", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "ACTIVE", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "ACTIVE", createdAt: previousRange } }),
-    prisma.cPProjectAccess.count({ where: cpFilter }),
-    prisma.cPProjectAccess.count({ where: { ...cpFilter, createdAt: currentRange } }),
-    prisma.cPProjectAccess.count({ where: { ...cpFilter, createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY" } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "CONFIRMATION_PENDING" } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "CONFIRMATION_PENDING", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "CONFIRMATION_PENDING", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "LEAD_CONFIRMED" } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "LEAD_CONFIRMED", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "LEAD_ONLY", journeyStatus: "LEAD_CONFIRMED", createdAt: previousRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "EOI" } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "EOI", createdAt: currentRange } }),
-    prisma.lead.count({ where: { ...cpFilter, intentType: "EOI", createdAt: previousRange } }),
-    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } } }),
-    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] }, updatedAt: currentRange } }),
-    prisma.eOI.count({ where: { cpId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] }, updatedAt: previousRange } }),
+    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "CORRECTION_PENDING", createdAt: currentRange } }),
+    prisma.lead.count({ where: { ...cpFilter, journeyStatus: "CORRECTION_PENDING", createdAt: previousRange } }),
+    prisma.eOI.count({
+      where: { ...eoiFilter, status: { in: ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "CLOSED"] } },
+    }),
+    prisma.eOI.count({
+      where: { ...eoiFilter, submittedAt: currentRange, status: { notIn: ["PENDING_SUBMISSION", "DRAFT"] } },
+    }),
+    prisma.eOI.count({
+      where: { ...eoiFilter, submittedAt: previousRange, status: { notIn: ["PENDING_SUBMISSION", "DRAFT"] } },
+    }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "APPROVED" } }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "APPROVED", approvedAt: currentRange } }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "APPROVED", approvedAt: previousRange } }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "REJECTED" } }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "REJECTED", updatedAt: currentRange } }),
+    prisma.eOI.count({ where: { ...eoiFilter, status: "REJECTED", updatedAt: previousRange } }),
+    prisma.eOI.count({
+      where: {
+        ...eoiFilter,
+        status: { in: ["DRAFT", "PENDING_SUBMISSION", "CORRECTION_REQUESTED"] },
+      },
+    }),
+    prisma.eOI.count({
+      where: {
+        ...eoiFilter,
+        status: { in: ["DRAFT", "PENDING_SUBMISSION", "CORRECTION_REQUESTED"] },
+        updatedAt: currentRange,
+      },
+    }),
+    prisma.eOI.count({
+      where: {
+        ...eoiFilter,
+        status: { in: ["DRAFT", "PENDING_SUBMISSION", "CORRECTION_REQUESTED"] },
+        updatedAt: previousRange,
+      },
+    }),
+    prisma.lead.count({
+      where: { ...cpFilter, intentType: "EOI", journeyStatus: "CONFIRMATION_PENDING" },
+    }),
+    prisma.lead.count({
+      where: { ...cpFilter, intentType: "EOI", journeyStatus: "CONFIRMATION_PENDING", createdAt: currentRange },
+    }),
+    prisma.lead.count({
+      where: { ...cpFilter, intentType: "EOI", journeyStatus: "CONFIRMATION_PENDING", createdAt: previousRange },
+    }),
   ]);
 
-  const allLeads = await prisma.lead.findMany({ where: cpFilter, select: { journeyStatus: true, confirmationSentAt: true } });
-  const journeyCounts = allLeads.reduce((acc, l) => {
-    acc[l.journeyStatus] = (acc[l.journeyStatus] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const eoiPendingCustomer = (journeyCounts.DRAFT || 0) + eoiPendingSubmitted;
+  const journeyCounts = await prisma.lead.groupBy({
+    by: ["journeyStatus"],
+    where: cpFilter,
+    _count: { _all: true },
+  });
+  const journeyMap = Object.fromEntries(
+    journeyCounts.map((row) => [row.journeyStatus, row._count._all])
+  );
 
   return apiResponse({
     totalLeads: { value: totalLeads, growth: computeGrowth(currentTotalLeads, previousTotalLeads) },
     eoiPendingCustomer: {
       value: eoiPendingCustomer,
-      growth: computeGrowth((currentDraft || 0) + (currentEoiPendingSubmitted || 0), (previousDraft || 0) + (previousEoiPendingSubmitted || 0)),
+      growth: computeGrowth(currentEoiPendingCustomer, previousEoiPendingCustomer),
     },
     confirmationPending: {
-      value: journeyCounts.CONFIRMATION_PENDING || 0,
-      growth: computeGrowth(currentConfirmationPending, previousConfirmationPending),
+      value: confirmationPending,
+      growth: computeGrowth(currentEoiConfirmationPending, previousEoiConfirmationPending),
     },
-    confirmationSent: {
-      value: allLeads.filter((l) => l.confirmationSentAt).length,
-      growth: computeGrowth(currentConfirmationSent, previousConfirmationSent),
+    submittedEOIs: {
+      value: submittedEOIs,
+      growth: computeGrowth(currentSubmittedEOIs, previousSubmittedEOIs),
     },
-    draft: { value: journeyCounts.DRAFT || 0, growth: computeGrowth(currentDraft, previousDraft) },
-    submittedEOIs: { value: journeyCounts.SUBMITTED || 0, growth: computeGrowth(currentSubmitted, previousSubmitted) },
-    approvedEOIs: { value: journeyCounts.APPROVED || 0, growth: computeGrowth(currentApproved, previousApproved) },
-    rejectedEOIs: { value: journeyCounts.REJECTED || 0, growth: computeGrowth(currentRejected, previousRejected) },
-    activeLeads: { value: journeyCounts.ACTIVE || 0, growth: computeGrowth(currentActive, previousActive) },
-    leadOnlyTotal: { value: leadOnlyTotal, growth: computeGrowth(currentLeadOnlyTotal, previousLeadOnlyTotal) },
-    leadOnlyPending: { value: leadOnlyPending, growth: computeGrowth(currentLeadOnlyPending, previousLeadOnlyPending) },
-    leadOnlyConfirmed: { value: leadOnlyConfirmed, growth: computeGrowth(currentLeadOnlyConfirmed, previousLeadOnlyConfirmed) },
-    eoiLeadsTotal: { value: eoiLeadsTotal, growth: computeGrowth(currentEoiLeadsTotal, previousEoiLeadsTotal) },
-    totalProjects: { value: totalProjects, growth: computeGrowth(currentProjects, previousProjects) },
-    journeyCounts,
+    approvedEOIs: {
+      value: approvedEOIs,
+      growth: computeGrowth(currentApprovedEOIs, previousApprovedEOIs),
+    },
+    rejectedEOIs: {
+      value: rejectedEOIs,
+      growth: computeGrowth(currentRejectedEOIs, previousRejectedEOIs),
+    },
+    draft: {
+      value: journeyMap.DRAFT || 0,
+      growth: computeGrowth(currentDraftLeads, previousDraftLeads),
+    },
+    correctionPending: {
+      value: journeyMap.CORRECTION_PENDING || 0,
+      growth: computeGrowth(currentCorrectionPending, previousCorrectionPending),
+    },
+    journeyCounts: journeyMap,
     recentLeads: leads,
   });
 }

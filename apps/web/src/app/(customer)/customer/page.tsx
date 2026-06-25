@@ -48,6 +48,7 @@ function CustomerDashboardContent() {
   }
 
   const displayJourneyStatus = journeyStatus || eoi.journeyStatus;
+  const showJourneyBadge = displayJourneyStatus && displayJourneyStatus !== eoi.status;
   const canSubmitEOI = ["PENDING_SUBMISSION", "DRAFT", "CORRECTION_REQUESTED"].includes(eoi.status);
   const currentEoiId = activeEoiId || eoiId;
 
@@ -91,7 +92,7 @@ function CustomerDashboardContent() {
           <CardContent>
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <StatusBadge status={eoi.status} />
-              {displayJourneyStatus && <JourneyStatusBadge status={displayJourneyStatus} />}
+              {showJourneyBadge && <JourneyStatusBadge status={displayJourneyStatus!} />}
             </div>
             {eoi.referenceNumber && (
               <p className="text-sm text-muted-foreground">

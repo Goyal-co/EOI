@@ -3,4 +3,5 @@ export { sendEmailWithLog, processEmailRetryQueue, enqueueEmailRetry } from "./e
 export { NotificationService } from "./notifications";
 export { isAdminNotificationEnabled, isTransactionalEmailType } from "./prefs";
 export * from "./templates";
+export * from "./email-layout";
 export { getAppBaseUrl } from "./urls";

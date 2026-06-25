@@ -26,6 +26,7 @@ export interface CustomerDocumentRecord {
 
 interface CustomerDocumentUploadsProps {
   eoiId?: string | null;
+  eoiStatus?: string;
   documents: CustomerDocumentRecord[];
   requiredTypes?: CustomerEoiDocumentType[];
   onPreview?: (doc: CustomerDocumentRecord) => void;
@@ -34,6 +35,7 @@ interface CustomerDocumentUploadsProps {
 
 export function CustomerDocumentUploads({
   eoiId,
+  eoiStatus,
   documents,
   requiredTypes,
   onPreview,
@@ -104,13 +106,16 @@ export function CustomerDocumentUploads({
         const label = CUSTOMER_DOCUMENT_LABELS[type];
         const existing = getDocForType(type);
         const upload = uploads[type];
+        const docStatus = existing
+          ? (eoiStatus === "APPROVED" || eoiStatus === "CLOSED" ? "VERIFIED" : existing.status)
+          : null;
 
         return (
           <Card key={type}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{label}</CardTitle>
-                {existing && <StatusBadge status={existing.status} />}
+                {docStatus && <StatusBadge status={docStatus} />}
               </div>
             </CardHeader>
             <CardContent>

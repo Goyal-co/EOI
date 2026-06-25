@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
       featuresPosition="bottom"
       showDescriptionDivider
       formCardTitle="Admin Portal"
-      formCardSubtitle="Sign in to manage projects, EOIs, and channel partners."
+      formCardSubtitle="Log in to manage projects, EOIs, and channel partners."
       formCardIcon={Shield}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -106,7 +106,7 @@ export default function AdminLoginPage() {
           </Link>
         </div>
         <Button type="submit" variant="gold" className="w-full" loading={loading}>
-          Sign In
+          Log In
         </Button>
       </form>
 

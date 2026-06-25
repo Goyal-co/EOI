@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import {
   LoadingSkeleton, EmptyState, Modal, Button, PageHeader, useToast,
 } from "@goyal/ui";
-import { useCustomerDocuments } from "@/lib/hooks";
+import { useCustomerDocuments, useCustomerEOI } from "@/lib/hooks";
 import { useCustomerEoiId } from "@/components/customer/project-switcher";
 import {
   CustomerDocumentUploads,
@@ -15,7 +15,9 @@ import { getPresignedUrlForPreview, isImageFileName, openPresignedAsset } from "
 function CustomerDocumentsContent() {
   const { addToast } = useToast();
   const eoiId = useCustomerEoiId();
-  const { data: documents, isLoading } = useCustomerDocuments(eoiId);
+  const { data: documents, isLoading: docsLoading } = useCustomerDocuments(eoiId);
+  const { data: eoi, isLoading: eoiLoading } = useCustomerEOI(eoiId);
+  const isLoading = docsLoading || eoiLoading;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>("");
 
@@ -48,6 +50,7 @@ function CustomerDocumentsContent() {
 
       <CustomerDocumentUploads
         eoiId={eoiId}
+        eoiStatus={eoi?.status}
         documents={docs}
         onPreview={handlePreview}
       />

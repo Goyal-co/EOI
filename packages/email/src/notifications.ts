@@ -405,20 +405,23 @@ export class NotificationService {
     customerName: string;
     projectName: string;
     confirmationNumber: string;
+    approvedDate?: string;
     cpUserId?: string;
   }) {
     const customerPortalUrl = `${getAppBaseUrl()}/customer`;
+    const approvedDate = params.approvedDate || new Date().toISOString();
     const email = await this.resolveEmail(
       "EOI_APPROVED",
       {
         customerName: params.customerName,
         projectName: params.projectName,
         confirmationNumber: params.confirmationNumber,
+        approvedDate,
         customerPortalUrl,
       },
       {
         subject: `EOI Approved — ${params.projectName}`,
-        html: eoiApprovedEmailHtml({ ...params, customerPortalUrl }),
+        html: eoiApprovedEmailHtml({ ...params, approvedDate, customerPortalUrl }),
       },
     );
     await this.emit({

@@ -108,6 +108,13 @@ export class EOIEngine {
         });
       }
 
+      if (params.toStatus === "APPROVED") {
+        await tx.document.updateMany({
+          where: { eoiId: params.eoiId },
+          data: { status: "VERIFIED" },
+        });
+      }
+
       await writeAudit(
         {
           actorId: params.actorId,
@@ -177,6 +184,7 @@ export class EOIEngine {
         customerName: eoi.lead.customerName,
         projectName: eoi.project.name,
         confirmationNumber: confirmationNumber!,
+        approvedDate: new Date().toISOString(),
         cpUserId: eoi.cp.user?.id,
       });
     }

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
-import { Button, Timeline, Card, CardContent, Select } from "@goyal/ui";
+import { Button, Timeline, Card, CardContent, Select, formatDate } from "@goyal/ui";
 import { brand } from "@goyal/ui";
 import { useCustomerDashboard } from "@/lib/hooks";
 import { ArrowRight, Clock, Headphones, Shield } from "lucide-react";
@@ -43,19 +43,37 @@ export default function CustomerWelcomePage() {
       status: needsEOI ? ("current" as const) : ("completed" as const),
     },
     {
+      id: "submitted",
+      title: "EOI Form Submitted",
+      description: "Your EOI has been submitted for review",
+      status: needsEOI ? ("upcoming" as const) : ("completed" as const),
+    },
+    {
       id: "documents",
       title: "Upload Documents",
       description: "Submit PAN, Aadhaar, and cheque copies",
-      status: needsEOI ? ("upcoming" as const) : eoiStatus === "SUBMITTED" ? ("current" as const) : ("completed" as const),
+      status: needsEOI ? ("upcoming" as const) : ("completed" as const),
     },
     {
-      id: "approval",
-      title: "Admin Review & Approval",
+      id: "review",
+      title: "Under Admin Review",
       description: "Your EOI will be reviewed by the Goyal Hariyana Projects team",
       status: ["APPROVED", "REJECTED", "CLOSED"].includes(eoiStatus)
         ? ("completed" as const)
-        : ["SUBMITTED", "UNDER_REVIEW"].includes(eoiStatus)
+        : ["SUBMITTED", "UNDER_REVIEW", "CORRECTION_REQUESTED"].includes(eoiStatus)
           ? ("current" as const)
+          : ("upcoming" as const),
+    },
+    {
+      id: "approved",
+      title: "Approved",
+      description: eoiStatus === "APPROVED" && dashboard?.eoi?.approvedAt
+        ? formatDate(dashboard.eoi.approvedAt)
+        : "Awaiting approval",
+      status: ["APPROVED", "CLOSED"].includes(eoiStatus)
+        ? ("completed" as const)
+        : eoiStatus === "REJECTED"
+          ? ("completed" as const)
           : ("upcoming" as const),
     },
   ];

@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
-import { Eye, EyeOff, Building2, FileText, Users, Shield } from "lucide-react";
+import { Eye, EyeOff, Building2, FileText, Users, Shield, Lock, Mail } from "lucide-react";
 
 const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
@@ -106,27 +106,34 @@ export default function PartnerLoginPage() {
       formCardIcon={Shield}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your email"
-          required
-        />
         <div className="relative">
+          <Mail className="pointer-events-none absolute left-3 top-[2.35rem] h-4 w-4 text-muted-foreground" />
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            className="pl-10"
+            required
+          />
+        </div>
+        <div className="relative">
+          <Lock className="pointer-events-none absolute left-3 top-[2.35rem] h-4 w-4 text-muted-foreground" />
           <Input
             label="Password"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
+            className="pl-10 pr-10"
             required
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-9 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-[2.35rem] text-muted-foreground hover:text-foreground"
+            aria-label={showPassword ? "Hide password" : "Show password"}
             suppressHydrationWarning
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -140,14 +147,14 @@ export default function PartnerLoginPage() {
         </div>
 
         <Button type="submit" variant="gold" className="w-full" loading={loading}>
-          Sign In
+          Log In
         </Button>
       </form>
 
       <p className="text-center text-sm text-muted-foreground mt-6">
         Interested in becoming a Channel Partner?{" "}
         <Link href="/partner/register" className="text-blue-600 font-medium hover:underline">
-          Contact Us &gt;
+          Sign In &gt;
         </Link>
       </p>
     </AuthLayout>
