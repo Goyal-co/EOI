@@ -65,8 +65,8 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
 
-export const PROJECT_BANNER_WIDTH = 1920;
-export const PROJECT_BANNER_HEIGHT = 600;
+const PROJECT_BANNER_WIDTH = 1920;
+const PROJECT_BANNER_HEIGHT = 600;
 
 const emptyForm: ProjectForm = {
   name: "",
