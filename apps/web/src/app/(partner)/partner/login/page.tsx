@@ -88,18 +88,17 @@ export default function PartnerLoginPage() {
     <AuthLayout
       portalLabel="Partner Portal"
       backgroundImage={LOGIN_BG}
-      subtitle="Grow Your Business with Premium Projects"
-      highlightSubtitle="Premium Projects"
-      description="Partner with one of Bangalore's most trusted developers and access projects & marketing resources in one place."
+      subtitle="Join our network of property advisor"
+      description=""
       features={[
         { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
         { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
         { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
       ]}
       stats={[
-        { label: "Years of Legacy", value: "53+" },
-        { label: "Projects Delivered", value: "250+" },
-        { label: "Happy Customers", value: "30k+" },
+        { label: "Years", value: "55+" },
+        { label: "Projects", value: "250+" },
+        { label: "Loyal Customers", value: "30+" },
       ]}
       formCardTitle="Partner Login"
       formCardSubtitle="Authorized Channel Partners Only"

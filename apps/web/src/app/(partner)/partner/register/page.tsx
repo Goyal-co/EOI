@@ -4,15 +4,17 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Input, MultiStepForm, useToast, AuthLayout,
+  Input, MultiStepForm, useToast, AuthLayout, FileUpload, type UploadedFile,
 } from "@goyal/ui";
 import type { CPRegisterStep1, CPRegisterStep2 } from "@goyal/types";
 import { isRegistrationStepValid, getRegistrationStepHints } from "@/lib/registration/validation";
 
 const STEPS = [
   { id: "personal", title: "Personal", description: "Your personal account details" },
-  { id: "business", title: "Business", description: "RERA, PAN, and GST details" },
+  { id: "business", title: "Business", description: "Company, RERA, PAN, GST & documents" },
 ];
+
+type DocKey = "reraCert" | "gstCert" | "cheque" | "panDoc";
 
 export default function PartnerRegisterPage() {
   const [step, setStep] = useState<0 | 1>(0);
@@ -30,8 +32,25 @@ export default function PartnerRegisterPage() {
     panNumber: "",
     gstNumber: "",
   });
+  const [docs, setDocs] = useState<Partial<Record<DocKey, File>>>({});
+  const [docMeta, setDocMeta] = useState<Partial<Record<DocKey, UploadedFile>>>({});
   const { addToast } = useToast();
   const router = useRouter();
+
+  const setDoc = (key: DocKey, file: File | null) => {
+    setDocs((prev) => {
+      const next = { ...prev };
+      if (file) next[key] = file;
+      else delete next[key];
+      return next;
+    });
+    setDocMeta((prev) => {
+      const next = { ...prev };
+      if (file) next[key] = { name: file.name, size: file.size, status: "success" };
+      else delete next[key];
+      return next;
+    });
+  };
 
   const postStep = async (s: number, data: unknown) => {
     const res = await fetch("/api/partner/register", {
@@ -44,8 +63,19 @@ export default function PartnerRegisterPage() {
     return json;
   };
 
-  const canProceed = isRegistrationStepValid(step, step1, step2);
-  const hints = useMemo(() => getRegistrationStepHints(step, step1, step2), [step, step1, step2]);
+  const docsValid = !!docs.reraCert && !!docs.panDoc && !!docs.cheque;
+  const canProceed = step === 0
+    ? isRegistrationStepValid(0, step1, step2)
+    : isRegistrationStepValid(1, step1, step2) && docsValid;
+  const hints = useMemo(() => {
+    const base = getRegistrationStepHints(step, step1, step2);
+    if (step === 1) {
+      if (!docs.reraCert) base.push("Upload RERA certificate PDF");
+      if (!docs.panDoc) base.push("Upload PAN document PDF");
+      if (!docs.cheque) base.push("Upload cancelled cheque image");
+    }
+    return base;
+  }, [step, step1, step2, docs]);
 
   const handleNext = async () => {
     setLoading(true);
@@ -57,7 +87,19 @@ export default function PartnerRegisterPage() {
         }
         setStep(1);
       } else {
-        await postStep(3, { step1, step2 });
+        const form = new FormData();
+        form.append("step", "3");
+        form.append("step1", JSON.stringify(step1));
+        form.append("step2", JSON.stringify(step2));
+        form.append("reraCert", docs.reraCert!);
+        form.append("panDoc", docs.panDoc!);
+        form.append("cheque", docs.cheque!);
+        if (docs.gstCert) form.append("gstCert", docs.gstCert);
+
+        const res = await fetch("/api/partner/register", { method: "POST", body: form });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Registration failed");
+
         addToast({ type: "success", title: "Registration submitted", message: "Your account is pending admin approval" });
         router.push(`/partner/pending-approval?email=${encodeURIComponent(step1.email)}`);
       }
@@ -71,7 +113,8 @@ export default function PartnerRegisterPage() {
   return (
     <AuthLayout
       portalLabel="Partner Portal"
-      subtitle="Join our network of channel partners"
+      subtitle="Join our network of property advisor"
+      description=""
     >
       <h1 className="text-page-title">Partner Registration</h1>
       <p className="text-caption mt-1 mb-6">Complete your application to get started</p>
@@ -104,10 +147,11 @@ export default function PartnerRegisterPage() {
         {step === 1 && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
-              label="Company Name (optional)"
+              label="Company / Individual Name"
               value={step2.companyName || ""}
               onChange={(e) => setStep2({ ...step2, companyName: e.target.value })}
               className="sm:col-span-2"
+              placeholder="Registered company or individual name"
             />
             <Input
               label="RERA Number"
@@ -127,6 +171,40 @@ export default function PartnerRegisterPage() {
               onChange={(e) => setStep2({ ...step2, gstNumber: e.target.value })}
               className="sm:col-span-2"
             />
+            <div className="sm:col-span-2 grid gap-4 sm:grid-cols-2">
+              <FileUpload
+                label="RERA Certificate (PDF)"
+                accept=".pdf,application/pdf"
+                maxSize={10 * 1024 * 1024}
+                file={docMeta.reraCert || null}
+                onUpload={(file) => setDoc("reraCert", file)}
+                onRemove={() => setDoc("reraCert", null)}
+              />
+              <FileUpload
+                label="PAN Document (PDF)"
+                accept=".pdf,application/pdf"
+                maxSize={10 * 1024 * 1024}
+                file={docMeta.panDoc || null}
+                onUpload={(file) => setDoc("panDoc", file)}
+                onRemove={() => setDoc("panDoc", null)}
+              />
+              <FileUpload
+                label="Cancelled Cheque (Image)"
+                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                maxSize={10 * 1024 * 1024}
+                file={docMeta.cheque || null}
+                onUpload={(file) => setDoc("cheque", file)}
+                onRemove={() => setDoc("cheque", null)}
+              />
+              <FileUpload
+                label="GST Certificate (PDF, optional)"
+                accept=".pdf,application/pdf"
+                maxSize={10 * 1024 * 1024}
+                file={docMeta.gstCert || null}
+                onUpload={(file) => setDoc("gstCert", file)}
+                onRemove={() => setDoc("gstCert", null)}
+              />
+            </div>
           </div>
         )}
 

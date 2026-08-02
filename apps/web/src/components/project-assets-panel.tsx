@@ -17,6 +17,8 @@ const ASSET_TYPE_MAP: Record<string, string> = {
   "floor-plans": "FLOOR_PLAN",
   "cost-sheet": "COST_SHEET",
   gallery: "GALLERY",
+  creatives: "CREATIVE",
+  walkthrough: "WALKTHROUGH",
 };
 
 export type ProjectAssetTab = keyof typeof ASSET_TYPE_MAP;
@@ -32,9 +34,14 @@ function getAssetsForTab(assets: ProjectAssetItem[], tab: ProjectAssetTab) {
   return assets.filter((a) => a.type === type);
 }
 
+function isVideoFileName(fileName: string) {
+  return /\.(mp4|webm|mov|m4v)$/i.test(fileName);
+}
+
 export function ProjectAssetsPanel({ assets, tab, downloadApiPrefix }: ProjectAssetsPanelProps) {
   const items = getAssetsForTab(assets, tab);
   const tabLabel = tab.replace("-", " ");
+  const gridTabs = tab === "gallery" || tab === "creatives";
 
   if (items.length === 0) {
     return (
@@ -49,9 +56,15 @@ export function ProjectAssetsPanel({ assets, tab, downloadApiPrefix }: ProjectAs
 
   return (
     <Card className="p-6">
-      <div className={cn("gap-4", tab === "gallery" ? "grid sm:grid-cols-2 lg:grid-cols-3" : "space-y-3")}>
+      <div className={cn("gap-4", gridTabs ? "grid sm:grid-cols-2 lg:grid-cols-3" : "space-y-3")}>
         {items.map((asset) => (
-          tab === "gallery" ? (
+          tab === "walkthrough" ? (
+            <WalkthroughAssetCard
+              key={asset.id}
+              asset={asset}
+              downloadApiPrefix={downloadApiPrefix}
+            />
+          ) : gridTabs ? (
             <GalleryAssetCard
               key={asset.id}
               asset={asset}
@@ -129,6 +142,42 @@ function GalleryAssetCard({
       )}
       <p className="p-2 text-xs text-muted-foreground truncate">{asset.fileName}</p>
     </button>
+  );
+}
+
+function WalkthroughAssetCard({
+  asset,
+  downloadApiPrefix,
+}: {
+  asset: ProjectAssetItem;
+  downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
+}) {
+  const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPresignedUrlForPreview(apiPath)
+      .then((url) => { if (!cancelled) setSrc(url); })
+      .catch(() => { if (!cancelled) setSrc(asset.fileUrl); });
+    return () => { cancelled = true; };
+  }, [apiPath, asset.fileUrl]);
+
+  return (
+    <div className="rounded-lg overflow-hidden border border-border">
+      {src && isVideoFileName(asset.fileName) ? (
+        <video src={src} controls className="w-full max-h-96 bg-black" />
+      ) : (
+        <div className="flex items-center justify-between p-4">
+          <p className="text-sm font-medium">{asset.fileName}</p>
+          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+            <ExternalLink className="h-4 w-4" />
+            View
+          </Button>
+        </div>
+      )}
+      <p className="p-2 text-xs text-muted-foreground truncate">{asset.fileName}</p>
+    </div>
   );
 }
 

@@ -23,7 +23,7 @@ const JOURNEY_STATUSES = [
 const INTENT_TYPES = [
   { value: "", label: "All Types" },
   { value: "EOI", label: "EOI" },
-  { value: "LEAD_ONLY", label: "Lead Only" },
+  { value: "LEAD_ONLY", label: "Lead" },
 ];
 
 export default function AdminLeadsPage() {

@@ -24,7 +24,7 @@ export const cpRegisterStep1Schema = z.object({
 });
 
 export const cpRegisterStep2Schema = z.object({
-  companyName: z.string().optional(),
+  companyName: z.string().min(2, "Company / Individual name is required"),
   reraNumber: z.string().min(5, "RERA number is required"),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
   gstNumber: z.string().optional(),
@@ -60,8 +60,8 @@ export const leadCreateSchema = z.object({
     z.string().email("Invalid email"),
   ),
   projectId: z.string().min(1, "Project is required"),
-  configuration: z.string().min(1, "Unit preference is required"),
-  fosName: z.string().min(1, "FOS name is required"),
+  configuration: z.string().optional(),
+  fosName: z.string().optional(),
   budget: z.string().optional(),
   city: z.string().optional(),
   notes: z.string().optional(),
@@ -177,7 +177,7 @@ export const partnerProfileSchema = z.object({
 });
 
 export const projectAssetSchema = z.object({
-  type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER"]),
+  type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH"]),
   fileName: z.string().min(1),
   fileUrl: z.string().url(),
   fileSize: z.number().optional(),
@@ -185,6 +185,14 @@ export const projectAssetSchema = z.object({
 
 export const leadPatchSchema = z.object({
   siteVisitStatus: z.enum(["NOT_SCHEDULED", "SCHEDULED", "COMPLETED", "CANCELLED"]).optional(),
+  siteVisitDate: z
+    .union([
+      z.string().datetime(),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      z.literal(""),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -228,7 +236,10 @@ export const notificationMarkReadSchema = z.object({
 });
 
 export const documentUploadSchema = z.object({
-  type: z.enum(["CHEQUE", "PAN", "AADHAAR", "RERA_CERT", "VISITING_CARD", "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER"]),
+  type: z.enum([
+    "CHEQUE", "PAN", "AADHAAR", "RERA_CERT", "GST_CERT", "VISITING_CARD",
+    "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH",
+  ]),
   fileName: z.string().min(1),
   fileUrl: z.string().min(1),
   fileSize: z.number().optional(),

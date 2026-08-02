@@ -53,14 +53,19 @@ function SidebarInner({
     <>
       <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-4 py-4">
         {logo || (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-gold to-gold-hover text-sm font-bold text-white">
-            G
-          </div>
+          <img
+            src={brand.logoSrc}
+            alt="Goyal Hariyana"
+            className={cn("object-contain", collapsed ? "h-8 w-8" : "h-9 w-auto max-w-[140px]")}
+          />
         )}
         {!collapsed && (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-            {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
+            {subtitle ? (
+              <p className="truncate text-sm font-semibold text-foreground">{subtitle}</p>
+            ) : title ? (
+              <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+            ) : null}
           </div>
         )}
         {showClose && onClose && (

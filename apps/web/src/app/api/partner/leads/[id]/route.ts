@@ -2,6 +2,55 @@ import { prisma } from "@goyal/db";
 import { leadPatchSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
 
+function resolveSiteVisit(data: {
+  siteVisitStatus?: "NOT_SCHEDULED" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
+  siteVisitDate?: string | null;
+}) {
+  const patch: {
+    siteVisitStatus?: "NOT_SCHEDULED" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
+    siteVisitDate?: Date | null;
+  } = {};
+
+  if (data.siteVisitDate !== undefined) {
+    if (!data.siteVisitDate) {
+      patch.siteVisitDate = null;
+    } else {
+      const date = new Date(data.siteVisitDate.includes("T") ? data.siteVisitDate : `${data.siteVisitDate}T00:00:00`);
+      if (Number.isNaN(date.getTime())) {
+        throw new Error("Invalid site visit date");
+      }
+      patch.siteVisitDate = date;
+    }
+  }
+
+  if (data.siteVisitStatus !== undefined) {
+    patch.siteVisitStatus = data.siteVisitStatus;
+  }
+
+  const status = patch.siteVisitStatus;
+  const visitDate = patch.siteVisitDate;
+
+  if (status === "NOT_SCHEDULED") {
+    patch.siteVisitDate = null;
+  }
+
+  if (status === "SCHEDULED" || (status === undefined && visitDate)) {
+    if (visitDate) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (visitDate <= startOfToday) {
+        patch.siteVisitStatus = "COMPLETED";
+      } else {
+        patch.siteVisitStatus = "SCHEDULED";
+      }
+    } else if (status === "SCHEDULED") {
+      patch.siteVisitStatus = "SCHEDULED";
+    }
+  }
+
+  return patch;
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
@@ -18,9 +67,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
   if (!lead) return apiError("Lead not found", 404);
 
+  let patch;
+  try {
+    patch = resolveSiteVisit(parsed.data);
+  } catch (e) {
+    return apiError(e instanceof Error ? e.message : "Invalid site visit update");
+  }
+
+  if (parsed.data.siteVisitStatus === "SCHEDULED" && !parsed.data.siteVisitDate && !lead.siteVisitDate) {
+    return apiError("Site visit date is required when scheduling");
+  }
+
   const updated = await prisma.lead.update({
     where: { id },
-    data: parsed.data,
+    data: patch,
   });
 
   return apiResponse(updated);

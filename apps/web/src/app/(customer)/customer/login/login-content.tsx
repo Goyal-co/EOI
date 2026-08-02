@@ -52,9 +52,9 @@ export default function CustomerLoginContent() {
       highlightSubtitle="exclusive portal"
       description="Access all your project information, submissions and documents in one secure place."
       stats={[
-        { label: "Years of Legacy", value: "53+", icon: Building2 },
-        { label: "Completed Projects", value: "250+", icon: Building2 },
-        { label: "Loyal Customers", value: "30k+", icon: Users },
+        { label: "Years", value: "55+", icon: Building2 },
+        { label: "Projects", value: "250+", icon: Building2 },
+        { label: "Loyal Customers", value: "30+", icon: Users },
       ]}
       legacyCard={{
         title: "A Legacy Built on Trust",

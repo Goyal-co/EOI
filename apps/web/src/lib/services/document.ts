@@ -27,18 +27,21 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   PAN: ["image/jpeg", "image/png", "application/pdf"],
   AADHAAR: ["image/jpeg", "image/png", "application/pdf"],
   RERA_CERT: ["application/pdf"],
+  GST_CERT: ["application/pdf"],
   VISITING_CARD: ["image/jpeg", "image/png", "application/pdf"],
   BROCHURE: ["application/pdf"],
   COST_SHEET: ["application/pdf"],
   FLOOR_PLAN: ["image/jpeg", "image/png", "application/pdf"],
   BANNER: ["image/jpeg", "image/png", "image/webp"],
   GALLERY: ["image/jpeg", "image/png", "image/webp"],
+  CREATIVE: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+  WALKTHROUGH: ["video/mp4", "video/webm", "video/quicktime"],
 };
 
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
   CUSTOMER: ["CHEQUE", "PAN", "AADHAAR"],
-  CHANNEL_PARTNER: ["RERA_CERT", "VISITING_CARD"],
-  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY"],
+  CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD"],
+  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH"],
 };
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -46,6 +49,7 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_SIZE_BY_TYPE: Partial<Record<DocumentType, number>> = {
   BROCHURE: 20 * 1024 * 1024,
   FLOOR_PLAN: 20 * 1024 * 1024,
+  WALKTHROUGH: 100 * 1024 * 1024,
 };
 
 export function getMaxFileSizeForType(type: DocumentType): number {
@@ -106,6 +110,41 @@ export class DocumentService {
       : `https://${BUCKET}.s3.amazonaws.com/${key}`;
 
     return { mode: "s3" as const, uploadUrl, fileUrl, key };
+  }
+
+  static async uploadBuffer(params: {
+    fileName: string;
+    mimeType: string;
+    folder: string;
+    body: Buffer | Uint8Array;
+    size: number;
+  }): Promise<{ fileUrl: string; key: string }> {
+    const safeName = this.sanitizeFileName(params.fileName);
+    const key = `${params.folder}/${Date.now()}-${safeName}`;
+
+    if (getStorageMode() === "blob") {
+      const { put } = await import("@vercel/blob");
+      const blob = await put(key, params.body, {
+        access: "private",
+        contentType: params.mimeType,
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      });
+      return { fileUrl: blob.url, key };
+    }
+
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: params.body,
+      ContentType: params.mimeType,
+      ContentLength: params.size,
+    }));
+
+    const fileUrl = process.env.S3_ENDPOINT
+      ? `${process.env.S3_ENDPOINT}/${BUCKET}/${key}`
+      : `https://${BUCKET}.s3.amazonaws.com/${key}`;
+
+    return { fileUrl, key };
   }
 
   static extractKey(fileUrl: string): string {

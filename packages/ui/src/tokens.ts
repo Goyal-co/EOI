@@ -45,6 +45,7 @@ export const spacing = {
 } as const;
 
 export const brand = {
-  appName: "Goyal Hariyana Projects",
-  tagline: "Expression of Interest Management",
+  appName: "Goyal Hariyana",
+  tagline: "creating landmarks since 1971",
+  logoSrc: "/images/email/goyal-hariyana-logo.png",
 } as const;

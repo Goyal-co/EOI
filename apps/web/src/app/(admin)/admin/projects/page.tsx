@@ -60,8 +60,13 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "FLOOR_PLAN", label: "Floor Plan" },
   { type: "COST_SHEET", label: "Cost Sheet" },
   { type: "GALLERY", label: "Gallery Image" },
-  { type: "BANNER", label: "Banner" },
+  { type: "CREATIVE", label: "Creative" },
+  { type: "WALKTHROUGH", label: "Walkthrough Video" },
+  { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
+
+export const PROJECT_BANNER_WIDTH = 1920;
+export const PROJECT_BANNER_HEIGHT = 600;
 
 const emptyForm: ProjectForm = {
   name: "",
@@ -304,6 +309,35 @@ export default function AdminProjectsPage() {
   const handleAssetUpload = async (type: DocumentType, file: File) => {
     if (!selected) return;
 
+    if (type === "BANNER") {
+      try {
+        const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            URL.revokeObjectURL(url);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Could not read banner image"));
+          };
+          img.src = url;
+        });
+        if (dims.width !== PROJECT_BANNER_WIDTH || dims.height !== PROJECT_BANNER_HEIGHT) {
+          addToast({
+            type: "error",
+            title: "Invalid banner size",
+            message: `Banner must be exactly ${PROJECT_BANNER_WIDTH}×${PROJECT_BANNER_HEIGHT}px (got ${dims.width}×${dims.height})`,
+          });
+          return;
+        }
+      } catch (e) {
+        addToast({ type: "error", title: "Banner check failed", message: (e as Error).message });
+        return;
+      }
+    }
+
     if (type === "GALLERY") {
       setGalleryQueueNames((prev) => {
         const next = [...prev, file.name];
@@ -378,7 +412,11 @@ export default function AdminProjectsPage() {
   };
 
   const maxSizeForType = (type: DocumentType) =>
-    type === "BROCHURE" || type === "FLOOR_PLAN" ? TWENTY_MB : 10 * 1024 * 1024;
+    type === "WALKTHROUGH"
+      ? 100 * 1024 * 1024
+      : type === "BROCHURE" || type === "FLOOR_PLAN"
+        ? TWENTY_MB
+        : 10 * 1024 * 1024;
 
   const formFields = (
     <div className="space-y-4">
@@ -664,11 +702,22 @@ export default function AdminProjectsPage() {
           {ASSET_TYPES.map(({ type, label }) => (
             <div key={type}>
               <p className="text-sm font-medium mb-2">{label}</p>
+              {type === "BANNER" && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  Exact dimensions required: {PROJECT_BANNER_WIDTH}×{PROJECT_BANNER_HEIGHT}px (16:5)
+                </p>
+              )}
               <FileUpload
-                accept={type === "BANNER" || type === "GALLERY" ? "image/*" : ".pdf,.doc,.docx"}
+                accept={
+                  type === "BANNER" || type === "GALLERY" || type === "CREATIVE"
+                    ? "image/*"
+                    : type === "WALKTHROUGH"
+                      ? "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+                      : ".pdf,.doc,.docx"
+                }
                 maxSize={maxSizeForType(type)}
-                multiple={type === "GALLERY"}
-                file={type === "GALLERY" ? null : uploads[type] || null}
+                multiple={type === "GALLERY" || type === "CREATIVE"}
+                file={type === "GALLERY" || type === "CREATIVE" ? null : uploads[type] || null}
                 onUpload={(file) => handleAssetUpload(type, file)}
                 onSizeError={(file, max) =>
                   addToast({

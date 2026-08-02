@@ -36,7 +36,7 @@ interface Project {
   myLeads: number;
 }
 
-const ASSET_TABS = ["brochure", "floor-plans", "cost-sheet", "gallery"] as const;
+const ASSET_TABS = ["brochure", "floor-plans", "cost-sheet", "gallery", "creatives", "walkthrough"] as const;
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -99,7 +99,7 @@ export default function ProjectDetailPage() {
         }
       />
 
-      <div className="relative rounded-xl overflow-hidden h-56 bg-gradient-to-br from-blue-100 to-blue-200">
+      <div className="relative rounded-xl overflow-hidden aspect-[16/5] max-h-72 bg-gradient-to-br from-blue-100 to-blue-200">
         {project.bannerUrl ? (
           <img src={project.bannerUrl} alt={project.name} className="h-full w-full object-cover" />
         ) : (
@@ -131,10 +131,13 @@ export default function ProjectDetailPage() {
       <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="location">Location</TabsTrigger>
           <TabsTrigger value="brochure">Brochure</TabsTrigger>
           <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
           <TabsTrigger value="cost-sheet">Cost Sheet</TabsTrigger>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
+          <TabsTrigger value="creatives">Creatives</TabsTrigger>
+          <TabsTrigger value="walkthrough">Walkthrough</TabsTrigger>
           <TabsTrigger value="faqs">FAQs</TabsTrigger>
         </TabsList>
 
@@ -160,6 +163,19 @@ export default function ProjectDetailPage() {
             </Card>
             <Card className="p-6 space-y-4">
               <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Location</p>
+                <p className="text-sm font-medium text-foreground mt-1 flex items-center gap-1">
+                  <MapPin className="h-4 w-4" />
+                  {project.locationLink ? (
+                    <a href={project.locationLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      {project.location}
+                    </a>
+                  ) : (
+                    project.location
+                  )}
+                </p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Price per sqft</p>
                 <p className="text-xl font-bold text-gold mt-1">{formatCurrency(project.startingPrice)} / sqft</p>
               </div>
@@ -178,6 +194,28 @@ export default function ProjectDetailPage() {
               </div>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="location">
+          <Card className="p-6 space-y-4">
+            <h3 className="text-section-title">Location</h3>
+            <p className="text-sm text-foreground flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              {project.location}
+            </p>
+            {project.locationLink ? (
+              <a
+                href={project.locationLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex text-sm text-blue-600 hover:underline"
+              >
+                Open in Maps
+              </a>
+            ) : (
+              <EmptyState title="No map link" description="Admin can add a location map link for this project." />
+            )}
+          </Card>
         </TabsContent>
 
         {ASSET_TABS.map((tabId) => (

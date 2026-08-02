@@ -9,7 +9,7 @@ import { CheckCircle } from "lucide-react";
 import type { LeadCreateInput } from "@goyal/types";
 
 const STEPS = [
-  { id: "customer", title: "Customer Details", description: "Register customer interest for this closed project" },
+  { id: "customer", title: "Customer Details", description: "Register customer interest for this project" },
   { id: "review", title: "Review", description: "Verify details before punching the lead" },
   { id: "success", title: "Success", description: "Lead punched" },
 ];
@@ -73,7 +73,7 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
         && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
       : true;
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (sendConfirmation: boolean) => {
     setLoading(true);
     try {
       const res = await fetch("/api/partner/leads", {
@@ -83,7 +83,7 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
           ...form,
           projectId,
           intentType: "LEAD_ONLY",
-          sendConfirmation: true,
+          sendConfirmation,
         }),
       });
       const data = await res.json();
@@ -106,11 +106,15 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
       qc.invalidateQueries({ queryKey: ["partner", "leads"] });
       qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
       addToast({
-        type: data.sentConfirmation ? "success" : "warning",
-        title: data.sentConfirmation ? "Confirmation sent" : "Lead punched — email not sent",
-        message: data.sentConfirmation
-          ? "Customer will receive a confirmation email to accept interest."
-          : data.emailError || "Use the dev links below or resend from Leads.",
+        type: data.sentConfirmation ? "success" : sendConfirmation ? "warning" : "success",
+        title: sendConfirmation
+          ? (data.sentConfirmation ? "Confirmation sent" : "Lead punched — email not sent")
+          : "Lead saved as draft",
+        message: sendConfirmation
+          ? (data.sentConfirmation
+            ? "Customer will receive a confirmation email to accept interest."
+            : data.emailError || "Use the dev links below or resend from Leads.")
+          : "You can send confirmation later from the leads page.",
       });
     } catch (err) {
       addToast({ type: "error", title: "Punch failed", message: err instanceof Error ? err.message : "Try again" });
@@ -201,9 +205,6 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
 
         {step === 1 && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-sm text-amber-900">
-              EOI is closed for this project. Punching a lead registers customer interest only — no EOI form or admin approval.
-            </div>
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-blue-50 p-4 space-y-2">
                 <div className="flex justify-between"><span className="text-muted-foreground">Project</span><span className="font-medium">{projectName}</span></div>
@@ -212,14 +213,17 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
                 <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span className="font-medium">{form.email}</span></div>
               </div>
               <p className="text-muted-foreground text-xs">
-                A confirmation email will be sent to the customer. Once they accept, the lead is complete.
+                Save as draft without emailing, or send a confirmation email now.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
               <Button variant="outline" onClick={() => setStep(0)} disabled={loading}>
                 Back
               </Button>
-              <Button variant="gold" loading={loading} disabled={!canProceed} onClick={handleSubmit}>
+              <Button variant="outline" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
+                Save as Draft
+              </Button>
+              <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(true)}>
                 Punch Lead &amp; Send Confirmation
               </Button>
             </div>
@@ -234,12 +238,12 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
               </div>
             </div>
             <h3 className="text-lg font-semibold text-foreground">
-              {sentConfirmation ? "Lead Punched — Confirmation Sent" : "Lead Punched"}
+              {sentConfirmation ? "Lead Punched — Confirmation Sent" : "Lead Saved"}
             </h3>
             <p className="text-sm text-muted-foreground mt-2">
               {sentConfirmation
                 ? "The customer must accept the confirmation email to complete this lead."
-                : emailWarning || "Confirmation email could not be delivered."}
+                : emailWarning || "The lead was saved. You can send confirmation later from the leads page."}
             </p>
             {devLinks && (
               <div className="mt-4 rounded-lg border border-dashed border-border bg-blue-50/50 p-4 text-left text-xs">

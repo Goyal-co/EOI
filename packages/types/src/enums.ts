@@ -91,12 +91,15 @@ export const DocumentType = {
   PAN: "PAN",
   AADHAAR: "AADHAAR",
   RERA_CERT: "RERA_CERT",
+  GST_CERT: "GST_CERT",
   VISITING_CARD: "VISITING_CARD",
   BROCHURE: "BROCHURE",
   COST_SHEET: "COST_SHEET",
   FLOOR_PLAN: "FLOOR_PLAN",
   GALLERY: "GALLERY",
   BANNER: "BANNER",
+  CREATIVE: "CREATIVE",
+  WALKTHROUGH: "WALKTHROUGH",
 } as const;
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
 

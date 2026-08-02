@@ -208,7 +208,7 @@ export async function GET() {
       journeyBreakdown: journeyBreakdown.map((j) => ({ name: j.journeyStatus, value: j._count.id })),
       leadIntentBreakdown: [
         { name: "EOI Leads", value: eoiLeadsTotal },
-        { name: "Lead Only", value: leadOnlyTotal },
+        { name: "Lead", value: leadOnlyTotal },
       ],
       eoisByCP: eoisByCP.map((cp) => ({
         name: cp.user.name || "CP",

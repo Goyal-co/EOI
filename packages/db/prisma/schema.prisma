@@ -69,12 +69,15 @@ enum DocumentType {
   PAN
   AADHAAR
   RERA_CERT
+  GST_CERT
   VISITING_CARD
   BROCHURE
   COST_SHEET
   FLOOR_PLAN
   GALLERY
   BANNER
+  CREATIVE
+  WALKTHROUGH
 }
 
 enum DocumentStatus {
@@ -260,6 +263,9 @@ model CPProjectAccess {
 
 model Lead {
   id              String          @id @default(cuid())
+  leadId          String?         @unique
+  titanCrmId      String?
+  bookingLeadId   String?
   customerId      String?
   customer        Customer?       @relation(fields: [customerId], references: [id])
   projectId       String
@@ -275,6 +281,7 @@ model Lead {
   notes           String?         @db.Text
   fosName         String?
   siteVisitStatus SiteVisitStatus @default(NOT_SCHEDULED)
+  siteVisitDate   DateTime?
   leadStatus      LeadStatus      @default(LEAD_REGISTERED)
   journeyStatus   CustomerJourneyStatus @default(ACTIVE)
   intentType      LeadIntent      @default(EOI)

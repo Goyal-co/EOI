@@ -23,6 +23,8 @@
     "@goyal/integrations": "*",
     "@goyal/types": "*",
     "@goyal/ui": "*",
+    "@goyal/ecosystem-contracts": "file:../../../packages/ecosystem-contracts",
+    "@goyal/integration-hub": "file:../../../packages/integration-hub",
     "@tailwindcss/postcss": "^4.0.0",
     "@tanstack/react-query": "^5.62.8",
     "@types/bcryptjs": "^2.4.6",

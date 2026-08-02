@@ -49,7 +49,6 @@ export default function PartnerProjectsPage() {
               eoiStatus={project.eoiStatus}
               totalLeads={project.myLeads}
               onViewDetails={() => router.push(`/partner/projects/${project.id}`)}
-              onViewBrochure={() => router.push(`/partner/projects/${project.id}?tab=brochure`)}
               onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
               onPunchLead={project.eoiStatus !== "OPEN" ? () => setPunchModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
             />

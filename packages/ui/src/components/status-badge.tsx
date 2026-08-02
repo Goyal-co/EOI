@@ -24,7 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "gold"
   CANCELLED: { label: "Cancelled", variant: "error" },
   LEAD_CONFIRMED: { label: "Lead Confirmed", variant: "success" },
   EOI: { label: "EOI", variant: "default" },
-  LEAD_ONLY: { label: "Lead Only", variant: "gold" },
+  LEAD_ONLY: { label: "Lead", variant: "gold" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -17,6 +17,9 @@ export function getRegistrationStepHints(step: 0 | 1, step1: CPRegisterStep1, st
   }
 
   const hints: string[] = [];
+  if (!step2.companyName || step2.companyName.length < 2) {
+    hints.push("Company / Individual name is required");
+  }
   if (step2.reraNumber.length < 5) hints.push("RERA number must be at least 5 characters");
   if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(step2.panNumber)) {
     hints.push("PAN must match format ABCDE1234F (5 letters, 4 digits, 1 letter)");

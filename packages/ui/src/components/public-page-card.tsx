@@ -14,11 +14,12 @@ export function PublicPageCard({ children, title, description, className }: Publ
       <div className="w-full max-w-lg">
         {(title || description) && (
           <div className="mb-6 text-center">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-gold to-gold-hover text-white font-bold text-sm">
-                G
-              </div>
-              <span className="font-semibold text-foreground">{brand.appName}</span>
+            <div className="flex flex-col items-center mb-4">
+              <img
+                src={brand.logoSrc}
+                alt="Goyal Hariyana"
+                className="h-10 w-auto max-w-[220px] object-contain"
+              />
             </div>
             {title && <h1 className="text-page-title">{title}</h1>}
             {description && <p className="text-caption mt-2">{description}</p>}

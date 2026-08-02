@@ -23,6 +23,8 @@ interface Lead {
   intentType?: string;
   confirmationStatus?: string | null;
   siteVisitStatus?: string;
+  siteVisitDate?: string | null;
+  fosName?: string | null;
   createdAt: string;
   project: { name: string };
   eoi?: { status: string; referenceNumber?: string; chequeUploaded?: boolean };
@@ -42,6 +44,8 @@ function PartnerLeadsContent() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [siteVisitDate, setSiteVisitDate] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
@@ -73,8 +77,9 @@ function PartnerLeadsContent() {
     if (debouncedSearch) f.search = debouncedSearch;
     if (fromDate) f.fromDate = fromDate;
     if (toDate) f.toDate = toDate;
+    if (teamFilter) f.fosName = teamFilter;
     return f;
-  }, [projectFilter, statusFilter, intentFilter, debouncedSearch, fromDate, toDate]);
+  }, [projectFilter, statusFilter, intentFilter, debouncedSearch, fromDate, toDate, teamFilter]);
 
   const { data, isLoading } = usePartnerLeads(filters);
   const { data: projects } = usePartnerProjects();
@@ -149,7 +154,14 @@ function PartnerLeadsContent() {
         loading={isLoading}
         emptyTitle="No leads yet"
         emptyDescription="Submit an EOI to register your first lead"
-        onRowClick={setSelectedLead}
+        onRowClick={(lead) => {
+          setSelectedLead(lead);
+          setSiteVisitDate(
+            lead.siteVisitDate
+              ? new Date(lead.siteVisitDate).toISOString().slice(0, 10)
+              : "",
+          );
+        }}
         filters={
           <div className="flex flex-col gap-3 w-full">
             <Input
@@ -193,9 +205,27 @@ function PartnerLeadsContent() {
               options={[
                 { value: "", label: "All Types" },
                 { value: "EOI", label: "EOI" },
-                { value: "LEAD_ONLY", label: "Lead Only" },
+                { value: "LEAD_ONLY", label: "Lead" },
               ]}
               className="w-40"
+            />
+            <Select
+              label=""
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              options={[
+                { value: "", label: "All Teams (FOS)" },
+                ...Array.from(
+                  new Set(
+                    leads
+                      .map((l) => l.fosName?.trim())
+                      .filter((n): n is string => !!n),
+                  ),
+                )
+                  .sort()
+                  .map((name) => ({ value: name, label: name })),
+              ]}
+              className="w-48"
             />
             <Input
               type="date"
@@ -211,11 +241,12 @@ function PartnerLeadsContent() {
               onChange={(e) => setToDate(e.target.value)}
               className="w-40"
             />
-            {(projectFilter || statusFilter || intentFilter || debouncedSearch || fromDate || toDate) && (
+            {(projectFilter || statusFilter || intentFilter || teamFilter || debouncedSearch || fromDate || toDate) && (
               <Button variant="ghost" size="sm" onClick={() => {
                 setProjectFilter("");
                 setStatusFilter("");
                 setIntentFilter("");
+                setTeamFilter("");
                 setSearchQuery("");
                 setFromDate("");
                 setToDate("");
@@ -284,28 +315,94 @@ function PartnerLeadsContent() {
               <div className="flex justify-between"><span className="text-muted-foreground">Registered</span><span className="font-medium">{formatDate(selectedLead.createdAt)}</span></div>
             </div>
 
-            <Select
-              label="Site Visit Status"
-              value={selectedLead.siteVisitStatus || "NOT_SCHEDULED"}
-              onChange={async (e) => {
-                const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ siteVisitStatus: e.target.value }),
-                });
-                if (res.ok) {
-                  await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
-                  setSelectedLead({ ...selectedLead, siteVisitStatus: e.target.value });
-                  addToast({ type: "success", title: "Site visit updated" });
-                }
-              }}
-              options={[
-                { value: "NOT_SCHEDULED", label: "Not Scheduled" },
-                { value: "SCHEDULED", label: "Scheduled" },
-                { value: "COMPLETED", label: "Completed" },
-                { value: "CANCELLED", label: "Cancelled" },
-              ]}
-            />
+            <div className="space-y-3">
+              {selectedLead.siteVisitStatus === "COMPLETED" ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">Site Visit</p>
+                    <StatusBadge status="COMPLETED" />
+                  </div>
+                  {selectedLead.siteVisitDate && (
+                    <p className="text-sm text-muted-foreground">
+                      Date: {formatDate(selectedLead.siteVisitDate)}
+                    </p>
+                  )}
+                  <p className="text-xs text-emerald-700">
+                    Completed automatically when the scheduled date was reached.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    type="date"
+                    label="Site Visit Scheduled"
+                    value={siteVisitDate}
+                    onChange={async (e) => {
+                      const date = e.target.value;
+                      setSiteVisitDate(date);
+                      if (!date) return;
+                      const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          siteVisitStatus: "SCHEDULED",
+                          siteVisitDate: date,
+                        }),
+                      });
+                      if (res.ok) {
+                        const updated = await res.json();
+                        await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+                        setSelectedLead({
+                          ...selectedLead,
+                          siteVisitStatus: updated.siteVisitStatus,
+                          siteVisitDate: updated.siteVisitDate,
+                        });
+                        addToast({
+                          type: "success",
+                          title: updated.siteVisitStatus === "COMPLETED"
+                            ? "Site visit marked completed"
+                            : "Site visit scheduled",
+                        });
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Pick a date to schedule. Status becomes Completed automatically on or after that date.
+                  </p>
+                  {selectedLead.siteVisitStatus === "SCHEDULED" && (
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status="SCHEDULED" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              siteVisitStatus: "NOT_SCHEDULED",
+                              siteVisitDate: null,
+                            }),
+                          });
+                          if (res.ok) {
+                            setSiteVisitDate("");
+                            await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+                            setSelectedLead({
+                              ...selectedLead,
+                              siteVisitStatus: "NOT_SCHEDULED",
+                              siteVisitDate: null,
+                            });
+                            addToast({ type: "success", title: "Site visit cleared" });
+                          }
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
 
             {selectedLead.notes && (
               <div>

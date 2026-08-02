@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AppShell, LogoutConfirmModal, brand } from "@goyal/ui";
+import { AppShell, LogoutConfirmModal } from "@goyal/ui";
 import {
   LayoutDashboard, Building2, FileText, FolderOpen,
 } from "lucide-react";
@@ -30,7 +30,7 @@ export function CustomerLayout({ children }: { children: React.ReactNode }) {
       <AppShell
         sidebar={{
           items: sidebarItems,
-          title: brand.appName,
+          title: "",
           subtitle: "Customer Portal",
           profile: {
             name: session?.user?.name || "Customer",

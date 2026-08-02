@@ -4,7 +4,7 @@
 ALTER TYPE "CustomerJourneyStatus" ADD VALUE IF NOT EXISTS 'LEAD_CONFIRMED';
 
 -- CreateEnum
-DO $$ BEGIN
+1DO $$ BEGIN
   CREATE TYPE "LeadIntent" AS ENUM ('EOI', 'LEAD_ONLY');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

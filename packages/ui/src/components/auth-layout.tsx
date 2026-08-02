@@ -40,36 +40,39 @@ export interface AuthLayoutProps {
 }
 
 function BrandHeader({
-  title,
   portalLabel,
   compact,
 }: {
-  title: string;
+  title?: string;
   portalLabel?: string;
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex items-center gap-3", compact ? "mb-6" : "mb-10")}>
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-gold to-gold-hover text-sm font-bold text-white shadow-sm">
-        G
-      </div>
-      <div>
-        <p className={cn("font-semibold text-foreground", compact ? "text-sm" : "text-lg")}>{title}</p>
-        {portalLabel && (
-          <p className={cn("text-gold font-medium", compact ? "text-xs" : "text-sm")}>{portalLabel}</p>
+    <div className={cn("flex flex-col items-start", compact ? "mb-6" : "mb-10")}>
+      <img
+        src={brand.logoSrc}
+        alt="Goyal Hariyana"
+        className={cn(
+          "object-contain object-left",
+          compact ? "h-10 w-auto max-w-[220px]" : "h-14 w-auto max-w-[300px]",
         )}
-      </div>
+      />
+      {portalLabel && (
+        <p className={cn("mt-2 font-medium text-gold tracking-wide", compact ? "text-xs" : "text-sm")}>
+          {portalLabel}
+        </p>
+      )}
     </div>
   );
 }
 
 export function AuthLayout({
   children,
-  title = brand.appName,
+  title: _title = brand.appName,
   subtitle = brand.tagline,
   portalLabel,
   tagline = "BUILDING TRUST. CREATING LANDMARKS.",
-  description = "Streamline expression of interest across channel partners & customers.",
+  description = "",
   stats,
   features,
   legacyCard,
@@ -93,9 +96,11 @@ export function AuthLayout({
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,168,76,0.18),transparent_55%)]"
           />
           <div className="relative">
-            <BrandHeader title={title} portalLabel={portalLabel} />
+            <BrandHeader portalLabel={portalLabel} />
             <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-tight">{subtitle}</h2>
-            <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">{description}</p>
+            {description ? (
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">{description}</p>
+            ) : null}
           </div>
           {stats && stats.length > 0 && (
             <div className="relative grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
@@ -111,7 +116,7 @@ export function AuthLayout({
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8">
           <div className="w-full max-w-md">
             <div className="mb-8 lg:hidden">
-              <BrandHeader title={title} portalLabel={portalLabel} compact />
+              <BrandHeader portalLabel={portalLabel} compact />
             </div>
             <div className="rounded-2xl border border-border/60 bg-surface p-6 shadow-card sm:p-8">{children}</div>
           </div>
@@ -136,7 +141,7 @@ export function AuthLayout({
         {/* Marketing panel */}
         <aside className="hidden w-[48%] shrink-0 flex-col justify-between p-10 xl:p-12 lg:flex">
           <div>
-            <BrandHeader title={title} portalLabel={portalLabel} />
+            <BrandHeader portalLabel={portalLabel} />
             <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gold">
               <Building2 className="h-4 w-4" />
               {tagline}
@@ -152,7 +157,9 @@ export function AuthLayout({
                 subtitle
               )}
             </h2>
-            <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
+            {description ? (
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
+            ) : null}
             {(showDescriptionDivider || featuresPosition === "bottom") && (
               <div className="mt-6 h-0.5 w-12 rounded-full bg-gold" aria-hidden="true" />
             )}
@@ -208,7 +215,7 @@ export function AuthLayout({
         {/* Form panel */}
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8">
           <div className="mb-6 w-full max-w-md lg:hidden">
-            <BrandHeader title={title} portalLabel={portalLabel} compact />
+            <BrandHeader portalLabel={portalLabel} compact />
           </div>
           <div className="w-full max-w-md rounded-2xl border border-border/60 bg-white p-6 shadow-card sm:p-8">
             {(formCardTitle || formCardSubtitle) && (

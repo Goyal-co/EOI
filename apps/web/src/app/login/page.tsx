@@ -45,7 +45,7 @@ export default function AdminLoginPage() {
       backgroundImage={LOGIN_BG}
       subtitle="Manage projects, EOIs, and channel partners"
       highlightSubtitle="channel partners"
-      description="Streamline expression of interest across channel partners & customers."
+      description=""
       features={[
         { icon: Building2, title: "Projects Management", description: "Create, update and manage all project information." },
         { icon: FileText, title: "EOI Oversight", description: "Track and manage EOIs across all projects." },

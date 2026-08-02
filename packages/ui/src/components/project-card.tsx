@@ -19,6 +19,7 @@ export interface ProjectCardProps {
   totalClosures?: number;
   conversionRate?: number;
   onViewDetails?: () => void;
+  /** @deprecated Brochures removed from cards — kept for call-site compatibility */
   onViewBrochure?: () => void;
   onSubmitEOI?: () => void;
   onPunchLead?: () => void;
@@ -35,16 +36,21 @@ export function ProjectCard({
   totalEois,
   leadOnlyCount,
   eoiLeadCount,
-  totalClosures,
   conversionRate,
   onViewDetails,
-  onViewBrochure,
   onSubmitEOI,
   onPunchLead,
   className,
 }: ProjectCardProps) {
   return (
-    <Card className={cn("overflow-hidden group", className)}>
+    <Card
+      className={cn(
+        "overflow-hidden group",
+        onViewDetails && "cursor-pointer",
+        className,
+      )}
+      onClick={onViewDetails}
+    >
       <div className="relative h-40 bg-gradient-to-br from-blue-100 to-blue-200 overflow-hidden">
         {imageUrl ? (
           <img src={imageUrl} alt={name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -77,7 +83,7 @@ export function ProjectCard({
               <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" />{totalEois} EOIs</span>
             )}
             {leadOnlyCount !== undefined && leadOnlyCount > 0 && (
-              <span className="flex items-center gap-1">{leadOnlyCount} Lead-only</span>
+              <span className="flex items-center gap-1">{leadOnlyCount} Lead</span>
             )}
             {eoiLeadCount !== undefined && eoiLeadCount > 0 && (
               <span className="flex items-center gap-1">{eoiLeadCount} EOI leads</span>
@@ -87,12 +93,9 @@ export function ProjectCard({
             )}
           </div>
         )}
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
           {onViewDetails && (
             <Button variant="outline" size="sm" className="flex-1" onClick={onViewDetails}>View Details</Button>
-          )}
-          {onViewBrochure && (
-            <Button variant="ghost" size="sm" onClick={onViewBrochure}>Brochure</Button>
           )}
           {onSubmitEOI && eoiStatus === "OPEN" && (
             <Button variant="gold" size="sm" className="flex-1" onClick={onSubmitEOI}>Submit EOI</Button>

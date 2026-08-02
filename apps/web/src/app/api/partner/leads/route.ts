@@ -20,6 +20,7 @@ export async function GET(req: Request) {
   const search = searchParams.get("search")?.trim();
   const fromDate = searchParams.get("fromDate");
   const toDate = searchParams.get("toDate");
+  const fosName = searchParams.get("fosName")?.trim();
 
   const createdAtFilter: { gte?: Date; lte?: Date } = {};
   if (fromDate) {
@@ -33,12 +34,27 @@ export async function GET(req: Request) {
     createdAtFilter.lte = to;
   }
 
+  const cpId = session!.user.cpId!;
+
+  // Auto-complete site visits whose scheduled date has passed
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  await prisma.lead.updateMany({
+    where: {
+      cpId,
+      siteVisitStatus: "SCHEDULED",
+      siteVisitDate: { lte: startOfToday },
+    },
+    data: { siteVisitStatus: "COMPLETED" },
+  });
+
   const leads = await prisma.lead.findMany({
     where: {
-      cpId: session!.user.cpId!,
+      cpId,
       ...(projectId ? { projectId } : {}),
       ...(status ? { journeyStatus: status as never } : {}),
       ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
+      ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" } } : {}),
       ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
       ...(search
         ? {
@@ -110,22 +126,36 @@ export async function POST(req: Request) {
   const inviteToken = generateInviteToken();
   const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const isLeadOnly = intentType === "LEAD_ONLY";
-  const sendConfirmation = isLeadOnly ? true : (parsed.data.sendConfirmation ?? false);
+  const sendConfirmation = parsed.data.sendConfirmation ?? false;
+
+  if (!isLeadOnly && sendConfirmation) {
+    if (!(parsed.data.configuration || "").trim()) {
+      return apiError("Unit preference is required");
+    }
+    if (!(parsed.data.fosName || "").trim()) {
+      return apiError("FOS name is required");
+    }
+  }
+
+  const leadCount = await prisma.lead.count({ where: { projectId: parsed.data.projectId } });
+  const { generatePublicLeadId } = await import("@/lib/leads/id-generator");
+  const publicLeadId = generatePublicLeadId(intentType, project.name, leadCount + 1);
 
   const lead = await prisma.lead.create({
     data: {
+      leadId: publicLeadId,
       cpId,
       projectId: parsed.data.projectId,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.email,
       customerMobile: parsed.data.mobile,
-      configuration: parsed.data.configuration,
-      fosName: parsed.data.fosName,
+      configuration: parsed.data.configuration || null,
+      fosName: parsed.data.fosName || null,
       budget: parsed.data.budget,
       city: parsed.data.city,
       notes: parsed.data.notes,
       intentType,
-      journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "ACTIVE",
+      journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
       confirmationStatus: sendConfirmation ? "PENDING" : null,
       confirmationSentAt: sendConfirmation ? new Date() : null,
       leadStatus: "LEAD_REGISTERED",
@@ -182,16 +212,50 @@ export async function POST(req: Request) {
     }
   }
 
+  let titanCrmId: string | undefined;
   try {
     const crm = getCRMProvider();
-    await crm.syncLead({
+    const crmResult = await crm.syncLead({
+      leadId: publicLeadId,
       customerName: lead.customerName,
       email: lead.customerEmail,
       mobile: lead.customerMobile,
       projectName: lead.project.name,
+      intentType,
+      category: intentType === "EOI" ? "EOI" : "LEADS",
     });
+    titanCrmId = crmResult.crmId;
+    if (titanCrmId) {
+      await prisma.lead.update({ where: { id: lead.id }, data: { titanCrmId } });
+    }
   } catch (e) {
     console.error("[CRM] syncLead failed:", e);
+  }
+
+  try {
+    const { publishEvent } = await import("@goyal/integration-hub");
+    await publishEvent({
+      type: "lead.created",
+      entityId: lead.id,
+      payload: {
+        leadId: publicLeadId,
+        eoiCpLeadId: lead.id,
+        customerName: lead.customerName,
+        customerEmail: lead.customerEmail,
+        customerPhone: lead.customerMobile,
+        customerMobile: lead.customerMobile,
+        projectId: lead.projectId,
+        titanCrmId,
+        cpId: lead.cpId,
+        intentType,
+      },
+    });
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { bookingLeadId: publicLeadId },
+    });
+  } catch (e) {
+    console.error("[Integration Hub] lead.created failed:", e);
   }
 
   await writeAudit({
