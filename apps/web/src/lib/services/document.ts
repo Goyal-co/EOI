@@ -121,10 +121,11 @@ export class DocumentService {
   }): Promise<{ fileUrl: string; key: string }> {
     const safeName = this.sanitizeFileName(params.fileName);
     const key = `${params.folder}/${Date.now()}-${safeName}`;
+    const body = Buffer.isBuffer(params.body) ? params.body : Buffer.from(params.body);
 
     if (getStorageMode() === "blob") {
       const { put } = await import("@vercel/blob");
-      const blob = await put(key, params.body, {
+      const blob = await put(key, body, {
         access: "private",
         contentType: params.mimeType,
         token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -135,7 +136,7 @@ export class DocumentService {
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET,
       Key: key,
-      Body: params.body,
+      Body: body,
       ContentType: params.mimeType,
       ContentLength: params.size,
     }));
