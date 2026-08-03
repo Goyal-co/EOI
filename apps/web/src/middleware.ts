@@ -57,6 +57,8 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Exclude all Next.js internals so static assets are never intercepted by auth middleware
-  matcher: ["/((?!_next/|favicon.ico|logo.svg|og-image.svg|images/|api/auth/).*)"],
+  // Exclude Next.js internals + public static assets so auth never intercepts them
+  matcher: [
+    "/((?!_next/|favicon.ico|images/|api/auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|webmanifest)$).*)",
+  ],
 };
