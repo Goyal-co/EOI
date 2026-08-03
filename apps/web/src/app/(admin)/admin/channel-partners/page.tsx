@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DataTable, StatusBadge, Button, Drawer, Card, Modal, useToast, Textarea, PageHeader,
 } from "@goyal/ui";
-import { Eye, CheckCircle, Ban } from "lucide-react";
+import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText } from "lucide-react";
 import { useAdminCPs, useAdminProjects } from "@/lib/hooks";
+import {
+  openPresignedAsset,
+  getPresignedUrlForPreview,
+  isImageFileName,
+  isPdfFileName,
+} from "@/lib/files/open-asset";
 
 interface ChannelPartner {
   id: string;
@@ -24,13 +30,24 @@ interface ChannelPartner {
   createdAt: string;
 }
 
+interface CPDocument {
+  id: string;
+  type: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType?: string | null;
+}
+
 interface CPProfile {
   id: string;
   companyName: string;
   reraNumber: string;
+  panNumber?: string | null;
+  gstNumber?: string | null;
   city: string;
   status: string;
   user: { name: string; email: string; status: string };
+  documents?: CPDocument[];
   projectAccess?: { projectId: string; project: { id: string; name: string } }[];
   performance: {
     totalLeads: number;
@@ -48,6 +65,89 @@ interface Project {
 
 type TabFilter = "all" | "pending";
 
+function isDocImage(doc: CPDocument): boolean {
+  if (doc.mimeType?.startsWith("image/")) return true;
+  return isImageFileName(doc.fileName) || isImageFileName(doc.fileUrl);
+}
+
+function isDocPdf(doc: CPDocument): boolean {
+  if (doc.mimeType === "application/pdf") return true;
+  return isPdfFileName(doc.fileName) || isPdfFileName(doc.fileUrl);
+}
+
+function DocumentPreviewCard({
+  doc,
+  label,
+}: {
+  doc: CPDocument;
+  label: string;
+}) {
+  const apiPath = `/api/admin/documents/${doc.id}/download`;
+  const showImage = isDocImage(doc);
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    if (!showImage) return;
+    let cancelled = false;
+    setImgSrc(null);
+    setImgError(false);
+    getPresignedUrlForPreview(apiPath)
+      .then((url) => {
+        if (!cancelled) setImgSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setImgSrc(doc.fileUrl || null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiPath, doc.fileUrl, showImage]);
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden bg-background">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">{label}</p>
+          <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            View
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      {showImage && !imgError ? (
+        <button
+          type="button"
+          onClick={() => openPresignedAsset(apiPath)}
+          className="block w-full text-left bg-muted/40"
+        >
+          {imgSrc ? (
+            <img
+              src={imgSrc}
+              alt={label}
+              className="w-full max-h-72 object-contain bg-[#f3f4f6]"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="h-40 w-full animate-pulse bg-muted" />
+          )}
+        </button>
+      ) : (
+        <div className="flex items-center gap-3 px-3 py-4 text-sm text-muted-foreground">
+          <FileText className="h-8 w-8 shrink-0 opacity-60" />
+          <span>{isDocPdf(doc) ? "PDF document — open to review" : "File attached — open to review"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminChannelPartnersPage() {
   const { data, isLoading } = useAdminCPs();
   const { data: projectsData } = useAdminProjects();
@@ -64,6 +164,8 @@ export default function AdminChannelPartnersPage() {
 
   const [approveModalOpen, setApproveModalOpen] = useState(false);
   const [cpToApprove, setCpToApprove] = useState<ChannelPartner | null>(null);
+  const [approveDocs, setApproveDocs] = useState<CPDocument[]>([]);
+  const [loadingApproveDocs, setLoadingApproveDocs] = useState(false);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
 
   const [blockModalOpen, setBlockModalOpen] = useState(false);
@@ -94,10 +196,47 @@ export default function AdminChannelPartnersPage() {
     }
   };
 
-  const openApproveModal = (cp: ChannelPartner) => {
+  const openApproveModal = async (cp: ChannelPartner) => {
     setCpToApprove(cp);
     setSelectedProjectIds([]);
+    setApproveDocs([]);
     setApproveModalOpen(true);
+    setLoadingApproveDocs(true);
+    try {
+      const res = await fetch(`/api/admin/channel-partners/${cp.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setApproveDocs(data.documents || []);
+      }
+    } catch {
+      // non-blocking — approve can continue without docs preview
+    } finally {
+      setLoadingApproveDocs(false);
+    }
+  };
+
+  const docLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      RERA_CERT: "RERA Certificate",
+      PAN: "PAN Document",
+      CHEQUE: "Cancelled Cheque",
+      GST_CERT: "GST Certificate",
+      VISITING_CARD: "Visiting Card",
+    };
+    return labels[type] || type.replace(/_/g, " ");
+  };
+
+  const DocumentsList = ({ docs, emptyText }: { docs: CPDocument[]; emptyText: string }) => {
+    if (docs.length === 0) {
+      return <p className="text-sm text-muted-foreground">{emptyText}</p>;
+    }
+    return (
+      <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+        {docs.map((doc) => (
+          <DocumentPreviewCard key={doc.id} doc={doc} label={docLabel(doc.type)} />
+        ))}
+      </div>
+    );
   };
 
   const toggleProject = (projectId: string) => {
@@ -318,10 +457,18 @@ export default function AdminChannelPartnersPage() {
           if (!open) setCpToApprove(null);
         }}
         title="Approve Channel Partner"
-        description={cpToApprove ? `Assign projects to ${cpToApprove.name}` : undefined}
-        size="md"
+        description={cpToApprove ? `Review documents and assign projects for ${cpToApprove.name}` : undefined}
+        size="lg"
       >
         <div className="space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground mb-2">Registration Documents</h4>
+            {loadingApproveDocs ? (
+              <p className="text-sm text-muted-foreground">Loading documents...</p>
+            ) : (
+              <DocumentsList docs={approveDocs} emptyText="No documents uploaded with this registration." />
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
             Select the projects this partner can access. You can change assignments later.
           </p>
@@ -480,10 +627,24 @@ export default function AdminChannelPartnersPage() {
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between"><dt className="text-muted-foreground">Company</dt><dd>{profile.companyName || "—"}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted-foreground">RERA</dt><dd>{profile.reraNumber}</dd></div>
+                {profile.panNumber && (
+                  <div className="flex justify-between"><dt className="text-muted-foreground">PAN</dt><dd>{profile.panNumber}</dd></div>
+                )}
+                {profile.gstNumber && (
+                  <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{profile.gstNumber}</dd></div>
+                )}
                 {profile.city && (
                   <div className="flex justify-between"><dt className="text-muted-foreground">City</dt><dd>{profile.city}</dd></div>
                 )}
               </dl>
+            </Card>
+
+            <Card className="p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2">Uploaded Documents</h4>
+              <DocumentsList
+                docs={profile.documents || []}
+                emptyText="No documents uploaded."
+              />
             </Card>
 
             {Object.keys(profile.performance.projectWise).length > 0 && (

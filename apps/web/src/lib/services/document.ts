@@ -36,12 +36,13 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   GALLERY: ["image/jpeg", "image/png", "image/webp"],
   CREATIVE: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   WALKTHROUGH: ["video/mp4", "video/webm", "video/quicktime"],
+  LOCATION: ["image/jpeg", "image/png", "image/webp"],
 };
 
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
   CUSTOMER: ["CHEQUE", "PAN", "AADHAAR"],
   CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD"],
-  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH"],
+  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION"],
 };
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;

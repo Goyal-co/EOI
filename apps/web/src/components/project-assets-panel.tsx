@@ -19,6 +19,7 @@ const ASSET_TYPE_MAP: Record<string, string> = {
   gallery: "GALLERY",
   creatives: "CREATIVE",
   walkthrough: "WALKTHROUGH",
+  location: "LOCATION",
 };
 
 export type ProjectAssetTab = keyof typeof ASSET_TYPE_MAP;

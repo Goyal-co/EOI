@@ -24,6 +24,7 @@ interface Project {
   name: string;
   location: string;
   locationLink?: string | null;
+  locationImageUrl?: string | null;
   startingPrice: number;
   eoiStatus: string;
   status: string;
@@ -203,7 +204,29 @@ export default function ProjectDetailPage() {
               <MapPin className="h-4 w-4 text-muted-foreground" />
               {project.location}
             </p>
-            {project.locationLink ? (
+            {project.locationImageUrl ? (
+              project.locationLink ? (
+                <a
+                  href={project.locationLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block overflow-hidden rounded-xl border border-border hover:opacity-95 transition-opacity"
+                >
+                  <img
+                    src={project.locationImageUrl}
+                    alt={`${project.name} location`}
+                    className="w-full max-h-[420px] object-cover"
+                  />
+                  <p className="px-3 py-2 text-xs text-blue-600">Open in Maps</p>
+                </a>
+              ) : (
+                <img
+                  src={project.locationImageUrl}
+                  alt={`${project.name} location`}
+                  className="w-full max-h-[420px] object-cover rounded-xl border border-border"
+                />
+              )
+            ) : project.locationLink ? (
               <a
                 href={project.locationLink}
                 target="_blank"
@@ -213,7 +236,10 @@ export default function ProjectDetailPage() {
                 Open in Maps
               </a>
             ) : (
-              <EmptyState title="No map link" description="Admin can add a location map link for this project." />
+              <EmptyState
+                title="No location image"
+                description="Admin can upload a location image and map link for this project."
+              />
             )}
           </Card>
         </TabsContent>

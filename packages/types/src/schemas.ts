@@ -177,7 +177,7 @@ export const partnerProfileSchema = z.object({
 });
 
 export const projectAssetSchema = z.object({
-  type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH"]),
+  type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH", "LOCATION"]),
   fileName: z.string().min(1),
   fileUrl: z.string().url(),
   fileSize: z.number().optional(),
@@ -238,7 +238,7 @@ export const notificationMarkReadSchema = z.object({
 export const documentUploadSchema = z.object({
   type: z.enum([
     "CHEQUE", "PAN", "AADHAAR", "RERA_CERT", "GST_CERT", "VISITING_CARD",
-    "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH",
+    "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION",
   ]),
   fileName: z.string().min(1),
   fileUrl: z.string().min(1),

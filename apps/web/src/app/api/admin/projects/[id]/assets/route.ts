@@ -44,6 +44,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
   }
 
+  if (parsed.data.type === "LOCATION") {
+    await prisma.project.update({
+      where: { id },
+      data: { locationImageUrl: parsed.data.fileUrl },
+    });
+  }
+
   return apiResponse(asset, 201);
 }
 

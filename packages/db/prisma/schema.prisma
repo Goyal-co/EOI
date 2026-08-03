@@ -78,6 +78,7 @@ enum DocumentType {
   BANNER
   CREATIVE
   WALKTHROUGH
+  LOCATION
 }
 
 enum DocumentStatus {
@@ -223,6 +224,7 @@ model Project {
   eoiStatus      ProjectEOIStatus @default(OPEN)
   status         ProjectStatus    @default(ACTIVE)
   bannerUrl      String?
+  locationImageUrl String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

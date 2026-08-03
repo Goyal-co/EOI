@@ -33,6 +33,7 @@ export async function GET() {
         eoiStatus: a.project.eoiStatus,
         status: a.project.status,
         bannerUrl: await resolveProjectBannerUrl(a.project.bannerUrl),
+        locationImageUrl: await resolveProjectBannerUrl(a.project.locationImageUrl),
         description: a.project.description,
         amenities: a.project.amenities,
         possessionDate: a.project.possessionDate,

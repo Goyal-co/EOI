@@ -62,6 +62,7 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "GALLERY", label: "Gallery Image" },
   { type: "CREATIVE", label: "Creative" },
   { type: "WALKTHROUGH", label: "Walkthrough Video" },
+  { type: "LOCATION", label: "Location Image" },
   { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
 
@@ -707,9 +708,14 @@ export default function AdminProjectsPage() {
                   Exact dimensions required: {PROJECT_BANNER_WIDTH}×{PROJECT_BANNER_HEIGHT}px (16:5)
                 </p>
               )}
+              {type === "LOCATION" && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  Map/location image — set Location Link on the project so partners can open maps when they click it.
+                </p>
+              )}
               <FileUpload
                 accept={
-                  type === "BANNER" || type === "GALLERY" || type === "CREATIVE"
+                  type === "BANNER" || type === "GALLERY" || type === "CREATIVE" || type === "LOCATION"
                     ? "image/*"
                     : type === "WALKTHROUGH"
                       ? "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
