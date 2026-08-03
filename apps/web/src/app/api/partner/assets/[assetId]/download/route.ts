@@ -18,11 +18,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ assetId
   if (!asset) return apiError("Asset not found", 404);
   if (asset.project.status !== "ACTIVE") return apiError("Project not available", 403);
 
+  const access = await prisma.cPProjectAccess.findFirst({
+    where: { cpId: session!.user.cpId!, projectId: asset.projectId },
+  });
+  if (!access) return apiError("Forbidden", 403);
+
   const downloadUrl = await DocumentService.getPresignedDownloadUrl(asset.fileUrl);
 
   return apiResponse({
     downloadUrl,
     fileName: asset.fileName,
-    mimeType: asset.type === "GALLERY" ? "image/jpeg" : "application/pdf",
+    mimeType: DocumentService.mimeTypeFromFileName(asset.fileName) || "application/octet-stream",
+    type: asset.type,
   });
 }

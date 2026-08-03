@@ -715,11 +715,15 @@ export default function AdminProjectsPage() {
               )}
               <FileUpload
                 accept={
-                  type === "BANNER" || type === "GALLERY" || type === "CREATIVE" || type === "LOCATION"
-                    ? "image/*"
-                    : type === "WALKTHROUGH"
-                      ? "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
-                      : ".pdf,.doc,.docx"
+                  type === "BANNER" || type === "GALLERY" || type === "LOCATION"
+                    ? "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    : type === "CREATIVE"
+                      ? "image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf"
+                      : type === "FLOOR_PLAN"
+                        ? "image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
+                        : type === "WALKTHROUGH"
+                          ? "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+                          : "application/pdf,.pdf"
                 }
                 maxSize={maxSizeForType(type)}
                 multiple={type === "GALLERY" || type === "CREATIVE"}

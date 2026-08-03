@@ -20,6 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ assetId
   return apiResponse({
     downloadUrl,
     fileName: asset.fileName,
-    mimeType: asset.type === "GALLERY" ? "image/jpeg" : "application/pdf",
+    mimeType: DocumentService.mimeTypeFromFileName(asset.fileName) || "application/octet-stream",
+    type: asset.type,
   });
 }

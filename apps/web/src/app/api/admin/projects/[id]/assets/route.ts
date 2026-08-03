@@ -69,25 +69,28 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (!asset) return apiError("Asset not found", 404);
 
   try {
-    const key = DocumentService.extractKey(asset.fileUrl);
-    if (key) {
-      const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
-      const s3 = new S3Client({
-        endpoint: process.env.S3_ENDPOINT,
-        region: process.env.S3_REGION || "us-east-1",
-        credentials: {
-          accessKeyId: process.env.S3_ACCESS_KEY || "",
-          secretAccessKey: process.env.S3_SECRET_KEY || "",
-        },
-        forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
-      });
-      await s3.send(new DeleteObjectCommand({
-        Bucket: process.env.S3_BUCKET || "goyal-eoi-documents",
-        Key: key,
-      }));
-    }
+    await DocumentService.deleteStoredFile(asset.fileUrl);
   } catch {
     // continue with DB delete
+  }
+
+  if (asset.type === "BANNER" || asset.type === "LOCATION") {
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { bannerUrl: true, locationImageUrl: true },
+    });
+    if (project) {
+      const data: { bannerUrl?: null; locationImageUrl?: null } = {};
+      if (asset.type === "BANNER" && project.bannerUrl === asset.fileUrl) {
+        data.bannerUrl = null;
+      }
+      if (asset.type === "LOCATION" && project.locationImageUrl === asset.fileUrl) {
+        data.locationImageUrl = null;
+      }
+      if (Object.keys(data).length > 0) {
+        await prisma.project.update({ where: { id }, data });
+      }
+    }
   }
 
   await prisma.projectAsset.delete({ where: { id: assetId } });

@@ -33,8 +33,8 @@ vi.mock("@goyal/email", () => ({
   },
 }));
 
-vi.mock("@goyal/integrations", () => ({
-  getCRMProvider: () => ({ syncEOI: vi.fn().mockResolvedValue(undefined) }),
+vi.mock("./goyal-crm-sync", () => ({
+  punchSubmittedEoiToCrm: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 vi.mock("./audit", () => ({

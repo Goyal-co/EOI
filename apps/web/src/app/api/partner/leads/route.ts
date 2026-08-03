@@ -3,9 +3,10 @@ import { leadCreateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
 import { generateInviteToken } from "@goyal/auth";
 import { NotificationService } from "@goyal/email";
-import { getSMSProvider, getCRMProvider } from "@goyal/integrations";
+import { getSMSProvider } from "@goyal/integrations";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveLeadIntent } from "@/lib/leads/intent";
+import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 
 export async function GET(req: Request) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
@@ -213,24 +214,19 @@ export async function POST(req: Request) {
   }
 
   let titanCrmId: string | undefined;
-  try {
-    const crm = getCRMProvider();
-    const crmResult = await crm.syncLead({
-      leadId: publicLeadId,
-      customerName: lead.customerName,
-      email: lead.customerEmail,
-      mobile: lead.customerMobile,
-      projectName: lead.project.name,
-      intentType,
-      category: intentType === "EOI" ? "EOI" : "LEADS",
-    });
-    titanCrmId = crmResult.crmId;
-    if (titanCrmId) {
-      await prisma.lead.update({ where: { id: lead.id }, data: { titanCrmId } });
-    }
-  } catch (e) {
-    console.error("[CRM] syncLead failed:", e);
-  }
+  const crmResult = await punchPartnerLeadToCrm({
+    leadDbId: lead.id,
+    customerName: lead.customerName,
+    customerEmail: lead.customerEmail,
+    customerMobile: lead.customerMobile,
+    projectName: lead.project.name,
+    city: lead.city,
+    fosName: lead.fosName,
+    notes: lead.notes,
+    intentType,
+    publicLeadId,
+  });
+  titanCrmId = crmResult.crmId;
 
   try {
     const { publishEvent } = await import("@goyal/integration-hub");

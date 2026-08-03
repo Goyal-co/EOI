@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, EmptyState, cn } from "@goyal/ui";
-import { Download, ExternalLink } from "lucide-react";
-import { openPresignedAsset, getPresignedUrlForPreview, isImageFileName } from "@/lib/files/open-asset";
+import { Download, ExternalLink, FileText } from "lucide-react";
+import {
+  openPresignedAsset,
+  fetchPresignedDownload,
+  resolvePreviewKind,
+  type AssetPreviewKind,
+} from "@/lib/files/open-asset";
 
 export interface ProjectAssetItem {
   id: string;
@@ -33,10 +38,6 @@ interface ProjectAssetsPanelProps {
 function getAssetsForTab(assets: ProjectAssetItem[], tab: ProjectAssetTab) {
   const type = ASSET_TYPE_MAP[tab];
   return assets.filter((a) => a.type === type);
-}
-
-function isVideoFileName(fileName: string) {
-  return /\.(mp4|webm|mov|m4v)$/i.test(fileName);
 }
 
 export function ProjectAssetsPanel({ assets, tab, downloadApiPrefix }: ProjectAssetsPanelProps) {
@@ -120,15 +121,78 @@ function GalleryAssetCard({
   downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [kind, setKind] = useState<AssetPreviewKind>(() =>
+    resolvePreviewKind({ fileName: asset.fileName, fileUrl: asset.fileUrl, assetType: asset.type })
+  );
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getPresignedUrlForPreview(apiPath)
-      .then((url) => { if (!cancelled) setImgSrc(url); })
-      .catch(() => { if (!cancelled) setImgSrc(asset.fileUrl); });
-    return () => { cancelled = true; };
-  }, [apiPath, asset.fileUrl]);
+    setFailed(false);
+    setPreviewUrl(null);
+    fetchPresignedDownload(apiPath)
+      .then((data) => {
+        if (cancelled) return;
+        setKind(
+          resolvePreviewKind({
+            mimeType: data.mimeType,
+            fileName: data.fileName || asset.fileName,
+            fileUrl: data.downloadUrl,
+            assetType: asset.type,
+          })
+        );
+        setPreviewUrl(data.downloadUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiPath, asset.fileName, asset.type]);
+
+  if (failed) {
+    return (
+      <div className="rounded-lg border border-border p-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FileText className="h-5 w-5 shrink-0" />
+          <span className="truncate">{asset.fileName}</span>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+          <ExternalLink className="h-4 w-4" />
+          View
+        </Button>
+      </div>
+    );
+  }
+
+  if (kind === "pdf" || kind === "other") {
+    return (
+      <div className="rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between gap-2 p-4">
+          <div className="min-w-0 flex items-center gap-2">
+            <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{asset.fileName}</p>
+              <p className="text-xs text-muted-foreground">{kind === "pdf" ? "PDF" : "File"}</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+            <ExternalLink className="h-4 w-4" />
+            View
+          </Button>
+        </div>
+        {kind === "pdf" && previewUrl ? (
+          <iframe
+            title={asset.fileName}
+            src={`${previewUrl}#toolbar=0&navpanes=0`}
+            className="w-full h-48 border-t border-border bg-white"
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <button
@@ -136,8 +200,13 @@ function GalleryAssetCard({
       onClick={() => openPresignedAsset(apiPath)}
       className="block rounded-lg overflow-hidden border border-border hover:shadow-md transition-shadow text-left w-full"
     >
-      {imgSrc ? (
-        <img src={imgSrc} alt={asset.fileName} className="h-48 w-full object-cover" />
+      {previewUrl ? (
+        <img
+          src={previewUrl}
+          alt={asset.fileName}
+          className="h-48 w-full object-cover bg-muted"
+          onError={() => setFailed(true)}
+        />
       ) : (
         <div className="h-48 w-full bg-muted animate-pulse" />
       )}
@@ -155,22 +224,36 @@ function WalkthroughAssetCard({
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
   const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getPresignedUrlForPreview(apiPath)
-      .then((url) => { if (!cancelled) setSrc(url); })
-      .catch(() => { if (!cancelled) setSrc(asset.fileUrl); });
-    return () => { cancelled = true; };
-  }, [apiPath, asset.fileUrl]);
+    setFailed(false);
+    setSrc(null);
+    fetchPresignedDownload(apiPath)
+      .then((data) => {
+        if (!cancelled) setSrc(data.downloadUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiPath]);
 
   return (
     <div className="rounded-lg overflow-hidden border border-border">
-      {src && isVideoFileName(asset.fileName) ? (
-        <video src={src} controls className="w-full max-h-96 bg-black" />
+      {src && !failed ? (
+        <video
+          src={src}
+          controls
+          className="w-full max-h-96 bg-black"
+          onError={() => setFailed(true)}
+        />
       ) : (
         <div className="flex items-center justify-between p-4">
-          <p className="text-sm font-medium">{asset.fileName}</p>
+          <p className="text-sm font-medium truncate">{asset.fileName}</p>
           <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
             <ExternalLink className="h-4 w-4" />
             View
@@ -184,5 +267,5 @@ function WalkthroughAssetCard({
 
 export { ASSET_TYPE_MAP, getAssetsForTab };
 export function isAssetImage(fileName: string) {
-  return isImageFileName(fileName);
+  return resolvePreviewKind({ fileName }) === "image";
 }

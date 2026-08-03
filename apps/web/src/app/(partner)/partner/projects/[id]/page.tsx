@@ -237,8 +237,8 @@ export default function ProjectDetailPage() {
               </a>
             ) : (
               <EmptyState
-                title="No location image"
-                description="Admin can upload a location image and map link for this project."
+                title="No location details"
+                description="Admin can add a location image and/or map link for this project."
               />
             )}
           </Card>

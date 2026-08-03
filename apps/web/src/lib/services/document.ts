@@ -62,6 +62,31 @@ export class DocumentService {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.+/g, ".").slice(0, 200);
   }
 
+  static mimeTypeFromFileName(fileName: string | null | undefined): string | null {
+    if (!fileName) return null;
+    const name = fileName.toLowerCase().split("?")[0];
+    if (name.endsWith(".mp4")) return "video/mp4";
+    if (name.endsWith(".webm")) return "video/webm";
+    if (name.endsWith(".mov") || name.endsWith(".qt")) return "video/quicktime";
+    if (name.endsWith(".png")) return "image/png";
+    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+    if (name.endsWith(".webp")) return "image/webp";
+    if (name.endsWith(".gif")) return "image/gif";
+    if (name.endsWith(".pdf")) return "application/pdf";
+    return null;
+  }
+
+  static async deleteStoredFile(fileUrl: string): Promise<void> {
+    if (!fileUrl) return;
+    if (isBlobUrl(fileUrl)) {
+      await blobDelete(fileUrl);
+      return;
+    }
+    const key = this.extractKey(fileUrl);
+    if (!key) return;
+    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  }
+
   static getScopedFolder(role: UserRole, userId: string, type: DocumentType): string {
     return `${role.toLowerCase()}/${userId}/${type.toLowerCase()}`;
   }

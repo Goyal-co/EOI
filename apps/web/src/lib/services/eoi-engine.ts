@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
 import { canTransitionEOI, generateEOIReference, type EOIStatus } from "@goyal/types";
 import { NotificationService } from "@goyal/email";
-import { getCRMProvider } from "@goyal/integrations";
 import { writeAudit } from "./audit";
 import { getSystemSettings } from "./system-settings";
+import { punchSubmittedEoiToCrm } from "./goyal-crm-sync";
 
 export class EOIEngine {
   static async transition(params: {
@@ -166,11 +166,16 @@ export class EOIEngine {
       }
 
       try {
-        const crm = getCRMProvider();
-        await crm.syncEOI({
+        await punchSubmittedEoiToCrm({
+          leadDbId: eoi.leadId,
           customerName: eoi.lead.customerName,
+          customerEmail: eoi.lead.customerEmail,
+          customerMobile: eoi.lead.customerMobile,
           projectName: eoi.project.name,
+          city: eoi.lead.city,
           referenceNumber: referenceNumber!,
+          formData: eoi.formData,
+          existingCrmId: eoi.lead.titanCrmId,
         });
       } catch (e) {
         console.error("[CRM] syncEOI failed:", e);

@@ -9,9 +9,9 @@ import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText } from "lucide-
 import { useAdminCPs, useAdminProjects } from "@/lib/hooks";
 import {
   openPresignedAsset,
-  getPresignedUrlForPreview,
-  isImageFileName,
-  isPdfFileName,
+  fetchPresignedDownload,
+  resolvePreviewKind,
+  type AssetPreviewKind,
 } from "@/lib/files/open-asset";
 
 interface ChannelPartner {
@@ -65,14 +65,14 @@ interface Project {
 
 type TabFilter = "all" | "pending";
 
-function isDocImage(doc: CPDocument): boolean {
-  if (doc.mimeType?.startsWith("image/")) return true;
-  return isImageFileName(doc.fileName) || isImageFileName(doc.fileUrl);
-}
+const DOC_DISPLAY_ORDER = ["RERA_CERT", "PAN", "CHEQUE", "GST_CERT", "VISITING_CARD"];
 
-function isDocPdf(doc: CPDocument): boolean {
-  if (doc.mimeType === "application/pdf") return true;
-  return isPdfFileName(doc.fileName) || isPdfFileName(doc.fileUrl);
+function sortRegistrationDocs(docs: CPDocument[]): CPDocument[] {
+  return [...docs].sort((a, b) => {
+    const ai = DOC_DISPLAY_ORDER.indexOf(a.type);
+    const bi = DOC_DISPLAY_ORDER.indexOf(b.type);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
 }
 
 function DocumentPreviewCard({
@@ -83,33 +83,78 @@ function DocumentPreviewCard({
   label: string;
 }) {
   const apiPath = `/api/admin/documents/${doc.id}/download`;
-  const showImage = isDocImage(doc);
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
-  const [imgError, setImgError] = useState(false);
+  const initialKind = resolvePreviewKind({
+    mimeType: doc.mimeType,
+    fileName: doc.fileName,
+    fileUrl: doc.fileUrl,
+  });
+
+  const [kind, setKind] = useState<AssetPreviewKind>(initialKind);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState(doc.fileName);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!showImage) return;
     let cancelled = false;
-    setImgSrc(null);
-    setImgError(false);
-    getPresignedUrlForPreview(apiPath)
-      .then((url) => {
-        if (!cancelled) setImgSrc(url);
+    setLoading(true);
+    setFailed(false);
+    setPreviewUrl(null);
+    setKind(initialKind);
+
+    fetchPresignedDownload(apiPath)
+      .then((data) => {
+        if (cancelled) return;
+        const resolved = resolvePreviewKind({
+          mimeType: data.mimeType || doc.mimeType,
+          fileName: data.fileName || doc.fileName,
+          fileUrl: data.downloadUrl || doc.fileUrl,
+        });
+        setKind(resolved);
+        setDisplayName(data.fileName || doc.fileName);
+        setPreviewUrl(data.downloadUrl);
+        setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) setImgSrc(doc.fileUrl || null);
+        if (cancelled) return;
+        // Private storage URLs usually need a signed link — don't fall back to raw fileUrl.
+        setFailed(true);
+        setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [apiPath, doc.fileUrl, showImage]);
+  }, [apiPath, doc.fileName, doc.fileUrl, doc.mimeType, initialKind]);
+
+  const handleImageError = () => {
+    // Mis-labeled uploads (PDF stored with image mime / wrong extension).
+    const byName = resolvePreviewKind({
+      mimeType: null,
+      fileName: displayName,
+      fileUrl: doc.fileUrl,
+    });
+    if (byName === "pdf") {
+      setKind("pdf");
+      return;
+    }
+    setFailed(true);
+  };
+
+  const kindBadge =
+    kind === "image" ? "Image" : kind === "pdf" ? "PDF" : "File";
 
   return (
     <div className="rounded-lg border border-border overflow-hidden bg-background">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{label}</p>
-          <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-foreground truncate">{label}</p>
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {kindBadge}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground truncate">{displayName}</p>
         </div>
         <div className="flex gap-1 shrink-0">
           <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
@@ -121,27 +166,45 @@ function DocumentPreviewCard({
           </Button>
         </div>
       </div>
-      {showImage && !imgError ? (
+
+      {loading ? (
+        <div className="h-44 w-full animate-pulse bg-muted" />
+      ) : failed || !previewUrl ? (
+        <div className="flex items-center gap-3 px-3 py-4 text-sm text-muted-foreground">
+          <FileText className="h-8 w-8 shrink-0 opacity-60" />
+          <div>
+            <p>Preview unavailable — use View to open the file.</p>
+            <p className="text-xs mt-0.5">Supports image (JPG/PNG/WebP) and PDF uploads.</p>
+          </div>
+        </div>
+      ) : kind === "image" ? (
         <button
           type="button"
           onClick={() => openPresignedAsset(apiPath)}
-          className="block w-full text-left bg-muted/40"
+          className="block w-full text-left bg-[#f3f4f6]"
         >
-          {imgSrc ? (
-            <img
-              src={imgSrc}
-              alt={label}
-              className="w-full max-h-72 object-contain bg-[#f3f4f6]"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <div className="h-40 w-full animate-pulse bg-muted" />
-          )}
+          <img
+            src={previewUrl}
+            alt={label}
+            className="w-full max-h-80 object-contain"
+            onError={handleImageError}
+          />
         </button>
+      ) : kind === "pdf" ? (
+        <div className="bg-[#f3f4f6]">
+          <iframe
+            title={`${label} PDF preview`}
+            src={`${previewUrl}#toolbar=0&navpanes=0`}
+            className="w-full h-72 border-0 bg-white"
+          />
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            PDF preview — use View if the embed does not load in your browser.
+          </p>
+        </div>
       ) : (
         <div className="flex items-center gap-3 px-3 py-4 text-sm text-muted-foreground">
           <FileText className="h-8 w-8 shrink-0 opacity-60" />
-          <span>{isDocPdf(doc) ? "PDF document — open to review" : "File attached — open to review"}</span>
+          <span>Attached file — open with View to review.</span>
         </div>
       )}
     </div>
@@ -206,7 +269,7 @@ export default function AdminChannelPartnersPage() {
       const res = await fetch(`/api/admin/channel-partners/${cp.id}`);
       if (res.ok) {
         const data = await res.json();
-        setApproveDocs(data.documents || []);
+        setApproveDocs(sortRegistrationDocs(data.documents || []));
       }
     } catch {
       // non-blocking — approve can continue without docs preview
@@ -232,7 +295,7 @@ export default function AdminChannelPartnersPage() {
     }
     return (
       <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
-        {docs.map((doc) => (
+        {sortRegistrationDocs(docs).map((doc) => (
           <DocumentPreviewCard key={doc.id} doc={doc} label={docLabel(doc.type)} />
         ))}
       </div>
@@ -458,7 +521,7 @@ export default function AdminChannelPartnersPage() {
         }}
         title="Approve Channel Partner"
         description={cpToApprove ? `Review documents and assign projects for ${cpToApprove.name}` : undefined}
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           <div>
