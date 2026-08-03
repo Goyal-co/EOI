@@ -47,5 +47,5 @@ export const spacing = {
 export const brand = {
   appName: "Goyal Hariyana",
   tagline: "creating landmarks since 1971",
-  logoSrc: "/images/email/goyal-hariyana-logo.png",
+  logoSrc: "/new_logo.jpeg",
 } as const;

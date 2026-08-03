@@ -7,7 +7,7 @@ const LIGHT_BG = "#F8F9FB";
 const BORDER = "#E8ECF1";
 
 export function getEmailLogoUrl(): string {
-  return `${getAppBaseUrl()}/images/email/goyal-hariyana-logo.png`;
+  return `${getAppBaseUrl()}/new_logo.jpeg`;
 }
 
 export function emailShell(body: string): string {
