@@ -92,7 +92,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       tempPassword = creds.password;
 
       const customer = await prisma.customer.findFirst({
-        where: { user: { email: lead.customerEmail } },
+        where: { user: { email: { equals: lead.customerEmail.trim().toLowerCase(), mode: "insensitive" } } },
       });
       if (customer) {
         await prisma.lead.update({
