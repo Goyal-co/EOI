@@ -50,8 +50,6 @@ interface Settings {
   pushNotifications: boolean;
   eoiUpdates: boolean;
   leadAlerts: boolean;
-  profileVisible: boolean;
-  shareAnalytics: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -60,8 +58,6 @@ const DEFAULTS: Settings = {
   pushNotifications: true,
   eoiUpdates: true,
   leadAlerts: true,
-  profileVisible: true,
-  shareAnalytics: false,
 };
 
 export default function PartnerSettingsPage() {

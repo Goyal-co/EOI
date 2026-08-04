@@ -185,25 +185,34 @@ export class NotificationService {
     projectLocation: string;
     entityId: string;
     leadId?: string;
+    customerLoginUrl?: string;
+    password?: string;
   }) {
     const leadId = params.leadId || params.entityId;
+    const customerLoginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
     const email = await this.resolveEmail(
       "LEAD_ONLY_ACCEPTED",
       {
         customerName: params.customerName,
+        customerEmail: params.customerEmail,
         cpName: params.cpName,
         projectName: params.projectName,
         projectLocation: params.projectLocation,
         leadId,
+        customerLoginUrl,
+        password: params.password || "",
       },
       {
         subject: `Interest confirmed — ${params.projectName}`,
         html: leadOnlyAcceptedEmailHtml({
           customerName: params.customerName,
+          customerEmail: params.customerEmail,
           cpName: params.cpName,
           projectName: params.projectName,
           projectLocation: params.projectLocation,
           leadId,
+          customerLoginUrl,
+          password: params.password,
         }),
       },
     );

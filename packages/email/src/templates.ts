@@ -315,10 +315,22 @@ export function leadOnlyAcceptedEmailHtml(params: {
   projectName: string;
   projectLocation: string;
   leadId?: string;
+  customerLoginUrl?: string;
+  password?: string;
+  customerEmail?: string;
 }) {
-  const leadDetails = params.leadId
-    ? detailsGrid([{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }])
-    : "";
+  const loginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
+  const detailItems: { label: string; value: string; icon: string }[] = [];
+  if (params.leadId) {
+    detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
+  }
+  if (params.customerEmail) {
+    detailItems.push({ label: "Login Email", value: params.customerEmail, icon: "&#9993;" });
+  }
+  if (params.password) {
+    detailItems.push({ label: "Temporary Password", value: params.password, icon: "&#128274;" });
+  }
+  const details = detailItems.length ? detailsGrid(detailItems) : "";
 
   return wrapEmail([
     emailHeader("Interest Confirmed"),
@@ -330,11 +342,11 @@ export function leadOnlyAcceptedEmailHtml(params: {
         with Channel Partner <strong style="color:${NAVY};">${params.cpName}</strong>.
       </p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
-      ${leadDetails}
-      <p style="margin:0;color:${MUTED};">
-        Your interest has been registered. Our team and your Channel Partner will reach out with next steps.
-        No further action is required from you at this time.
+      ${details}
+      <p style="margin:0 0 16px;color:${MUTED};">
+        Sign in to the Customer Portal with the email and temporary password above. You can reset your password from the login page if needed.
       </p>
+      ${primaryButton("Open Customer Portal", loginUrl)}
       <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">EOI is currently closed for this project. This confirmation records your interest only.</p>
     `),
     emailSupportBlock(),
@@ -392,10 +404,13 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
   }),
   LEAD_ONLY_ACCEPTED: leadOnlyAcceptedEmailHtml({
     customerName: "{{customerName}}",
+    customerEmail: "{{customerEmail}}",
     cpName: "{{cpName}}",
     projectName: "{{projectName}}",
     projectLocation: "{{projectLocation}}",
     leadId: "{{leadId}}",
+    customerLoginUrl: "{{customerLoginUrl}}",
+    password: "{{password}}",
   }),
   EOI_SUBMITTED: eoiSubmittedEmailHtml({
     customerName: "{{customerName}}",

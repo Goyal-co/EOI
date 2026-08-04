@@ -176,12 +176,38 @@ export const partnerProfileSchema = z.object({
   city: z.string().optional(),
 });
 
-export const projectAssetSchema = z.object({
-  type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH", "LOCATION"]),
-  fileName: z.string().min(1),
-  fileUrl: z.string().url(),
-  fileSize: z.number().optional(),
-});
+export const PROJECT_BANNER_WIDTH = 1920;
+export const PROJECT_BANNER_HEIGHT = 600;
+export const PROJECT_LOCATION_WIDTH = 1920;
+export const PROJECT_LOCATION_HEIGHT = 1080;
+
+export const projectAssetSchema = z
+  .object({
+    type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH", "LOCATION"]),
+    fileName: z.string().min(1),
+    fileUrl: z.string().url(),
+    fileSize: z.number().optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "BANNER") {
+      if (data.width !== PROJECT_BANNER_WIDTH || data.height !== PROJECT_BANNER_HEIGHT) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Banner must be exactly ${PROJECT_BANNER_WIDTH}×${PROJECT_BANNER_HEIGHT}px`,
+        });
+      }
+    }
+    if (data.type === "LOCATION") {
+      if (data.width !== PROJECT_LOCATION_WIDTH || data.height !== PROJECT_LOCATION_HEIGHT) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Location image must be exactly ${PROJECT_LOCATION_WIDTH}×${PROJECT_LOCATION_HEIGHT}px`,
+        });
+      }
+    }
+  });
 
 export const leadPatchSchema = z.object({
   siteVisitStatus: z.enum(["NOT_SCHEDULED", "SCHEDULED", "COMPLETED", "CANCELLED"]).optional(),

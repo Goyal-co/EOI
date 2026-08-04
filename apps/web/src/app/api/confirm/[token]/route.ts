@@ -113,6 +113,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         projectLocation: lead.project.location,
         entityId: lead.id,
         leadId: lead.leadId || lead.id,
+        customerLoginUrl,
+        password: tempPassword,
       });
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
     } else {

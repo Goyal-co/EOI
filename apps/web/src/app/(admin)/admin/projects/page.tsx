@@ -309,63 +309,45 @@ export default function AdminProjectsPage() {
     }
   };
 
+  const readImageDims = (file: File) =>
+    new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not read image dimensions"));
+      };
+      img.src = url;
+    });
+
   const handleAssetUpload = async (type: DocumentType, file: File) => {
     if (!selected) return;
 
-    if (type === "BANNER") {
-      try {
-        const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const img = new Image();
-          const url = URL.createObjectURL(file);
-          img.onload = () => {
-            resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            URL.revokeObjectURL(url);
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error("Could not read banner image"));
-          };
-          img.src = url;
-        });
-        if (dims.width !== PROJECT_BANNER_WIDTH || dims.height !== PROJECT_BANNER_HEIGHT) {
-          addToast({
-            type: "error",
-            title: "Invalid banner size",
-            message: `Banner must be exactly ${PROJECT_BANNER_WIDTH}×${PROJECT_BANNER_HEIGHT}px (got ${dims.width}×${dims.height})`,
-          });
-          return;
-        }
-      } catch (e) {
-        addToast({ type: "error", title: "Banner check failed", message: (e as Error).message });
-        return;
-      }
-    }
+    let imageDims: { width: number; height: number } | undefined;
 
-    if (type === "LOCATION") {
+    if (type === "BANNER" || type === "LOCATION") {
       try {
-        const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-          const img = new Image();
-          const url = URL.createObjectURL(file);
-          img.onload = () => {
-            resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            URL.revokeObjectURL(url);
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error("Could not read location image"));
-          };
-          img.src = url;
-        });
-        if (dims.width !== PROJECT_LOCATION_WIDTH || dims.height !== PROJECT_LOCATION_HEIGHT) {
+        imageDims = await readImageDims(file);
+        const expectedW = type === "BANNER" ? PROJECT_BANNER_WIDTH : PROJECT_LOCATION_WIDTH;
+        const expectedH = type === "BANNER" ? PROJECT_BANNER_HEIGHT : PROJECT_LOCATION_HEIGHT;
+        if (imageDims.width !== expectedW || imageDims.height !== expectedH) {
           addToast({
             type: "error",
-            title: "Invalid location image size",
-            message: `Location image must be exactly ${PROJECT_LOCATION_WIDTH}×${PROJECT_LOCATION_HEIGHT}px (got ${dims.width}×${dims.height})`,
+            title: type === "BANNER" ? "Invalid banner size" : "Invalid location image size",
+            message: `${type === "BANNER" ? "Banner" : "Location image"} must be exactly ${expectedW}×${expectedH}px (got ${imageDims.width}×${imageDims.height})`,
           });
           return;
         }
       } catch (e) {
-        addToast({ type: "error", title: "Location image check failed", message: (e as Error).message });
+        addToast({
+          type: "error",
+          title: type === "BANNER" ? "Banner check failed" : "Location image check failed",
+          message: (e as Error).message,
+        });
         return;
       }
     }
@@ -394,9 +376,13 @@ export default function AdminProjectsPage() {
           fileName: uploaded.fileName,
           fileUrl: uploaded.fileUrl,
           fileSize: uploaded.fileSize,
+          ...(imageDims ? { width: imageDims.width, height: imageDims.height } : {}),
         }),
       });
-      if (!assetRes.ok) throw new Error("Failed to save asset");
+      if (!assetRes.ok) {
+        const err = await assetRes.json().catch(() => null);
+        throw new Error(err?.error || "Failed to save asset");
+      }
 
       const asset = await assetRes.json();
       setAssets((prev) => [asset, ...prev]);
