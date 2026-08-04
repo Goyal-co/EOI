@@ -3,7 +3,12 @@
 import { usePathname } from "next/navigation";
 import { CustomerLayout } from "@/components/customer-layout";
 
-const NO_LAYOUT_PATHS = ["/customer/login", "/customer/welcome"];
+const NO_LAYOUT_PATHS = [
+  "/customer/login",
+  "/customer/welcome",
+  "/customer/forgot-password",
+  "/customer/reset-password",
+];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

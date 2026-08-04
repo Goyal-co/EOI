@@ -61,7 +61,7 @@ html {
   line-height: 2rem;
   font-weight: 600;
   color: var(--color-foreground);
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
 }
 
 @utility text-section-title {

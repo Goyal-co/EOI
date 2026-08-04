@@ -62,12 +62,14 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "GALLERY", label: "Gallery Image" },
   { type: "CREATIVE", label: "Creative" },
   { type: "WALKTHROUGH", label: "Walkthrough Video" },
-  { type: "LOCATION", label: "Location Image" },
+  { type: "LOCATION", label: "Location Image (1920×1080 px)" },
   { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
 
 const PROJECT_BANNER_WIDTH = 1920;
 const PROJECT_BANNER_HEIGHT = 600;
+const PROJECT_LOCATION_WIDTH = 1920;
+const PROJECT_LOCATION_HEIGHT = 1080;
 
 const emptyForm: ProjectForm = {
   name: "",
@@ -335,6 +337,35 @@ export default function AdminProjectsPage() {
         }
       } catch (e) {
         addToast({ type: "error", title: "Banner check failed", message: (e as Error).message });
+        return;
+      }
+    }
+
+    if (type === "LOCATION") {
+      try {
+        const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+            URL.revokeObjectURL(url);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Could not read location image"));
+          };
+          img.src = url;
+        });
+        if (dims.width !== PROJECT_LOCATION_WIDTH || dims.height !== PROJECT_LOCATION_HEIGHT) {
+          addToast({
+            type: "error",
+            title: "Invalid location image size",
+            message: `Location image must be exactly ${PROJECT_LOCATION_WIDTH}×${PROJECT_LOCATION_HEIGHT}px (got ${dims.width}×${dims.height})`,
+          });
+          return;
+        }
+      } catch (e) {
+        addToast({ type: "error", title: "Location image check failed", message: (e as Error).message });
         return;
       }
     }
@@ -710,7 +741,8 @@ export default function AdminProjectsPage() {
               )}
               {type === "LOCATION" && (
                 <p className="text-xs text-muted-foreground mb-2">
-                  Map/location image — set Location Link on the project so partners can open maps when they click it.
+                  Exact dimensions required: {PROJECT_LOCATION_WIDTH}×{PROJECT_LOCATION_HEIGHT}px (16:9).
+                  Set Location Link on the project so partners can open maps when they click it.
                 </p>
               )}
               <FileUpload

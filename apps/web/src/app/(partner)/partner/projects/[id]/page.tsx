@@ -37,7 +37,7 @@ interface Project {
   myLeads: number;
 }
 
-const ASSET_TABS = ["brochure", "floor-plans", "cost-sheet", "gallery", "creatives", "walkthrough"] as const;
+const ASSET_TABS = ["walkthrough", "brochure", "floor-plans", "cost-sheet", "gallery", "creatives"] as const;
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -132,13 +132,13 @@ export default function ProjectDetailPage() {
       <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="walkthrough">Walkthrough</TabsTrigger>
           <TabsTrigger value="location">Location</TabsTrigger>
           <TabsTrigger value="brochure">Brochure</TabsTrigger>
           <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
           <TabsTrigger value="cost-sheet">Cost Sheet</TabsTrigger>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
           <TabsTrigger value="creatives">Creatives</TabsTrigger>
-          <TabsTrigger value="walkthrough">Walkthrough</TabsTrigger>
           <TabsTrigger value="faqs">FAQs</TabsTrigger>
         </TabsList>
 

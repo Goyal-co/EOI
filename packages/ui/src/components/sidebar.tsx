@@ -51,46 +51,52 @@ function SidebarInner({
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-4 py-4">
-        {logo || (
-          <img
-            src={brand.logoSrc}
-            alt="Goyal Hariyana"
-            className={cn("object-contain", collapsed ? "h-8 w-8" : "h-9 w-auto max-w-[140px]")}
-          />
+      <div
+        className={cn(
+          "flex shrink-0 border-b border-border/60 px-4 py-4",
+          collapsed ? "flex-col items-center gap-2" : "flex-col gap-2",
         )}
-        {!collapsed && (
-          <div className="min-w-0 flex-1">
-            {subtitle ? (
-              <p className="truncate text-sm font-semibold text-foreground">{subtitle}</p>
-            ) : title ? (
-              <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-            ) : null}
-          </div>
-        )}
-        {showClose && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close navigation"
-            className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
-        {onToggleCollapse && !showClose && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "ml-auto hidden shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground lg:flex",
-              collapsed && "mx-auto"
-            )}
-          >
-            <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
-          </button>
-        )}
+      >
+        <div className={cn("flex w-full items-center gap-2", collapsed && "justify-center")}>
+          {logo || (
+            <img
+              src={brand.logoSrc}
+              alt="Goyal Hariyana"
+              className={cn(
+                "object-contain object-left",
+                collapsed ? "h-8 w-8" : "h-8 w-auto max-w-[180px]",
+              )}
+            />
+          )}
+          {showClose && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="ml-auto shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-blue-50 hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+          {onToggleCollapse && !showClose && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className={cn(
+                "ml-auto hidden shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground lg:flex",
+                collapsed && "mx-auto ml-0",
+              )}
+            >
+              <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
+            </button>
+          )}
+        </div>
+        {!collapsed && (subtitle || title) ? (
+          <p className="w-full text-[15px] font-semibold leading-normal tracking-normal text-foreground whitespace-normal break-words">
+            {subtitle || title}
+          </p>
+        ) : null}
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">

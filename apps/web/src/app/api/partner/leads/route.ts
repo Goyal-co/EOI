@@ -37,18 +37,6 @@ export async function GET(req: Request) {
 
   const cpId = session!.user.cpId!;
 
-  // Auto-complete site visits whose scheduled date has passed
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  await prisma.lead.updateMany({
-    where: {
-      cpId,
-      siteVisitStatus: "SCHEDULED",
-      siteVisitDate: { lte: startOfToday },
-    },
-    data: { siteVisitStatus: "COMPLETED" },
-  });
-
   const leads = await prisma.lead.findMany({
     where: {
       cpId,
@@ -63,6 +51,7 @@ export async function GET(req: Request) {
               { customerName: { contains: search, mode: "insensitive" } },
               { customerEmail: { contains: search, mode: "insensitive" } },
               { customerMobile: { contains: search } },
+              { leadId: { contains: search, mode: "insensitive" } },
             ],
           }
         : {}),
@@ -106,21 +95,51 @@ export async function POST(req: Request) {
   });
   if (!access) return apiError("You do not have access to this project", 403);
 
+  const { normalizeMobile, phoneLockWindowMs, daysRemainingUntil } = await import("@/lib/leads/phone");
+  const mobile = normalizeMobile(parsed.data.mobile);
+  if (mobile.length !== 10) {
+    return apiError("Enter a valid 10-digit mobile number");
+  }
+
+  // Same CP + project + phone already exists
   const existingLead = await prisma.lead.findFirst({
     where: {
       cpId,
       projectId: parsed.data.projectId,
-      customerEmail: { equals: parsed.data.email, mode: "insensitive" },
+      customerMobile: mobile,
       journeyStatus: { not: "REJECTED" },
     },
-    select: { id: true, journeyStatus: true },
+    select: { id: true, leadId: true, journeyStatus: true },
   });
 
   if (existingLead) {
     return apiError(
-      "A lead already exists for this customer on this project",
+      "A lead already exists for this mobile number on this project",
       409,
       "DUPLICATE_LEAD",
+    );
+  }
+
+  // 15-day lock: another CP registered this phone (any project) recently
+  const lockSince = new Date(Date.now() - phoneLockWindowMs());
+  const lockedByOtherCp = await prisma.lead.findFirst({
+    where: {
+      customerMobile: mobile,
+      cpId: { not: cpId },
+      createdAt: { gte: lockSince },
+      journeyStatus: { not: "REJECTED" },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true, leadId: true },
+  });
+
+  if (lockedByOtherCp) {
+    const unlockAt = new Date(lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs());
+    const daysLeft = daysRemainingUntil(unlockAt);
+    return apiError(
+      `Another CP registered the same lead. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
+      409,
+      "PHONE_LOCKED",
     );
   }
 
@@ -138,9 +157,17 @@ export async function POST(req: Request) {
     }
   }
 
+  // One phone → one Lead ID (reuse across CPs after lock window)
+  const existingByPhone = await prisma.lead.findFirst({
+    where: { customerMobile: mobile, leadId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: { leadId: true },
+  });
+
   const leadCount = await prisma.lead.count({ where: { projectId: parsed.data.projectId } });
   const { generatePublicLeadId } = await import("@/lib/leads/id-generator");
-  const publicLeadId = generatePublicLeadId(intentType, project.name, leadCount + 1);
+  const publicLeadId =
+    existingByPhone?.leadId || generatePublicLeadId(intentType, project.name, leadCount + 1);
 
   const lead = await prisma.lead.create({
     data: {
@@ -149,7 +176,7 @@ export async function POST(req: Request) {
       projectId: parsed.data.projectId,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.email,
-      customerMobile: parsed.data.mobile,
+      customerMobile: mobile,
       configuration: parsed.data.configuration || null,
       fosName: parsed.data.fosName || null,
       budget: parsed.data.budget,
@@ -196,6 +223,7 @@ export async function POST(req: Request) {
       acceptUrl,
       rejectUrl,
       entityId: lead.id,
+      leadId: publicLeadId,
     });
 
     emailMocked = !!emailResult.mocked;
@@ -268,11 +296,13 @@ export async function POST(req: Request) {
   });
 
   return apiResponse({
-    lead,
+    lead: { ...lead, leadId: publicLeadId, titanCrmId: titanCrmId || lead.titanCrmId },
     intentType,
     sentConfirmation: emailSent,
     emailError,
     emailMocked,
+    crmSynced: !!crmResult.success,
+    crmId: titanCrmId,
     ...(process.env.NODE_ENV !== "production" && sendConfirmation
       ? { devConfirmationLinks: { acceptUrl, rejectUrl } }
       : {}),

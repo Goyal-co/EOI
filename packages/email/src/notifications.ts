@@ -141,8 +141,10 @@ export class NotificationService {
     projectLocation: string;
     acceptUrl: string;
     rejectUrl: string;
+    leadId?: string;
     entityId?: string;
   }) {
+    const leadId = params.leadId || params.entityId || "";
     const email = await this.resolveEmail(
       "CUSTOMER_CONFIRMATION",
       {
@@ -154,12 +156,14 @@ export class NotificationService {
         projectLocation: params.projectLocation,
         acceptUrl: params.acceptUrl,
         rejectUrl: params.rejectUrl,
+        leadId,
       },
       {
         subject: `Confirm Channel Partner Association — ${params.projectName}`,
         html: customerConfirmationEmailHtml({
           ...params,
           customerEmail: params.customerEmail,
+          leadId: leadId || undefined,
         }),
       },
     );
@@ -169,7 +173,7 @@ export class NotificationService {
       html: email.html,
       type: "CUSTOMER_CONFIRMATION",
       entityType: "Lead",
-      entityId: params.entityId,
+      entityId: params.entityId || params.leadId,
     });
   }
 
@@ -180,7 +184,9 @@ export class NotificationService {
     projectName: string;
     projectLocation: string;
     entityId: string;
+    leadId?: string;
   }) {
+    const leadId = params.leadId || params.entityId;
     const email = await this.resolveEmail(
       "LEAD_ONLY_ACCEPTED",
       {
@@ -188,6 +194,7 @@ export class NotificationService {
         cpName: params.cpName,
         projectName: params.projectName,
         projectLocation: params.projectLocation,
+        leadId,
       },
       {
         subject: `Interest confirmed — ${params.projectName}`,
@@ -196,6 +203,7 @@ export class NotificationService {
           cpName: params.cpName,
           projectName: params.projectName,
           projectLocation: params.projectLocation,
+          leadId,
         }),
       },
     );
@@ -217,8 +225,10 @@ export class NotificationService {
     projectName: string;
     projectLocation: string;
     startingPrice: string;
-    inviteUrl: string;
+    inviteUrl?: string;
     customerLoginUrl?: string;
+    leadId?: string;
+    password?: string;
   }) {
     const customerLoginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
     const email = await this.resolveEmail(
@@ -230,8 +240,10 @@ export class NotificationService {
         projectName: params.projectName,
         projectLocation: params.projectLocation,
         startingPrice: params.startingPrice,
-        inviteUrl: params.inviteUrl,
+        inviteUrl: params.inviteUrl || "",
         customerLoginUrl,
+        leadId: params.leadId || "",
+        password: params.password || "",
       },
       {
         subject: `Complete Your EOI — ${params.projectName}`,
@@ -246,6 +258,26 @@ export class NotificationService {
       subject: email.subject,
       html: email.html,
       type: "EOI_INVITATION",
+      entityType: "Lead",
+      entityId: params.leadId,
+    });
+  }
+
+  /** Send customer portal login credentials (email + temporary password). */
+  static async notifyCustomerCredentials(params: {
+    customerEmail: string;
+    customerName: string;
+    cpName: string;
+    projectName: string;
+    projectLocation: string;
+    startingPrice: string;
+    password: string;
+    leadId?: string;
+    customerLoginUrl?: string;
+  }) {
+    return this.notifyEOIInvitation({
+      ...params,
+      password: params.password,
     });
   }
 

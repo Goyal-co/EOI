@@ -38,6 +38,7 @@ export const CustomerJourneyStatus = {
   DRAFT: "DRAFT",
   SUBMITTED: "SUBMITTED",
   APPROVED: "APPROVED",
+  BOOKED: "BOOKED",
   REJECTED: "REJECTED",
   CORRECTION_PENDING: "CORRECTION_PENDING",
   LEAD_CONFIRMED: "LEAD_CONFIRMED",
@@ -62,6 +63,7 @@ export const LeadStatus = {
   CUSTOMER_PENDING: "CUSTOMER_PENDING",
   EOI_SUBMITTED: "EOI_SUBMITTED",
   APPROVED: "APPROVED",
+  BOOKED: "BOOKED",
   REJECTED: "REJECTED",
 } as const;
 export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];

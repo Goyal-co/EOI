@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     select: { id: true, role: true },
   });
 
-  if (user && user.role === "CHANNEL_PARTNER") {
+  if (user && (user.role === "CHANNEL_PARTNER" || user.role === "CUSTOMER")) {
     const token = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
@@ -28,10 +28,14 @@ export async function POST(req: Request) {
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const resetPath =
+      user.role === "CUSTOMER"
+        ? `/customer/reset-password/${token}`
+        : `/partner/reset-password/${token}`;
     await sendEmailWithLog({
       to: parsed.data.email,
       subject: "Reset your password — Goyal & Co. | Hariyana Group",
-      html: `<p>Click <a href="${baseUrl}/partner/reset-password/${token}">here</a> to reset your password. Link expires in 1 hour.</p>`,
+      html: `<p>Click <a href="${baseUrl}${resetPath}">here</a> to reset your password. Link expires in 1 hour.</p>`,
       type: "PASSWORD_RESET",
     });
   }

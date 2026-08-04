@@ -4,6 +4,8 @@ import { apiResponse, apiError } from "@/lib/api";
 import { NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
+import { ensureCustomerCredentials } from "@/lib/customer/credentials";
+
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
@@ -28,6 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     confirmationStatus: lead.confirmationStatus,
     journeyStatus: lead.journeyStatus,
     intentType: lead.intentType,
+    leadId: lead.leadId,
   });
 }
 
@@ -55,6 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const customerLoginUrl = `${baseUrl}/customer/login`;
 
   if (lead.confirmationStatus === "ACCEPTED") {
     return apiError("Confirmation already accepted", 409);
@@ -77,7 +81,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     });
 
     let emailSent = false;
-    let inviteUrl: string | undefined;
+    let tempPassword: string | undefined;
+
+    try {
+      const creds = await ensureCustomerCredentials({
+        email: lead.customerEmail,
+        name: lead.customerName,
+        mobile: lead.customerMobile,
+      });
+      tempPassword = creds.password;
+
+      const customer = await prisma.customer.findFirst({
+        where: { user: { email: lead.customerEmail } },
+      });
+      if (customer) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { customerId: customer.id },
+        });
+      }
+    } catch (e) {
+      console.error("[Confirm] ensureCustomerCredentials failed:", e);
+    }
 
     if (isLeadOnly) {
       const emailResult = await NotificationService.notifyLeadOnlyAccepted({
@@ -87,11 +112,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         projectName: lead.project.name,
         projectLocation: lead.project.location,
         entityId: lead.id,
+        leadId: lead.leadId || lead.id,
       });
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
     } else {
-      inviteUrl = `${baseUrl}/invite/${token}`;
-      const customerLoginUrl = `${baseUrl}/customer/login`;
       const emailResult = await NotificationService.notifyEOIInvitation({
         customerEmail: lead.customerEmail,
         customerName: lead.customerName,
@@ -99,8 +123,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         projectName: lead.project.name,
         projectLocation: lead.project.location,
         startingPrice: `₹${Number(lead.project.startingPrice).toLocaleString("en-IN")}`,
-        inviteUrl,
+        inviteUrl: customerLoginUrl,
         customerLoginUrl,
+        password: tempPassword,
+        leadId: lead.leadId || undefined,
       });
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
     }
@@ -117,9 +143,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       success: true,
       action: "accepted",
       intentType: lead.intentType,
-      inviteUrl,
+      loginUrl: customerLoginUrl,
       emailSent,
-      ...(process.env.NODE_ENV !== "production" && inviteUrl ? { devInviteUrl: inviteUrl } : {}),
+      leadId: lead.leadId,
     });
   }
 

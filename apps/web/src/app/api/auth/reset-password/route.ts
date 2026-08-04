@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     return apiError("Invalid or expired reset token", 400);
   }
 
-  if (record.user.role !== "CHANNEL_PARTNER") {
+  if (record.user.role !== "CHANNEL_PARTNER" && record.user.role !== "CUSTOMER") {
     return apiError("Invalid reset token", 400);
   }
 

@@ -54,11 +54,16 @@ function BrandHeader({
         alt="Goyal Hariyana"
         className={cn(
           "object-contain object-left",
-          compact ? "h-10 w-auto max-w-[220px]" : "h-14 w-auto max-w-[300px]",
+          compact ? "h-12 w-auto max-w-[260px]" : "h-16 w-auto max-w-[340px]",
         )}
       />
       {portalLabel && (
-        <p className={cn("mt-2 font-medium text-gold tracking-wide", compact ? "text-xs" : "text-sm")}>
+        <p
+          className={cn(
+            "mt-2 font-semibold text-gold tracking-normal leading-normal whitespace-normal break-words",
+            compact ? "text-base" : "text-lg",
+          )}
+        >
           {portalLabel}
         </p>
       )}
@@ -97,7 +102,7 @@ export function AuthLayout({
           />
           <div className="relative">
             <BrandHeader portalLabel={portalLabel} />
-            <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-tight">{subtitle}</h2>
+            <h2 className="max-w-md text-3xl font-semibold leading-snug tracking-normal">{subtitle}</h2>
             {description ? (
               <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">{description}</p>
             ) : null}

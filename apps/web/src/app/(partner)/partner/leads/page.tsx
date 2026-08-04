@@ -11,6 +11,7 @@ import { usePartnerLeads, usePartnerProjects } from "@/lib/hooks";
 
 interface Lead {
   id: string;
+  leadId?: string | null;
   customerName: string;
   customerEmail: string;
   customerMobile: string;
@@ -126,6 +127,9 @@ function PartnerLeadsContent() {
 
       <DataTable<Lead>
         columns={[
+          { key: "leadId", header: "Lead ID", render: (row) => (
+            <span className="font-mono text-xs font-medium text-foreground">{row.leadId || "—"}</span>
+          )},
           { key: "customerName", header: "Customer", render: (row) => (
             <div>
               <p className="font-medium">{row.customerName}</p>
@@ -192,6 +196,7 @@ function PartnerLeadsContent() {
                 { value: "ACTIVE", label: "Active" },
                 { value: "SUBMITTED", label: "Submitted" },
                 { value: "APPROVED", label: "Approved" },
+                { value: "BOOKED", label: "Booked" },
                 { value: "REJECTED", label: "Rejected" },
                 { value: "CORRECTION_PENDING", label: "Correction Pending" },
                 { value: "LEAD_CONFIRMED", label: "Lead Confirmed" },
@@ -268,6 +273,11 @@ function PartnerLeadsContent() {
           <div className="space-y-6">
             <div>
               <h3 className="text-section-title">{selectedLead.customerName}</h3>
+              {selectedLead.leadId && (
+                <p className="mt-1 font-mono text-sm text-muted-foreground">
+                  Lead ID: <span className="font-medium text-foreground">{selectedLead.leadId}</span>
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-2">
                 <StatusBadge status={selectedLead.intentType === "LEAD_ONLY" ? "LEAD_ONLY" : "EOI"} />
                 <StatusBadge status={selectedLead.journeyStatus || selectedLead.leadStatus} />
@@ -328,7 +338,7 @@ function PartnerLeadsContent() {
                     </p>
                   )}
                   <p className="text-xs text-emerald-700">
-                    Completed automatically when the scheduled date was reached.
+                    Completed when confirmed by reception.
                   </p>
                 </div>
               ) : (
@@ -359,15 +369,13 @@ function PartnerLeadsContent() {
                         });
                         addToast({
                           type: "success",
-                          title: updated.siteVisitStatus === "COMPLETED"
-                            ? "Site visit marked completed"
-                            : "Site visit scheduled",
+                          title: "Site visit scheduled",
                         });
                       }
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Pick a date to schedule. Status becomes Completed automatically on or after that date.
+                    Pick a date to schedule. Status becomes Completed only when reception confirms the visit.
                   </p>
                   {selectedLead.siteVisitStatus === "SCHEDULED" && (
                     <div className="flex items-center gap-2">

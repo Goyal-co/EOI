@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent, Button, useToast, PageHeader, LoadingSkeleton, cn } from "@goyal/ui";
-import { Bell, Mail, Shield, Eye } from "lucide-react";
+import { Bell, Mail } from "lucide-react";
 
 interface ToggleProps {
   label: string;
@@ -112,7 +112,7 @@ export default function PartnerSettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <PageHeader
         title="Settings"
-        description="Manage notification and privacy preferences"
+        description="Manage notification preferences"
       />
 
       <Card>
@@ -154,28 +154,6 @@ export default function PartnerSettingsPage() {
             icon={<Bell className="h-4 w-4" />}
             checked={settings.leadAlerts}
             onChange={(v) => update("leadAlerts", v)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Privacy</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-border">
-          <SettingToggle
-            label="Profile Visibility"
-            description="Allow admin to view your profile details"
-            icon={<Eye className="h-4 w-4" />}
-            checked={settings.profileVisible}
-            onChange={(v) => update("profileVisible", v)}
-          />
-          <SettingToggle
-            label="Share Analytics"
-            description="Share anonymized performance data for benchmarking"
-            icon={<Shield className="h-4 w-4" />}
-            checked={settings.shareAnalytics}
-            onChange={(v) => update("shareAnalytics", v)}
           />
         </CardContent>
       </Card>

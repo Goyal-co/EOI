@@ -8,12 +8,9 @@ import {
   detailsGrid,
   numberedSteps,
   primaryButton,
-  secondaryButton,
   buttonRow,
   infoBox,
-  linkFallback,
   emailSupportBlock,
-  emailStatsBlock,
   emailFooter,
 } from "./email-layout";
 
@@ -39,7 +36,6 @@ export function cpRegistrationAckEmailHtml(params: { cpName: string; email: stri
       <p style="margin:0;color:${MUTED};">Your account (<strong style="color:${NAVY};">${params.email}</strong>) is pending admin approval. You will receive login credentials once approved.</p>
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -54,10 +50,8 @@ export function cpCredentialsEmailHtml(params: { cpName: string; email: string; 
       <p style="margin:0 0 4px;color:${MUTED};"><strong style="color:${NAVY};">Login Email:</strong> ${params.email}</p>
       <p style="margin:0;color:${MUTED};">Use the password you set during registration.</p>
       <div style="text-align:center;">${primaryButton("Go to Partner Dashboard", params.loginUrl)}</div>
-      ${linkFallback(params.loginUrl, "Partner login link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -71,9 +65,14 @@ export function customerConfirmationEmailHtml(params: {
   projectLocation: string;
   acceptUrl: string;
   rejectUrl: string;
+  leadId?: string;
 }) {
   const emailNote = params.customerEmail
     ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This invitation was sent to <a href="mailto:${params.customerEmail}" style="color:#2563EB;">${params.customerEmail}</a>. Please use the same email when you sign in later.</p>`
+    : "";
+
+  const leadDetails = params.leadId
+    ? detailsGrid([{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }])
     : "";
 
   return wrapEmail([
@@ -84,23 +83,21 @@ export function customerConfirmationEmailHtml(params: {
         <strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an Expression of Interest (EOI) at:
       </p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
+      ${leadDetails}
       ${emailNote}
       <p style="margin:0 0 8px;color:${MUTED};">Please confirm whether you would like to proceed with this Channel Partner. After you accept, you will receive a second email with your personal EOI link.</p>
       ${numberedSteps([
         "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
         "Check your inbox for the EOI invitation email with your project link.",
-        "Sign in with Google using the same email address and complete your EOI form.",
+        "Sign in at the Customer Portal with the email and password we send after you accept.",
       ])}
       ${buttonRow([
         { label: "Accept & Continue", href: params.acceptUrl, variant: "primary" },
         { label: "Decline", href: params.rejectUrl, variant: "secondary" },
       ])}
-      ${linkFallback(params.acceptUrl, "Accept association link")}
-      ${linkFallback(params.rejectUrl, "Decline association link")}
       <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this email, you can safely decline or ignore it.</p>
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -112,10 +109,22 @@ export function invitationEmailHtml(params: {
   projectName: string;
   projectLocation: string;
   startingPrice: string;
-  inviteUrl: string;
+  inviteUrl?: string;
   customerLoginUrl?: string;
+  leadId?: string;
+  password?: string;
 }) {
   const loginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
+
+  const detailItems: { label: string; value: string; icon?: string }[] = [];
+  if (params.leadId) {
+    detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
+  }
+  detailItems.push({ label: "Login URL", value: loginUrl, icon: "&#128279;" });
+  detailItems.push({ label: "Email", value: params.customerEmail, icon: "&#9993;" });
+  if (params.password) {
+    detailItems.push({ label: "Temporary Password", value: params.password, icon: "&#128274;" });
+  }
 
   return wrapEmail([
     emailHeader("Expression of Interest &nbsp;|&nbsp; Step 2 of 3"),
@@ -123,30 +132,20 @@ export function invitationEmailHtml(params: {
       <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
       <p style="margin:0;color:${MUTED};">
         Thank you for confirming your association with <strong style="color:${NAVY};">${params.cpName}</strong>.
-        You can now complete your Expression of Interest for:
+        You can now sign in to the Customer Portal to complete your Expression of Interest for:
       </p>
       ${projectCard({
         projectName: params.projectName,
         projectLocation: params.projectLocation,
         startingPrice: params.startingPrice,
       })}
-      <p style="margin:0;font-size:14px;color:${MUTED};">
-        Sign in with Google using <strong style="color:${NAVY};">${params.customerEmail}</strong> — the email your Channel Partner registered for you.
+      ${detailsGrid(detailItems)}
+      <div style="text-align:center;">${primaryButton("Go to Customer Login", loginUrl)}</div>
+      <p style="margin:16px 0 0;font-size:14px;color:${MUTED};text-align:center;">
+        You can reset your password from the login page if needed.
       </p>
-      ${numberedSteps([
-        "Open your EOI invitation link below.",
-        "Click <strong>Continue with Google</strong> and sign in with your registered email.",
-        "Complete personal details, address, unit preference, and bank information.",
-        "Upload PAN, Aadhaar, and cheque documents, then submit your EOI.",
-      ])}
-      <div style="text-align:center;">${primaryButton("Open My EOI Invitation", params.inviteUrl)}</div>
-      ${linkFallback(params.inviteUrl, "Your EOI invitation link")}
-      <p style="margin:16px 0 8px;font-size:14px;color:${MUTED};text-align:center;">Already signed in before?</p>
-      <div style="text-align:center;">${secondaryButton("Go to Customer Login", loginUrl)}</div>
-      ${linkFallback(loginUrl, "Customer login link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -172,10 +171,8 @@ export function eoiSubmittedEmailHtml(params: {
       ])}
       <p style="margin:0;color:${MUTED};">We will notify you once your EOI is reviewed by our team.</p>
       <div style="text-align:center;">${primaryButton("View My EOI Status", portalUrl)}</div>
-      ${linkFallback(portalUrl, "Customer portal link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -205,10 +202,8 @@ export function eoiApprovedEmailHtml(params: {
       ])}
       <p style="margin:0;text-align:center;color:${MUTED};">You can login to the customer portal to view your EOI details and track next steps.</p>
       <div style="text-align:center;">${primaryButton("View Confirmation", portalUrl)}</div>
-      ${linkFallback(portalUrl, "Customer portal link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -230,10 +225,8 @@ export function eoiRejectedEmailHtml(params: {
       <p style="margin:0 0 16px;color:${MUTED};">Your EOI for <strong style="color:${NAVY};">${params.projectName}</strong> was not approved.</p>
       ${infoBox(`<strong>Reason:</strong> ${params.reason}${params.remarks ? `<br/><br/><strong>Remarks:</strong> ${params.remarks}` : ""}`, "warning")}
       <div style="text-align:center;">${primaryButton("View Details", portalUrl)}</div>
-      ${linkFallback(portalUrl, "Customer portal link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -255,10 +248,8 @@ export function correctionRequestedEmailHtml(params: {
       ${infoBox(params.remarks, "warning")}
       <p style="margin:0;color:${MUTED};">Please sign in and update your EOI form with the requested corrections.</p>
       <div style="text-align:center;">${primaryButton("Update My EOI Form", formUrl)}</div>
-      ${linkFallback(formUrl, "EOI form link")}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -273,7 +264,6 @@ export function cpRegisteredEmailHtml(params: { cpName: string; companyName?: st
       </p>
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -297,7 +287,6 @@ export function cpCustomerSubmittedEmailHtml(params: {
       ])}
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -316,7 +305,6 @@ export function cpCustomerRejectedEmailHtml(params: {
       <p style="margin:0;color:${MUTED};">No further action is required on this lead.</p>
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -326,7 +314,12 @@ export function leadOnlyAcceptedEmailHtml(params: {
   cpName: string;
   projectName: string;
   projectLocation: string;
+  leadId?: string;
 }) {
+  const leadDetails = params.leadId
+    ? detailsGrid([{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }])
+    : "";
+
   return wrapEmail([
     emailHeader("Interest Confirmed"),
     emailHero("Interest Confirmed", "Confirmed", "check"),
@@ -337,6 +330,7 @@ export function leadOnlyAcceptedEmailHtml(params: {
         with Channel Partner <strong style="color:${NAVY};">${params.cpName}</strong>.
       </p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
+      ${leadDetails}
       <p style="margin:0;color:${MUTED};">
         Your interest has been registered. Our team and your Channel Partner will reach out with next steps.
         No further action is required from you at this time.
@@ -344,7 +338,6 @@ export function leadOnlyAcceptedEmailHtml(params: {
       <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">EOI is currently closed for this project. This confirmation records your interest only.</p>
     `),
     emailSupportBlock(),
-    emailStatsBlock(),
     emailFooter(),
   ]);
 }
@@ -384,6 +377,7 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     projectLocation: "{{projectLocation}}",
     acceptUrl: "{{acceptUrl}}",
     rejectUrl: "{{rejectUrl}}",
+    leadId: "{{leadId}}",
   }),
   EOI_INVITATION: invitationEmailHtml({
     customerName: "{{customerName}}",
@@ -392,14 +386,16 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     projectName: "{{projectName}}",
     projectLocation: "{{projectLocation}}",
     startingPrice: "{{startingPrice}}",
-    inviteUrl: "{{inviteUrl}}",
     customerLoginUrl: "{{customerLoginUrl}}",
+    leadId: "{{leadId}}",
+    password: "{{password}}",
   }),
   LEAD_ONLY_ACCEPTED: leadOnlyAcceptedEmailHtml({
     customerName: "{{customerName}}",
     cpName: "{{cpName}}",
     projectName: "{{projectName}}",
     projectLocation: "{{projectLocation}}",
+    leadId: "{{leadId}}",
   }),
   EOI_SUBMITTED: eoiSubmittedEmailHtml({
     customerName: "{{customerName}}",

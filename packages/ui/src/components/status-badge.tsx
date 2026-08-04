@@ -6,6 +6,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "gold"
   DRAFT: { label: "Draft", variant: "outline" },
   SUBMITTED: { label: "Submitted", variant: "default" },
   APPROVED: { label: "Approved", variant: "success" },
+  BOOKED: { label: "Booked", variant: "success" },
   REJECTED: { label: "Rejected", variant: "error" },
   CORRECTION_PENDING: { label: "Correction Pending", variant: "warning" },
   PENDING_SUBMISSION: { label: "Pending Submission", variant: "outline" },

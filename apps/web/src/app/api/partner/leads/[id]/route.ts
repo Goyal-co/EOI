@@ -34,18 +34,14 @@ function resolveSiteVisit(data: {
     patch.siteVisitDate = null;
   }
 
+  // Partners may schedule a visit; COMPLETED is set only via reception webhook — never auto-complete by date.
   if (status === "SCHEDULED" || (status === undefined && visitDate)) {
-    if (visitDate) {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      if (visitDate <= startOfToday) {
-        patch.siteVisitStatus = "COMPLETED";
-      } else {
-        patch.siteVisitStatus = "SCHEDULED";
-      }
-    } else if (status === "SCHEDULED") {
-      patch.siteVisitStatus = "SCHEDULED";
-    }
+    patch.siteVisitStatus = "SCHEDULED";
+  }
+
+  // Partners cannot mark COMPLETED themselves through this route.
+  if (status === "COMPLETED") {
+    throw new Error("Site visit can only be marked completed from reception");
   }
 
   return patch;
