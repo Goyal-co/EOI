@@ -1,7 +1,45 @@
 import { prisma } from "@goyal/db";
-import { projectAssetSchema } from "@goyal/types";
+import {
+  PROJECT_BANNER_HEIGHT,
+  PROJECT_BANNER_WIDTH,
+  PROJECT_LOCATION_HEIGHT,
+  PROJECT_LOCATION_WIDTH,
+  projectAssetSchema,
+} from "@goyal/types";
 import { withAuth, apiResponse, apiError } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
+import { imageSize } from "image-size";
+
+const MAX_VALIDATION_IMAGE_BYTES = 10 * 1024 * 1024;
+
+async function readActualImageDimensions(fileUrl: string) {
+  const accessibleUrl = await DocumentService.resolveAccessibleUrl(fileUrl);
+  if (!accessibleUrl) throw new Error("Uploaded image could not be accessed");
+
+  const response = await fetch(accessibleUrl, {
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`Uploaded image could not be read (${response.status})`);
+  }
+
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (declaredSize > MAX_VALIDATION_IMAGE_BYTES) {
+    throw new Error("Image exceeds the 10 MB validation limit");
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_VALIDATION_IMAGE_BYTES) {
+    throw new Error("Image exceeds the 10 MB validation limit");
+  }
+
+  const dimensions = imageSize(bytes);
+  if (!dimensions.width || !dimensions.height) {
+    throw new Error("Could not determine uploaded image dimensions");
+  }
+  return { width: dimensions.width, height: dimensions.height };
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await withAuth(["ADMIN"]);
@@ -26,6 +64,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = await req.json();
   const parsed = projectAssetSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
+
+  if (parsed.data.type === "BANNER" || parsed.data.type === "LOCATION") {
+    try {
+      const actual = await readActualImageDimensions(parsed.data.fileUrl);
+      const expected =
+        parsed.data.type === "BANNER"
+          ? { width: PROJECT_BANNER_WIDTH, height: PROJECT_BANNER_HEIGHT }
+          : { width: PROJECT_LOCATION_WIDTH, height: PROJECT_LOCATION_HEIGHT };
+
+      if (actual.width !== expected.width || actual.height !== expected.height) {
+        return apiError(
+          `${parsed.data.type === "BANNER" ? "Banner" : "Location image"} must be exactly ${expected.width}×${expected.height}px (actual ${actual.width}×${actual.height}px)`,
+        );
+      }
+    } catch (validationError) {
+      return apiError(
+        validationError instanceof Error
+          ? validationError.message
+          : "Could not validate image dimensions",
+      );
+    }
+  }
 
   const asset = await prisma.projectAsset.create({
     data: {

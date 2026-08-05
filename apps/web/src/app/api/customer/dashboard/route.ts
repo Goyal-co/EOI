@@ -9,8 +9,8 @@ type ProjectAssetRow = {
   fileUrl: string;
 };
 
-async function resolveBannerUrl(bannerUrl: string | null): Promise<string | null> {
-  return DocumentService.resolveAccessibleUrl(bannerUrl);
+async function resolveAssetUrl(fileUrl: string | null): Promise<string | null> {
+  return DocumentService.resolveAccessibleUrl(fileUrl);
 }
 
 function mapEoiEntry(eoi: {
@@ -33,6 +33,7 @@ function mapEoiEntry(eoi: {
     startingPrice: unknown;
     possessionDate: Date | null;
     bannerUrl: string | null;
+    locationImageUrl: string | null;
     amenities: string[];
     description: string | null;
     faqs: unknown;
@@ -40,7 +41,7 @@ function mapEoiEntry(eoi: {
     assets?: ProjectAssetRow[];
   };
   cp: { user: { name: string | null } };
-}, resolvedBannerUrl: string | null) {
+}, resolvedBannerUrl: string | null, resolvedLocationImageUrl: string | null) {
   return {
     eoi: {
       id: eoi.id,
@@ -63,6 +64,7 @@ function mapEoiEntry(eoi: {
       startingPrice: Number(eoi.project.startingPrice),
       possessionDate: eoi.project.possessionDate,
       bannerUrl: resolvedBannerUrl ?? eoi.project.bannerUrl,
+      locationImageUrl: resolvedLocationImageUrl ?? eoi.project.locationImageUrl,
       amenities: eoi.project.amenities,
       description: eoi.project.description,
       faqs: (eoi.project.faqs as Array<{ question: string; answer: string }> | null) || [],
@@ -107,8 +109,11 @@ export async function GET(req: Request) {
 
   const entries = await Promise.all([
     ...eois.map(async (e) => {
-      const bannerUrl = await resolveBannerUrl(e.project.bannerUrl);
-      return { eoiId: e.id, ...mapEoiEntry(e, bannerUrl) };
+      const [bannerUrl, locationImageUrl] = await Promise.all([
+        resolveAssetUrl(e.project.bannerUrl),
+        resolveAssetUrl(e.project.locationImageUrl),
+      ]);
+      return { eoiId: e.id, ...mapEoiEntry(e, bannerUrl, locationImageUrl) };
     }),
     ...pendingLeads.map(async (l) => ({
       eoiId: l.eoi?.id || null,
@@ -120,7 +125,8 @@ export async function GET(req: Request) {
       project: {
         ...l.project,
         startingPrice: Number(l.project.startingPrice),
-        bannerUrl: await resolveBannerUrl(l.project.bannerUrl),
+        bannerUrl: await resolveAssetUrl(l.project.bannerUrl),
+        locationImageUrl: await resolveAssetUrl(l.project.locationImageUrl),
         faqs: (l.project.faqs as Array<{ question: string; answer: string }> | null) || [],
         assets: l.project.assets ?? [],
       },

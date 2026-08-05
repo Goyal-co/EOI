@@ -2,11 +2,25 @@ import { prisma } from "@goyal/db";
 import { leadCreateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
 import { generateInviteToken } from "@goyal/auth";
-import { NotificationService } from "@goyal/email";
+import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveLeadIntent } from "@/lib/leads/intent";
 import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
+import {
+  daysRemainingUntil,
+  normalizeMobile,
+  phoneLockWindowMs,
+} from "@/lib/leads/phone";
+
+class LeadCreateConflict extends Error {
+  constructor(
+    message: string,
+    readonly code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED",
+  ) {
+    super(message);
+  }
+}
 
 export async function GET(req: Request) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
@@ -37,33 +51,110 @@ export async function GET(req: Request) {
 
   const cpId = session!.user.cpId!;
 
-  const leads = await prisma.lead.findMany({
-    where: {
-      cpId,
-      ...(projectId ? { projectId } : {}),
-      ...(status ? { journeyStatus: status as never } : {}),
-      ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
-      ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" } } : {}),
-      ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
-      ...(search
-        ? {
-            OR: [
-              { customerName: { contains: search, mode: "insensitive" } },
-              { customerEmail: { contains: search, mode: "insensitive" } },
-              { customerMobile: { contains: search } },
-              { leadId: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      project: { select: { name: true, eoiStatus: true } },
-      eoi: { select: { status: true, referenceNumber: true, chequeUploaded: true } },
-    },
-    orderBy: { createdAt: "desc" },
+  const [leads, projectAccess, cpIdentityLeads] = await Promise.all([
+    prisma.lead.findMany({
+      where: {
+        cpId,
+        ...(projectId ? { projectId } : {}),
+        ...(status ? { journeyStatus: status as never } : {}),
+        ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
+        ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" } } : {}),
+        ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
+        ...(search
+          ? {
+              OR: [
+                { customerName: { contains: search, mode: "insensitive" } },
+                { customerEmail: { contains: search, mode: "insensitive" } },
+                { customerMobile: { contains: search } },
+                { leadId: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        project: { select: { id: true, name: true, eoiStatus: true } },
+        eoi: { select: { status: true, referenceNumber: true, chequeUploaded: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.cPProjectAccess.findMany({
+      where: { cpId },
+      include: {
+        project: {
+          select: { id: true, name: true, location: true, eoiStatus: true, status: true },
+        },
+      },
+    }),
+    prisma.lead.findMany({
+      where: { cpId, journeyStatus: { not: "REJECTED" } },
+      select: {
+        projectId: true,
+        customerMobile: true,
+        customerEmail: true,
+        leadId: true,
+      },
+    }),
+  ]);
+
+  const now = new Date();
+  const identities = leads.flatMap((lead) => [
+    { customerMobile: lead.customerMobile },
+    { customerEmail: { equals: lead.customerEmail, mode: "insensitive" as const } },
+  ]);
+  const identityHistory = identities.length
+    ? await prisma.lead.findMany({
+        where: {
+          OR: identities,
+          journeyStatus: { not: "REJECTED" },
+          createdAt: { gte: new Date(now.getTime() - phoneLockWindowMs()) },
+        },
+        select: {
+          leadId: true,
+          customerMobile: true,
+          customerEmail: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
+  const result = leads.map((lead) => {
+    const sameIdentity = (candidate: {
+      customerMobile: string;
+      customerEmail: string;
+    }) =>
+      candidate.customerMobile === lead.customerMobile
+      || candidate.customerEmail.toLowerCase() === lead.customerEmail.toLowerCase();
+    const firstRegistration = identityHistory.find(sameIdentity);
+    const lockExpiresAt = firstRegistration
+      ? new Date(firstRegistration.createdAt.getTime() + phoneLockWindowMs())
+      : new Date(lead.createdAt.getTime() + phoneLockWindowMs());
+    const existingProjectIds = new Set(
+      cpIdentityLeads
+        .filter(sameIdentity)
+        .map((candidate) => candidate.projectId),
+    );
+    const availableProjects = projectAccess
+      .map((access) => access.project)
+      .filter((project) => project.status === "ACTIVE" && !existingProjectIds.has(project.id))
+      .map((project) => ({
+        id: project.id,
+        name: project.name,
+        location: project.location,
+        eoiStatus: project.eoiStatus,
+        action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
+      }));
+
+    return {
+      ...lead,
+      lockExpiresAt: lockExpiresAt.toISOString(),
+      lockDaysRemaining:
+        lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,
+      availableProjects,
+    };
   });
 
-  return apiResponse(leads);
+  return apiResponse(result);
 }
 
 export async function POST(req: Request) {
@@ -95,52 +186,10 @@ export async function POST(req: Request) {
   });
   if (!access) return apiError("You do not have access to this project", 403);
 
-  const { normalizeMobile, phoneLockWindowMs, daysRemainingUntil } = await import("@/lib/leads/phone");
   const mobile = normalizeMobile(parsed.data.mobile);
+  const email = parsed.data.email.trim().toLowerCase();
   if (mobile.length !== 10) {
     return apiError("Enter a valid 10-digit mobile number");
-  }
-
-  // Same CP + project + phone already exists
-  const existingLead = await prisma.lead.findFirst({
-    where: {
-      cpId,
-      projectId: parsed.data.projectId,
-      customerMobile: mobile,
-      journeyStatus: { not: "REJECTED" },
-    },
-    select: { id: true, leadId: true, journeyStatus: true },
-  });
-
-  if (existingLead) {
-    return apiError(
-      "A lead already exists for this mobile number on this project",
-      409,
-      "DUPLICATE_LEAD",
-    );
-  }
-
-  // 15-day lock: another CP registered this phone (any project) recently
-  const lockSince = new Date(Date.now() - phoneLockWindowMs());
-  const lockedByOtherCp = await prisma.lead.findFirst({
-    where: {
-      customerMobile: mobile,
-      cpId: { not: cpId },
-      createdAt: { gte: lockSince },
-      journeyStatus: { not: "REJECTED" },
-    },
-    orderBy: { createdAt: "asc" },
-    select: { createdAt: true, leadId: true },
-  });
-
-  if (lockedByOtherCp) {
-    const unlockAt = new Date(lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs());
-    const daysLeft = daysRemainingUntil(unlockAt);
-    return apiError(
-      `Another CP registered the same lead. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
-      409,
-      "PHONE_LOCKED",
-    );
   }
 
   const inviteToken = generateInviteToken();
@@ -157,54 +206,125 @@ export async function POST(req: Request) {
     }
   }
 
-  // One phone → one Lead ID (reuse across CPs after lock window)
-  const existingByPhone = await prisma.lead.findFirst({
-    where: { customerMobile: mobile, leadId: { not: null } },
-    orderBy: { createdAt: "asc" },
-    select: { leadId: true },
-  });
-
-  const leadCount = await prisma.lead.count({ where: { projectId: parsed.data.projectId } });
   const { generatePublicLeadId } = await import("@/lib/leads/id-generator");
-  const publicLeadId =
-    existingByPhone?.leadId || generatePublicLeadId(intentType, project.name, leadCount + 1);
+  let lead;
+  try {
+    lead = await prisma.$transaction(async (tx) => {
+      // Serialize both phone and email identities so simultaneous CP submissions
+      // cannot bypass duplicate or 15-day ownership checks.
+      const identityKeys = [`lead-email:${email}`, `lead-phone:${mobile}`].sort();
+      for (const key of identityKeys) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+      }
 
-  const lead = await prisma.lead.create({
-    data: {
-      leadId: publicLeadId,
-      cpId,
-      projectId: parsed.data.projectId,
-      customerName: parsed.data.customerName,
-      customerEmail: parsed.data.email,
-      customerMobile: mobile,
-      configuration: parsed.data.configuration || null,
-      fosName: parsed.data.fosName || null,
-      budget: parsed.data.budget,
-      city: parsed.data.city,
-      notes: parsed.data.notes,
-      intentType,
-      journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
-      confirmationStatus: sendConfirmation ? "PENDING" : null,
-      confirmationSentAt: sendConfirmation ? new Date() : null,
-      leadStatus: "LEAD_REGISTERED",
-      inviteToken,
-      inviteExpiresAt,
-    },
-    include: { project: true, cp: { include: { user: true } } },
-  });
+      const existingLead = await tx.lead.findFirst({
+        where: {
+          cpId,
+          projectId: parsed.data.projectId,
+          OR: [
+            { customerMobile: mobile },
+            { customerEmail: { equals: email, mode: "insensitive" } },
+          ],
+          journeyStatus: { not: "REJECTED" },
+        },
+        select: { id: true },
+      });
+      if (existingLead) {
+        throw new LeadCreateConflict(
+          "This customer is already registered on this project. Open the lead to punch another project.",
+          "DUPLICATE_LEAD",
+        );
+      }
 
-  if (!isLeadOnly) {
-    await prisma.eOI.create({
-      data: {
-        leadId: lead.id,
-        projectId: lead.projectId,
-        cpId: lead.cpId,
-        status: "PENDING_SUBMISSION",
-      },
-    });
+      const lockSince = new Date(Date.now() - phoneLockWindowMs());
+      const lockedByOtherCp = await tx.lead.findFirst({
+        where: {
+          cpId: { not: cpId },
+          createdAt: { gte: lockSince },
+          journeyStatus: { not: "REJECTED" },
+          OR: [
+            { customerMobile: mobile },
+            { customerEmail: { equals: email, mode: "insensitive" } },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      });
+      if (lockedByOtherCp) {
+        const unlockAt = new Date(
+          lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
+        );
+        const daysLeft = daysRemainingUntil(unlockAt);
+        throw new LeadCreateConflict(
+          `Another CP registered this phone number or email. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
+          "IDENTITY_LOCKED",
+        );
+      }
+
+      const existingIdentity = await tx.lead.findFirst({
+        where: {
+          leadId: { not: null },
+          OR: [
+            { customerMobile: mobile },
+            { customerEmail: { equals: email, mode: "insensitive" } },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+        select: { leadId: true },
+      });
+      if (!existingIdentity?.leadId) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
+      }
+      const leadCount = await tx.lead.count();
+      const publicLeadId =
+        existingIdentity?.leadId
+        || generatePublicLeadId(intentType, project.name, leadCount + 1);
+
+      const createdLead = await tx.lead.create({
+        data: {
+          leadId: publicLeadId,
+          cpId,
+          projectId: parsed.data.projectId,
+          customerName: parsed.data.customerName,
+          customerEmail: email,
+          customerMobile: mobile,
+          configuration: parsed.data.configuration || null,
+          fosName: parsed.data.fosName || null,
+          budget: parsed.data.budget,
+          city: parsed.data.city,
+          notes: parsed.data.notes,
+          intentType,
+          journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
+          confirmationStatus: sendConfirmation ? "PENDING" : null,
+          confirmationSentAt: sendConfirmation ? new Date() : null,
+          leadStatus: "LEAD_REGISTERED",
+          inviteToken,
+          inviteExpiresAt,
+        },
+        include: { project: true, cp: { include: { user: true } } },
+      });
+
+      if (!isLeadOnly) {
+        await tx.eOI.create({
+          data: {
+            leadId: createdLead.id,
+            projectId: createdLead.projectId,
+            cpId: createdLead.cpId,
+            status: "PENDING_SUBMISSION",
+          },
+        });
+      }
+      return createdLead;
+    }, { isolationLevel: "Serializable" });
+  } catch (creationError) {
+    if (creationError instanceof LeadCreateConflict) {
+      return apiError(creationError.message, 409, creationError.code);
+    }
+    throw creationError;
   }
+  const publicLeadId = lead.leadId!;
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = getAppBaseUrl();
   const acceptUrl = `${baseUrl}/confirm/${inviteToken}/accept`;
   const rejectUrl = `${baseUrl}/confirm/${inviteToken}/reject`;
 
@@ -224,6 +344,7 @@ export async function POST(req: Request) {
       rejectUrl,
       entityId: lead.id,
       leadId: publicLeadId,
+      intentType,
     });
 
     emailMocked = !!emailResult.mocked;

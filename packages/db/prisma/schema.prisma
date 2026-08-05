@@ -267,7 +267,7 @@ model CPProjectAccess {
 
 model Lead {
   id              String          @id @default(cuid())
-  leadId          String?         @unique
+  leadId          String?
   titanCrmId      String?
   bookingLeadId   String?
   customerId      String?
@@ -302,11 +302,13 @@ model Lead {
 
   @@index([cpId])
   @@index([projectId])
+  @@index([leadId])
   @@index([leadStatus])
   @@index([journeyStatus])
   @@index([intentType])
   @@index([inviteToken])
   @@index([customerEmail, projectId, cpId])
+  @@index([customerEmail, createdAt])
   @@index([customerMobile, createdAt])
 }
 

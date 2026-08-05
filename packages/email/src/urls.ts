@@ -1,7 +1,9 @@
 export function getAppBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "")
-    || process.env.NEXTAUTH_URL?.replace(/\/$/, "")
-    || "http://localhost:3000"
-  );
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL
+    || process.env.NEXTAUTH_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+    || "http://localhost:3000";
+
+  return configured.replace(/\/+$/, "");
 }

@@ -7,10 +7,8 @@ export async function ensureCustomerCredentials(params: {
   email: string;
   name: string;
   mobile: string;
-}): Promise<{ password: string; created: boolean; userId: string }> {
+}): Promise<{ password?: string; created: boolean; userId: string }> {
   const email = params.email.trim().toLowerCase();
-  const password = `Gh${randomBytes(4).toString("hex")}@${Math.floor(100 + Math.random() * 900)}`;
-  const passwordHash = await bcrypt.hash(password, 12);
 
   const existing = await prisma.user.findUnique({
     where: { email },
@@ -21,10 +19,14 @@ export async function ensureCustomerCredentials(params: {
     if (existing.role !== "CUSTOMER") {
       throw new Error("This email is registered under a different portal role");
     }
+    const password = existing.passwordHash
+      ? undefined
+      : `Gh${randomBytes(4).toString("hex")}@${Math.floor(100 + Math.random() * 900)}`;
+    const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        passwordHash,
+        ...(passwordHash ? { passwordHash } : {}),
         name: params.name || existing.name,
         status: "ACTIVE",
       },
@@ -49,6 +51,8 @@ export async function ensureCustomerCredentials(params: {
     return { password, created: false, userId: existing.id };
   }
 
+  const password = `Gh${randomBytes(4).toString("hex")}@${Math.floor(100 + Math.random() * 900)}`;
+  const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
     data: {
       email,

@@ -2,6 +2,7 @@ import { prisma } from "@goyal/db";
 import { apiResponse, apiError } from "@/lib/api";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+import { NotificationService } from "@goyal/email";
 
 /**
  * Reception / Booking Inventory → EOI Partner Portal webhook.
@@ -16,7 +17,8 @@ import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
  *     "eoiCpLeadId"|"internalLeadId": "<uuid>",
  *     "phone"|"mobile"|"customerMobile": "9876543210" }
  *
- * Prefer public leadId; then internal id; phone is last-resort fallback.
+ * Prefer internal EOI lead id or CRM id; public leadId and phone can be shared
+ * across projects, so project details should accompany either fallback.
  */
 export async function POST(req: Request) {
   const secret = process.env.INTEGRATION_WEBHOOK_SECRET?.trim();
@@ -35,7 +37,14 @@ export async function POST(req: Request) {
   if (!body || typeof body !== "object") return apiError("Invalid JSON body");
 
   const raw = body as Record<string, unknown>;
-  const event = String(raw.event || raw.type || "").toLowerCase().trim();
+  const event = normalizeWebhookEvent(
+    raw.event
+      || raw.type
+      || (raw.siteVisitStatus ? `site_visit.${String(raw.siteVisitStatus)}` : "")
+      || raw.leadStatus
+      || raw.status
+      || "",
+  );
   const phoneRaw = String(
     raw.phone || raw.mobile || raw.customerMobile || raw.customerPhone || "",
   );
@@ -44,35 +53,79 @@ export async function POST(req: Request) {
   const internalLeadId =
     String(raw.eoiCpLeadId || raw.internalLeadId || raw.cpLeadId || "").trim() ||
     null;
+  const crmLeadId =
+    String(raw.titanCrmId || raw.crmLeadId || raw.externalLeadId || "").trim() ||
+    null;
+  const projectId = String(raw.projectId || "").trim() || null;
+  const projectName = String(raw.projectName || "").trim() || null;
   const mobile = phoneRaw ? normalizeMobile(phoneRaw) : "";
 
-  if (!mobile && !publicLeadId && !internalLeadId) {
-    return apiError("phone, leadId, or eoiCpLeadId is required");
+  if (!mobile && !publicLeadId && !internalLeadId && !crmLeadId) {
+    return apiError("phone, leadId, eoiCpLeadId, or crmLeadId is required");
   }
 
-  let leads =
-    publicLeadId
-      ? await prisma.lead.findMany({
-          where: { leadId: publicLeadId, journeyStatus: { not: "REJECTED" } },
-        })
-      : [];
+  const include = {
+    project: { select: { id: true, name: true } },
+    cp: { include: { user: { select: { id: true, name: true, email: true } } } },
+    customer: {
+      include: { user: { select: { id: true, name: true, email: true } } },
+    },
+  } as const;
 
-  // Booking stores EOI's public id in LeadRegistry.leadId and EOI DB uuid in eoiCpLeadId.
-  // If the caller sent the uuid as leadId, resolve by primary key.
-  if (leads.length === 0 && publicLeadId && looksLikeUuid(publicLeadId)) {
+  let matchedByExactId = false;
+  let leads = internalLeadId
+    ? await prisma.lead.findMany({
+        where: { id: internalLeadId, journeyStatus: { not: "REJECTED" } },
+        include,
+      })
+    : [];
+  matchedByExactId = leads.length > 0;
+
+  // Some integrations historically placed EOI_CP's internal CUID in leadId.
+  if (leads.length === 0 && publicLeadId) {
     leads = await prisma.lead.findMany({
       where: { id: publicLeadId, journeyStatus: { not: "REJECTED" } },
+      include,
     });
+    matchedByExactId = leads.length > 0;
   }
 
   if (leads.length === 0 && internalLeadId) {
     leads = await prisma.lead.findMany({
       where: {
         journeyStatus: { not: "REJECTED" },
-        ...(looksLikeUuid(internalLeadId)
-          ? { id: internalLeadId }
-          : { leadId: internalLeadId }),
+        leadId: internalLeadId,
       },
+      include,
+    });
+  }
+
+  if (leads.length === 0 && crmLeadId) {
+    leads = await prisma.lead.findMany({
+      where: {
+        titanCrmId: crmLeadId,
+        journeyStatus: { not: "REJECTED" },
+        ...(projectId ? { projectId } : {}),
+        ...(projectName
+          ? { project: { name: { equals: projectName, mode: "insensitive" } } }
+          : {}),
+      },
+      include,
+    });
+    matchedByExactId = leads.length === 1;
+  }
+
+  if (leads.length === 0 && publicLeadId) {
+    leads = await prisma.lead.findMany({
+      where: {
+        leadId: publicLeadId,
+        journeyStatus: { not: "REJECTED" },
+        ...(projectId ? { projectId } : {}),
+        ...(projectName
+          ? { project: { name: { equals: projectName, mode: "insensitive" } } }
+          : {}),
+      },
+      include,
     });
   }
 
@@ -84,7 +137,12 @@ export async function POST(req: Request) {
           { customerMobile: mobile },
           { customerMobile: { endsWith: mobile } },
         ],
+        ...(projectId ? { projectId } : {}),
+        ...(projectName
+          ? { project: { name: { equals: projectName, mode: "insensitive" } } }
+          : {}),
       },
+      include,
     });
   }
 
@@ -92,7 +150,15 @@ export async function POST(req: Request) {
     return apiError("Lead not found", 404);
   }
 
-  const ids = leads.map((l) => l.id);
+  if (leads.length > 1 && !matchedByExactId) {
+    return apiError(
+      "Multiple leads matched. Send eoiCpLeadId, crmLeadId, projectId, or projectName to identify the particular lead.",
+      409,
+      "AMBIGUOUS_LEAD",
+    );
+  }
+
+  const completedAt = parseEventDate(raw.completedAt || raw.eventAt || raw.updatedAt);
 
   if (
     event === "site_visit.completed" ||
@@ -100,10 +166,22 @@ export async function POST(req: Request) {
     event === "site_visit" ||
     event === "sitevisit.completed"
   ) {
-    await prisma.lead.updateMany({
-      where: { id: { in: ids } },
-      data: { siteVisitStatus: "COMPLETED" },
-    });
+    const changed = [];
+    for (const lead of leads) {
+      const result = await prisma.lead.updateMany({
+        where: { id: lead.id, siteVisitStatus: { not: "COMPLETED" } },
+        data: {
+          siteVisitStatus: "COMPLETED",
+          ...(completedAt ? { siteVisitDate: completedAt } : {}),
+        },
+      });
+      if (result.count === 1) changed.push(lead);
+    }
+
+    const notificationResults = await Promise.allSettled(
+      changed.map((lead) => notifyMilestone(lead, "SITE_VISIT_COMPLETED")),
+    );
+    logNotificationFailures(notificationResults);
 
     await writeAudit({
       action: "SITE_VISIT_COMPLETED_RECEPTION",
@@ -114,14 +192,19 @@ export async function POST(req: Request) {
         phone: mobile || undefined,
         leadId: publicLeadId,
         eoiCpLeadId: internalLeadId,
-        count: leads.length,
+        count: changed.length,
+        matched: leads.length,
+        crmLeadId,
+        projectId,
+        projectName,
       },
       ipAddress: getIpFromRequest(req),
     });
 
     return apiResponse({
       success: true,
-      updated: leads.length,
+      updated: changed.length,
+      notified: changed.length,
       event: "site_visit.completed",
     });
   }
@@ -132,14 +215,33 @@ export async function POST(req: Request) {
     event === "lead.booked" ||
     event === "booking.confirm"
   ) {
-    await prisma.lead.updateMany({
-      where: { id: { in: ids } },
-      data: {
-        leadStatus: "BOOKED",
-        journeyStatus: "BOOKED",
-        siteVisitStatus: "COMPLETED",
-      },
-    });
+    const changed = [];
+    for (const lead of leads) {
+      const result = await prisma.lead.updateMany({
+        where: {
+          id: lead.id,
+          OR: [
+            { leadStatus: { not: "BOOKED" } },
+            { journeyStatus: { not: "BOOKED" } },
+            { siteVisitStatus: { not: "COMPLETED" } },
+          ],
+        },
+        data: {
+          leadStatus: "BOOKED",
+          journeyStatus: "BOOKED",
+          siteVisitStatus: "COMPLETED",
+          ...(completedAt && lead.siteVisitStatus !== "COMPLETED"
+            ? { siteVisitDate: completedAt }
+            : {}),
+        },
+      });
+      if (result.count === 1) changed.push(lead);
+    }
+
+    const notificationResults = await Promise.allSettled(
+      changed.map((lead) => notifyMilestone(lead, "BOOKED")),
+    );
+    logNotificationFailures(notificationResults);
 
     await writeAudit({
       action: "LEAD_BOOKED_RECEPTION",
@@ -150,14 +252,19 @@ export async function POST(req: Request) {
         phone: mobile || undefined,
         leadId: publicLeadId,
         eoiCpLeadId: internalLeadId,
-        count: leads.length,
+        count: changed.length,
+        matched: leads.length,
+        crmLeadId,
+        projectId,
+        projectName,
       },
       ipAddress: getIpFromRequest(req),
     });
 
     return apiResponse({
       success: true,
-      updated: leads.length,
+      updated: changed.length,
+      notified: changed.length,
       event: "booking.confirmed",
     });
   }
@@ -165,8 +272,78 @@ export async function POST(req: Request) {
   return apiError(`Unsupported event: ${event || "(empty)"}`);
 }
 
-function looksLikeUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+async function notifyMilestone(
+  lead: Awaited<ReturnType<typeof getLeadForNotification>>,
+  milestone: "SITE_VISIT_COMPLETED" | "BOOKED",
+) {
+  return NotificationService.notifyLeadMilestone({
+    milestone,
+    entityId: lead.id,
+    leadId: lead.leadId || undefined,
+    customerName: lead.customerName,
+    customerEmail: lead.customerEmail,
+    customerUserId: lead.customer?.user.id,
+    cpName: lead.cp.user.name || lead.cp.companyName || "Channel Partner",
+    cpEmail: lead.cp.user.email,
+    cpUserId: lead.cp.user.id,
+    projectName: lead.project.name,
+  });
+}
+
+async function getLeadForNotification(id: string) {
+  const lead = await prisma.lead.findUniqueOrThrow({
+    where: { id },
+    include: {
+      project: { select: { id: true, name: true } },
+      cp: { include: { user: { select: { id: true, name: true, email: true } } } },
+      customer: {
+        include: { user: { select: { id: true, name: true, email: true } } },
+      },
+    },
+  });
+  return lead;
+}
+
+function parseEventDate(value: unknown): Date | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function logNotificationFailures(results: PromiseSettledResult<unknown>[]) {
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("[Reception webhook] milestone notification failed", result.reason);
+    }
+  }
+}
+
+function normalizeWebhookEvent(value: unknown): string {
+  const normalized = String(value)
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_-]+/g, ".");
+
+  if (
+    normalized === "site.visit.done"
+    || normalized === "site.visit.completed"
+    || normalized === "site.visit"
+    || normalized === "lead.site.visit"
+    || normalized === "sitevisit.done"
+    || normalized === "sitevisit.completed"
+    || normalized === "sv.done"
+  ) {
+    return "site_visit.completed";
+  }
+
+  if (
+    normalized === "booking.done"
+    || normalized === "booking.confirmed"
+    || normalized === "booking.booked"
+    || normalized === "booked"
+  ) {
+    return "booking.confirmed";
+  }
+
+  return normalized;
 }

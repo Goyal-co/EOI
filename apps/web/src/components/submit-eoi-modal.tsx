@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Modal, Button, Input, Select, Textarea, MultiStepForm, useToast,
@@ -19,14 +19,25 @@ interface SubmitEOIModalProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+  initialLead?: Pick<
+    LeadCreateInput,
+    "customerName" | "mobile" | "email" | "configuration" | "fosName" | "budget" | "city" | "notes"
+  >;
 }
 
-export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: SubmitEOIModalProps) {
+export function SubmitEOIModal({
+  open,
+  onOpenChange,
+  projectId,
+  projectName,
+  initialLead,
+}: SubmitEOIModalProps) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [sentConfirmation, setSentConfirmation] = useState(false);
   const [devLinks, setDevLinks] = useState<{ acceptUrl: string; rejectUrl: string } | null>(null);
   const [emailWarning, setEmailWarning] = useState<string | null>(null);
+  const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -41,11 +52,22 @@ export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: S
   const { addToast } = useToast();
   const qc = useQueryClient();
 
+  useEffect(() => {
+    if (!open || !initialLead) return;
+    setForm((current) => ({
+      ...current,
+      ...initialLead,
+      projectId,
+      intentType: "EOI",
+    }));
+  }, [initialLead, open, projectId]);
+
   const reset = () => {
     setStep(0);
     setSentConfirmation(false);
     setDevLinks(null);
     setEmailWarning(null);
+    setCreatedLeadId(null);
     setForm({
       customerName: "",
       mobile: "",
@@ -56,6 +78,8 @@ export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: S
       budget: "",
       city: "",
       notes: "",
+      intentType: "EOI",
+      ...initialLead,
     });
   };
 
@@ -79,7 +103,7 @@ export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: S
       const res = await fetch("/api/partner/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, projectId, sendConfirmation }),
+        body: JSON.stringify({ ...form, projectId, intentType: "EOI", sendConfirmation }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -90,6 +114,7 @@ export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: S
       }
 
       setSentConfirmation(!!data.sentConfirmation);
+      setCreatedLeadId(data.lead?.leadId || null);
       setDevLinks(data.devConfirmationLinks || null);
       setEmailWarning(
         data.emailError
@@ -251,6 +276,12 @@ export function SubmitEOIModal({ open, onOpenChange, projectId, projectName }: S
                   ? "The customer was saved but the confirmation email could not be delivered."
                   : "The customer has been saved. You can send a confirmation email later from the leads page."}
             </p>
+            {createdLeadId && (
+              <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Lead ID</p>
+                <p className="font-mono text-sm font-semibold text-foreground">{createdLeadId}</p>
+              </div>
+            )}
             {devLinks && (
               <div className="mt-4 rounded-lg border border-dashed border-border bg-blue-50/50 p-4 text-left text-xs">
                 <p className="font-medium text-foreground mb-2">Dev mode — share these links with the customer:</p>

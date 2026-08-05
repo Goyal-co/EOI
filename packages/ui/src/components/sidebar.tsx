@@ -64,7 +64,7 @@ function SidebarInner({
               alt="Goyal Hariyana"
               className={cn(
                 "object-contain object-left",
-                collapsed ? "h-8 w-8" : "h-8 w-auto max-w-[180px]",
+                collapsed ? "h-10 w-10" : "h-12 w-auto max-w-[220px]",
               )}
             />
           )}

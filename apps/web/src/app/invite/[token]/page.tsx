@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { Button, CardContent, LoadingSkeleton, PublicPageCard, formatCurrency } from "@goyal/ui";
 import { MapPin, Building2 } from "lucide-react";
 
@@ -89,16 +89,13 @@ export default function InvitePage() {
       </div>
 
       <div className="text-center">
-        <Button
-          variant="gold"
-          size="lg"
-          className="w-full"
-          onClick={() => signIn("google", { callbackUrl: "/customer/welcome" })}
-        >
-          Continue with Google
-        </Button>
+        <Link href="/customer/login">
+          <Button variant="gold" size="lg" className="w-full">
+            Continue to Customer Login
+          </Button>
+        </Link>
         <p className="text-xs text-muted-foreground mt-4">
-          Please login using <strong>{data.customerEmail}</strong> — the email provided by your Channel Partner.
+          Use <strong>{data.customerEmail}</strong> and the temporary password sent to you.
         </p>
       </div>
     </PublicPageCard>

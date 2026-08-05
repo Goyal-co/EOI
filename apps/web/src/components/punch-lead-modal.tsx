@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Modal, Button, Input, Select, Textarea, MultiStepForm, useToast,
@@ -19,14 +19,25 @@ interface PunchLeadModalProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+  initialLead?: Pick<
+    LeadCreateInput,
+    "customerName" | "mobile" | "email" | "configuration" | "fosName" | "budget" | "city" | "notes"
+  >;
 }
 
-export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: PunchLeadModalProps) {
+export function PunchLeadModal({
+  open,
+  onOpenChange,
+  projectId,
+  projectName,
+  initialLead,
+}: PunchLeadModalProps) {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [sentConfirmation, setSentConfirmation] = useState(false);
   const [devLinks, setDevLinks] = useState<{ acceptUrl: string; rejectUrl: string } | null>(null);
   const [emailWarning, setEmailWarning] = useState<string | null>(null);
+  const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -42,11 +53,22 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
   const { addToast } = useToast();
   const qc = useQueryClient();
 
+  useEffect(() => {
+    if (!open || !initialLead) return;
+    setForm((current) => ({
+      ...current,
+      ...initialLead,
+      projectId,
+      intentType: "LEAD_ONLY",
+    }));
+  }, [initialLead, open, projectId]);
+
   const reset = () => {
     setStep(0);
     setSentConfirmation(false);
     setDevLinks(null);
     setEmailWarning(null);
+    setCreatedLeadId(null);
     setForm({
       customerName: "",
       mobile: "",
@@ -58,6 +80,7 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
       city: "",
       notes: "",
       intentType: "LEAD_ONLY",
+      ...initialLead,
     });
   };
 
@@ -95,6 +118,7 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
       }
 
       setSentConfirmation(!!data.sentConfirmation);
+      setCreatedLeadId(data.lead?.leadId || null);
       setDevLinks(data.devConfirmationLinks || null);
       setEmailWarning(
         data.emailError
@@ -245,6 +269,12 @@ export function PunchLeadModal({ open, onOpenChange, projectId, projectName }: P
                 ? "The customer must accept the confirmation email to complete this lead."
                 : emailWarning || "The lead was saved. You can send confirmation later from the leads page."}
             </p>
+            {createdLeadId && (
+              <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Lead ID</p>
+                <p className="font-mono text-sm font-semibold text-foreground">{createdLeadId}</p>
+              </div>
+            )}
             {devLinks && (
               <div className="mt-4 rounded-lg border border-dashed border-border bg-blue-50/50 p-4 text-left text-xs">
                 <p className="font-medium text-foreground mb-2">Dev mode — share these links with the customer:</p>

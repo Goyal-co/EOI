@@ -54,7 +54,7 @@ function BrandHeader({
         alt="Goyal Hariyana"
         className={cn(
           "object-contain object-left",
-          compact ? "h-12 w-auto max-w-[260px]" : "h-16 w-auto max-w-[340px]",
+          compact ? "h-16 w-auto max-w-[300px]" : "h-20 w-auto max-w-[380px]",
         )}
       />
       {portalLabel && (

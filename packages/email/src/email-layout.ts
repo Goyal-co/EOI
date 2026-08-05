@@ -1,5 +1,3 @@
-import { getAppBaseUrl } from "./urls";
-
 const GOLD = "#C9A84C";
 const NAVY = "#1A2332";
 const MUTED = "#64748B";
@@ -7,7 +5,10 @@ const LIGHT_BG = "#F8F9FB";
 const BORDER = "#E8ECF1";
 
 export function getEmailLogoUrl(): string {
-  return `${getAppBaseUrl()}/new_logo.jpeg`;
+  return (
+    process.env.EMAIL_LOGO_URL?.trim()
+    || "https://raw.githubusercontent.com/Goyal-co/EOI/main/apps/web/public/new_logo.jpeg"
+  );
 }
 
 export function emailShell(body: string): string {
@@ -55,7 +56,7 @@ export function emailHeader(stepLabel?: string): string {
   return `
     <tr>
       <td style="padding:32px 32px 24px;text-align:center;background:#ffffff;">
-        <img src="${logoUrl}" alt="Goyal & Co. | Hariyana Group" width="280" style="max-width:280px;width:100%;height:auto;display:block;margin:0 auto;" />
+        <img src="${logoUrl}" alt="Goyal & Co. | Hariyana Group" width="320" style="max-width:320px;width:100%;height:auto;display:block;margin:0 auto;" />
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
           <tr>
             <td width="30%" style="border-bottom:1px solid ${GOLD};">&nbsp;</td>
@@ -211,14 +212,6 @@ export function infoBox(content: string, variant: "default" | "warning" = "defau
     </table>`;
 }
 
-export function linkFallback(url: string, label: string): string {
-  return `
-    <p style="margin:16px 0 4px;font-size:12px;color:${MUTED};">${label}:</p>
-    <p style="margin:0 0 16px;font-size:12px;word-break:break-all;">
-      <a href="${url}" style="color:#2563EB;">${url}</a>
-    </p>`;
-}
-
 export function emailSupportBlock(): string {
   return `
     <tr>
@@ -235,35 +228,18 @@ export function emailSupportBlock(): string {
                     <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:${NAVY};">Need Assistance?</p>
                     <p style="margin:0 0 12px;font-size:13px;color:${MUTED};">Our relationship team is here to help you.</p>
                     <p style="margin:0 0 6px;font-size:13px;color:${NAVY};">&#128222; +91 80888 66000 &nbsp;|&nbsp; +91 80888 33000</p>
-                    <p style="margin:0;font-size:13px;"><a href="mailto:info.bng@goyalco.com" style="color:${NAVY};text-decoration:none;">&#9993; info.bng@goyalco.com</a></p>
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="border-radius:6px;background:${NAVY};">
+                          <a href="mailto:info.bng@goyalco.com" style="display:inline-block;padding:8px 14px;color:#ffffff;text-decoration:none;font-size:12px;font-weight:600;">Email Support</a>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
-        </table>
-      </td>
-    </tr>`;
-}
-
-export function emailStatsBlock(): string {
-  const stats = [
-    { value: "55+", label: "Years of Legacy" },
-    { value: "250+", label: "Projects Delivered" },
-    { value: "35+", label: "Million Sqft. under Development" },
-  ];
-
-  const cols = stats.map((s, i) => `
-    <td width="33%" style="padding:16px 8px;text-align:center;${i > 0 ? `border-left:1px solid ${BORDER};` : ""}">
-      <p style="margin:0;font-size:22px;font-weight:700;color:${GOLD};">${s.value}</p>
-      <p style="margin:6px 0 0;font-size:11px;color:${MUTED};line-height:1.4;">${s.label}</p>
-    </td>`).join("");
-
-  return `
-    <tr>
-      <td style="padding:0 32px 24px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:12px;">
-          <tr>${cols}</tr>
         </table>
       </td>
     </tr>`;
@@ -278,7 +254,6 @@ export function emailFooter(): string {
             <td style="text-align:center;">
               <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${NAVY};">Goyal & Co. | Hariyana Group</p>
               <p style="margin:0 0 16px;font-size:12px;color:${MUTED};">Building Trust. Creating Landmarks.</p>
-              <p style="margin:0;font-size:12px;color:#94A3B8;">f &nbsp; in &nbsp; &#127760;</p>
             </td>
           </tr>
         </table>

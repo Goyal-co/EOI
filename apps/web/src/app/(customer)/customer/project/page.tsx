@@ -55,6 +55,8 @@ function CustomerProjectContent() {
   const amenities = project.amenities || [];
   const faqs = project.faqs || [];
   const assets = (project as { assets?: Array<{ id: string; type: string; fileName: string; fileUrl: string }> }).assets || [];
+  const locationImageUrl = (project as { locationImageUrl?: string | null }).locationImageUrl;
+  const locationLink = (project as { locationLink?: string | null }).locationLink;
 
   return (
     <div className="space-y-6">
@@ -109,6 +111,7 @@ function CustomerProjectContent() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="amenities">Amenities</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="location">Location Map</TabsTrigger>
           <TabsTrigger value="brochure">Brochure</TabsTrigger>
           <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
           <TabsTrigger value="cost-sheet">Cost Sheet</TabsTrigger>
@@ -185,6 +188,40 @@ function CustomerProjectContent() {
                 </div>
               </div>
             </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="location">
+          <Card className="p-6 space-y-4">
+            <h3 className="text-section-title">Location Map</h3>
+            {locationImageUrl ? (
+              locationLink ? (
+                <a
+                  href={locationLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block overflow-hidden rounded-xl border border-border transition-opacity hover:opacity-95"
+                >
+                  <img
+                    src={locationImageUrl}
+                    alt={`${project.name} location map`}
+                    className="aspect-video w-full bg-blue-50 object-contain"
+                  />
+                  <p className="px-3 py-2 text-xs text-blue-600">Open in Maps</p>
+                </a>
+              ) : (
+                <img
+                  src={locationImageUrl}
+                  alt={`${project.name} location map`}
+                  className="aspect-video w-full rounded-xl border border-border bg-blue-50 object-contain"
+                />
+              )
+            ) : (
+              <EmptyState
+                title="Location map unavailable"
+                description="The project location map will appear here once uploaded."
+              />
+            )}
           </Card>
         </TabsContent>
 

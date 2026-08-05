@@ -18,7 +18,7 @@ export function PublicPageCard({ children, title, description, className }: Publ
               <img
                 src={brand.logoSrc}
                 alt="Goyal Hariyana"
-                className="h-10 w-auto max-w-[220px] object-contain"
+                className="h-14 w-auto max-w-[300px] object-contain"
               />
             </div>
             {title && <h1 className="text-page-title">{title}</h1>}

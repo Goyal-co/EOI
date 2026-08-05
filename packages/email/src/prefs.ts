@@ -26,6 +26,10 @@ const TRANSACTIONAL_EMAIL_TYPES = new Set([
   "CORRECTION_REQUESTED",
   "CP_REGISTRATION_ACK",
   "CP_APPROVED",
+  "SITE_VISIT_COMPLETED_CP",
+  "SITE_VISIT_COMPLETED_CUSTOMER",
+  "LEAD_BOOKED_CP",
+  "LEAD_BOOKED_CUSTOMER",
 ]);
 
 export function isTransactionalEmailType(notificationType: string): boolean {

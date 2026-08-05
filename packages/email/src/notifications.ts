@@ -7,6 +7,7 @@ import {
   cpRegistrationAckEmailHtml,
   cpCredentialsEmailHtml,
   customerConfirmationEmailHtml,
+  customerConfirmationSubject,
   invitationEmailHtml,
   eoiSubmittedEmailHtml,
   eoiApprovedEmailHtml,
@@ -16,6 +17,7 @@ import {
   cpCustomerSubmittedEmailHtml,
   cpCustomerRejectedEmailHtml,
   leadOnlyAcceptedEmailHtml,
+  leadMilestoneEmailHtml,
 } from "./templates";
 
 export class NotificationService {
@@ -143,10 +145,13 @@ export class NotificationService {
     rejectUrl: string;
     leadId?: string;
     entityId?: string;
+    intentType?: string;
   }) {
-    const leadId = params.leadId || params.entityId || "";
+    // Only the public Lead ID is customer-facing; never fall back to internal ids.
+    const leadId = params.leadId?.trim() || "";
+    const isLeadOnly = params.intentType === "LEAD_ONLY";
     const email = await this.resolveEmail(
-      "CUSTOMER_CONFIRMATION",
+      isLeadOnly ? "CUSTOMER_CONFIRMATION_LEAD_ONLY" : "CUSTOMER_CONFIRMATION",
       {
         customerName: params.customerName,
         customerEmail: params.customerEmail,
@@ -159,7 +164,10 @@ export class NotificationService {
         leadId,
       },
       {
-        subject: `Confirm Channel Partner Association — ${params.projectName}`,
+        subject: customerConfirmationSubject({
+          projectName: params.projectName,
+          intentType: params.intentType,
+        }),
         html: customerConfirmationEmailHtml({
           ...params,
           customerEmail: params.customerEmail,
@@ -225,6 +233,134 @@ export class NotificationService {
       entityType: "Lead",
       entityId: params.entityId,
     });
+  }
+
+  static async notifyLeadMilestone(params: {
+    milestone: "SITE_VISIT_COMPLETED" | "BOOKED";
+    entityId: string;
+    leadId?: string;
+    customerName: string;
+    customerEmail: string;
+    customerUserId?: string;
+    cpName: string;
+    cpEmail: string;
+    cpUserId: string;
+    projectName: string;
+  }) {
+    const isBooked = params.milestone === "BOOKED";
+    const appUrl = getAppBaseUrl();
+    const cpPortalUrl = `${appUrl}/partner/leads${
+      params.leadId ? `?search=${encodeURIComponent(params.leadId)}` : ""
+    }`;
+    const customerPortalUrl = `${appUrl}/customer`;
+    const vars = {
+      recipientName: "",
+      customerName: params.customerName,
+      projectName: params.projectName,
+      leadId: params.leadId || "",
+      portalUrl: "",
+    };
+
+    const cpTemplateType = isBooked ? "LEAD_BOOKED_CP" : "SITE_VISIT_COMPLETED_CP";
+    const customerTemplateType = isBooked
+      ? "LEAD_BOOKED_CUSTOMER"
+      : "SITE_VISIT_COMPLETED_CUSTOMER";
+    const cpTitle = isBooked ? "Lead Booked" : "Site Visit Completed";
+    const cpBody = isBooked
+      ? `${params.customerName}'s booking for ${params.projectName} is confirmed.`
+      : `${params.customerName}'s site visit for ${params.projectName} is completed.`;
+    const customerTitle = isBooked ? "Booking Confirmed" : "Site Visit Completed";
+    const customerBody = isBooked
+      ? `Your booking for ${params.projectName} is confirmed.`
+      : `Your site visit for ${params.projectName} is completed.`;
+
+    const [cpEmail, customerEmail] = await Promise.all([
+      this.resolveEmail(
+        cpTemplateType,
+        { ...vars, recipientName: params.cpName, portalUrl: cpPortalUrl },
+        {
+          subject: isBooked
+            ? `Booking Confirmed — ${params.customerName} | ${params.projectName}`
+            : `Site Visit Completed — ${params.customerName} | ${params.projectName}`,
+          html: leadMilestoneEmailHtml({
+            recipientName: params.cpName,
+            customerName: params.customerName,
+            projectName: params.projectName,
+            leadId: params.leadId,
+            milestone: params.milestone,
+            portalUrl: cpPortalUrl,
+            recipientType: "CP",
+          }),
+        },
+      ),
+      this.resolveEmail(
+        customerTemplateType,
+        { ...vars, recipientName: params.customerName, portalUrl: customerPortalUrl },
+        {
+          subject: isBooked
+            ? `Your Booking is Confirmed — ${params.projectName}`
+            : `Your Site Visit is Completed — ${params.projectName}`,
+          html: leadMilestoneEmailHtml({
+            recipientName: params.customerName,
+            customerName: params.customerName,
+            projectName: params.projectName,
+            leadId: params.leadId,
+            milestone: params.milestone,
+            portalUrl: customerPortalUrl,
+            recipientType: "CUSTOMER",
+          }),
+        },
+      ),
+    ]);
+
+    const deliveries: Promise<unknown>[] = [
+      this.emit({
+        userId: params.cpUserId,
+        type: "PROJECT_STATUS_UPDATED",
+        title: cpTitle,
+        body: cpBody,
+        entityType: "Lead",
+        entityId: params.entityId,
+        emailType: cpTemplateType,
+        email: {
+          to: params.cpEmail,
+          subject: cpEmail.subject,
+          html: cpEmail.html,
+        },
+      }),
+    ];
+
+    if (params.customerUserId) {
+      deliveries.push(
+        this.emit({
+          userId: params.customerUserId,
+          type: "PROJECT_STATUS_UPDATED",
+          title: customerTitle,
+          body: customerBody,
+          entityType: "Lead",
+          entityId: params.entityId,
+          emailType: customerTemplateType,
+          email: {
+            to: params.customerEmail,
+            subject: customerEmail.subject,
+            html: customerEmail.html,
+          },
+        }),
+      );
+    } else {
+      deliveries.push(
+        this.deliverEmail({
+          to: params.customerEmail,
+          subject: customerEmail.subject,
+          html: customerEmail.html,
+          type: customerTemplateType,
+          entityType: "Lead",
+          entityId: params.entityId,
+        }),
+      );
+    }
+
+    return Promise.allSettled(deliveries);
   }
 
   static async notifyEOIInvitation(params: {

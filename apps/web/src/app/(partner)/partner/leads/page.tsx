@@ -6,8 +6,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DataTable, Drawer, StatusBadge, Select, Button, Input, formatDate, useToast, PageHeader, LoadingSkeleton,
 } from "@goyal/ui";
-import { Mail, Phone, MapPin, Copy, Send } from "lucide-react";
+import { Clock, Copy, Layers3, Mail, MapPin, Phone, Send } from "lucide-react";
 import { usePartnerLeads, usePartnerProjects } from "@/lib/hooks";
+import { SubmitEOIModal } from "@/components/submit-eoi-modal";
+import { PunchLeadModal } from "@/components/punch-lead-modal";
+
+interface AvailableProject {
+  id: string;
+  name: string;
+  location: string;
+  eoiStatus: string;
+  action: "EOI" | "LEAD_ONLY";
+}
 
 interface Lead {
   id: string;
@@ -27,7 +37,10 @@ interface Lead {
   siteVisitDate?: string | null;
   fosName?: string | null;
   createdAt: string;
-  project: { name: string };
+  lockExpiresAt?: string;
+  lockDaysRemaining?: number;
+  availableProjects?: AvailableProject[];
+  project: { id?: string; name: string };
   eoi?: { status: string; referenceNumber?: string; chequeUploaded?: boolean };
 }
 
@@ -48,6 +61,8 @@ function PartnerLeadsContent() {
   const [teamFilter, setTeamFilter] = useState("");
   const [siteVisitDate, setSiteVisitDate] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [crossProject, setCrossProject] = useState<AvailableProject | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
   const { addToast } = useToast();
@@ -69,6 +84,23 @@ function PartnerLeadsContent() {
       .then((data) => setCanExport(!!data.permissions?.cpCanExportLeads))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!selectedLead?.lockExpiresAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [selectedLead?.lockExpiresAt]);
+
+  const lockCountdown = (expiresAt?: string) => {
+    if (!expiresAt) return "—";
+    const remaining = Math.max(0, new Date(expiresAt).getTime() - now);
+    if (remaining === 0) return "Unlocked";
+    const days = Math.floor(remaining / 86_400_000);
+    const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+    const minutes = Math.floor((remaining % 3_600_000) / 60_000);
+    const seconds = Math.floor((remaining % 60_000) / 1_000);
+    return `${days}d ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
 
   const filters = useMemo(() => {
     const f: Record<string, string> = {};
@@ -152,6 +184,16 @@ function PartnerLeadsContent() {
                 : <span className="text-muted-foreground">—</span>
           )},
           { key: "siteVisitStatus", header: "Site Visit", render: (row) => <StatusBadge status={row.siteVisitStatus || "NOT_SCHEDULED"} /> },
+          { key: "bookingStatus", header: "Booking", render: (row) => (
+            row.journeyStatus === "BOOKED" || row.leadStatus === "BOOKED"
+              ? <StatusBadge status="BOOKED" />
+              : <span className="text-xs text-muted-foreground">Not booked</span>
+          )},
+          { key: "lockExpiresAt", header: "CP Lock", render: (row) => (
+            <span className="text-xs font-medium text-amber-700">
+              {row.lockDaysRemaining ? `${row.lockDaysRemaining} day${row.lockDaysRemaining === 1 ? "" : "s"}` : "Unlocked"}
+            </span>
+          )},
           { key: "createdAt", header: "Date", render: (row) => formatDate(row.createdAt) },
         ]}
         data={leads}
@@ -322,7 +364,65 @@ function PartnerLeadsContent() {
               <div className="flex justify-between"><span className="text-muted-foreground">Project</span><span className="font-medium">{selectedLead.project.name}</span></div>
               {selectedLead.configuration && <div className="flex justify-between"><span className="text-muted-foreground">Configuration</span><span className="font-medium">{selectedLead.configuration}</span></div>}
               {selectedLead.budget && <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-medium">{selectedLead.budget}</span></div>}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Site Visit</span>
+                <StatusBadge status={selectedLead.siteVisitStatus || "NOT_SCHEDULED"} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Booking</span>
+                {selectedLead.journeyStatus === "BOOKED" || selectedLead.leadStatus === "BOOKED"
+                  ? <StatusBadge status="BOOKED" />
+                  : <span className="text-xs text-muted-foreground">Not booked</span>}
+              </div>
               <div className="flex justify-between"><span className="text-muted-foreground">Registered</span><span className="font-medium">{formatDate(selectedLead.createdAt)}</span></div>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                <Clock className="h-4 w-4" />
+                15-day CP protection
+              </div>
+              <p className="mt-2 font-mono text-lg font-semibold text-amber-800">
+                {lockCountdown(selectedLead.lockExpiresAt)}
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Other CPs cannot register this phone number or email until the timer ends.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Layers3 className="h-4 w-4 text-gold" />
+                <h4 className="text-sm font-semibold text-foreground">Punch another project</h4>
+              </div>
+              {selectedLead.availableProjects?.length ? (
+                <div className="space-y-2">
+                  {selectedLead.availableProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {project.location} · {project.eoiStatus === "OPEN" ? "EOI open" : "Lead only"}
+                        </p>
+                      </div>
+                      <Button
+                        variant={project.action === "EOI" ? "gold" : "outline"}
+                        size="sm"
+                        onClick={() => setCrossProject(project)}
+                      >
+                        {project.action === "EOI" ? "Register EOI" : "Punch Lead"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  This customer is already mapped to all projects available to you.
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -421,6 +521,56 @@ function PartnerLeadsContent() {
           </div>
         )}
       </Drawer>
+
+      {selectedLead && crossProject?.action === "EOI" && (
+        <SubmitEOIModal
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setCrossProject(null);
+              setSelectedLead(null);
+              qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+            }
+          }}
+          projectId={crossProject.id}
+          projectName={crossProject.name}
+          initialLead={{
+            customerName: selectedLead.customerName,
+            mobile: selectedLead.customerMobile,
+            email: selectedLead.customerEmail,
+            configuration: selectedLead.configuration,
+            fosName: selectedLead.fosName || undefined,
+            budget: selectedLead.budget,
+            city: selectedLead.city,
+            notes: selectedLead.notes,
+          }}
+        />
+      )}
+
+      {selectedLead && crossProject?.action === "LEAD_ONLY" && (
+        <PunchLeadModal
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setCrossProject(null);
+              setSelectedLead(null);
+              qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+            }
+          }}
+          projectId={crossProject.id}
+          projectName={crossProject.name}
+          initialLead={{
+            customerName: selectedLead.customerName,
+            mobile: selectedLead.customerMobile,
+            email: selectedLead.customerEmail,
+            configuration: selectedLead.configuration,
+            fosName: selectedLead.fosName || undefined,
+            budget: selectedLead.budget,
+            city: selectedLead.city,
+            notes: selectedLead.notes,
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -8,7 +8,13 @@ import {
 import type { UploadedFile } from "@goyal/ui";
 import { Plus, Pencil, Trash2, X, FolderOpen } from "lucide-react";
 import { useAdminProjects } from "@/lib/hooks";
-import type { DocumentType } from "@goyal/types";
+import {
+  PROJECT_BANNER_HEIGHT,
+  PROJECT_BANNER_WIDTH,
+  PROJECT_LOCATION_HEIGHT,
+  PROJECT_LOCATION_WIDTH,
+  type DocumentType,
+} from "@goyal/types";
 import { uploadViaPresign } from "@/lib/uploads/client-upload";
 import { CUSTOMER_DOCUMENT_LABELS, CUSTOMER_EOI_DOCUMENT_TYPES } from "@/lib/required-documents";
 
@@ -65,11 +71,6 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "LOCATION", label: "Location Image (1920×1080 px)" },
   { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
-
-const PROJECT_BANNER_WIDTH = 1920;
-const PROJECT_BANNER_HEIGHT = 600;
-const PROJECT_LOCATION_WIDTH = 1920;
-const PROJECT_LOCATION_HEIGHT = 1080;
 
 const emptyForm: ProjectForm = {
   name: "",

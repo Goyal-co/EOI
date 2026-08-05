@@ -1,6 +1,6 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
-import { NotificationService } from "@goyal/email";
+import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 
@@ -28,7 +28,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return apiError("Customer rejected the association. Create a new lead.", 409);
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = getAppBaseUrl();
   const acceptUrl = `${baseUrl}/confirm/${lead.inviteToken}/accept`;
   const rejectUrl = `${baseUrl}/confirm/${lead.inviteToken}/reject`;
 
@@ -67,6 +67,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     acceptUrl,
     rejectUrl,
     entityId: lead.id,
+    leadId: lead.leadId || undefined,
+    intentType: lead.intentType,
   });
 
   const emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;

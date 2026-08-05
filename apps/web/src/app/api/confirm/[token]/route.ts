@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { confirmActionSchema } from "@goyal/types";
 import { apiResponse, apiError } from "@/lib/api";
-import { NotificationService } from "@goyal/email";
+import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
@@ -57,28 +57,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return apiError("Confirmation link has expired", 410);
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const customerLoginUrl = `${baseUrl}/customer/login`;
+  const customerLoginUrl = `${getAppBaseUrl()}/customer/login`;
 
+  // Re-opening the same link (or a client retry) must not fail — replay the outcome.
   if (lead.confirmationStatus === "ACCEPTED") {
-    return apiError("Confirmation already accepted", 409);
+    if (action === "accept") {
+      return apiResponse({
+        success: true,
+        action: "accepted",
+        alreadyAccepted: true,
+        intentType: lead.intentType,
+        loginUrl: customerLoginUrl,
+        leadId: lead.leadId,
+        customerName: lead.customerName,
+        customerEmail: lead.customerEmail,
+        projectName: lead.project.name,
+      });
+    }
+    return apiError(
+      "You already accepted this invitation. Contact your Channel Partner if you want to change it.",
+      409,
+    );
   }
   if (lead.confirmationStatus === "REJECTED") {
-    return apiError("Confirmation already rejected", 409);
+    if (action === "reject") {
+      return apiResponse({ success: true, action: "rejected", alreadyRejected: true });
+    }
+    return apiError(
+      "This invitation was already declined. Ask your Channel Partner to send a new invitation.",
+      409,
+    );
   }
 
   if (action === "accept") {
     const isLeadOnly = lead.intentType === "LEAD_ONLY";
-
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: {
-        confirmationStatus: "ACCEPTED",
-        confirmationRespondedAt: new Date(),
-        journeyStatus: isLeadOnly ? "LEAD_CONFIRMED" : "ACTIVE",
-        inviteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
 
     let emailSent = false;
     let tempPassword: string | undefined;
@@ -102,7 +114,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       }
     } catch (e) {
       console.error("[Confirm] ensureCustomerCredentials failed:", e);
+      return apiError(
+        "We could not create your customer login. Please retry or contact support.",
+        500,
+        "CUSTOMER_CREDENTIALS_FAILED",
+      );
     }
+
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        confirmationStatus: "ACCEPTED",
+        confirmationRespondedAt: new Date(),
+        journeyStatus: isLeadOnly ? "LEAD_CONFIRMED" : "ACTIVE",
+        inviteExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
 
     if (isLeadOnly) {
       const emailResult = await NotificationService.notifyLeadOnlyAccepted({
@@ -147,7 +174,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       intentType: lead.intentType,
       loginUrl: customerLoginUrl,
       emailSent,
+      passwordEmailed: !!tempPassword,
       leadId: lead.leadId,
+      customerName: lead.customerName,
+      customerEmail: lead.customerEmail,
+      projectName: lead.project.name,
     });
   }
 

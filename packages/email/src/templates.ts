@@ -56,6 +56,15 @@ export function cpCredentialsEmailHtml(params: { cpName: string; email: string; 
   ]);
 }
 
+export function customerConfirmationSubject(params: {
+  projectName: string;
+  intentType?: string;
+}): string {
+  return params.intentType === "LEAD_ONLY"
+    ? `Confirm Your Interest — ${params.projectName}`
+    : `Confirm Channel Partner Association — ${params.projectName}`;
+}
+
 export function customerConfirmationEmailHtml(params: {
   customerName: string;
   customerEmail?: string;
@@ -66,36 +75,61 @@ export function customerConfirmationEmailHtml(params: {
   acceptUrl: string;
   rejectUrl: string;
   leadId?: string;
+  intentType?: string;
 }) {
+  const isLeadOnly = params.intentType === "LEAD_ONLY";
+
   const emailNote = params.customerEmail
-    ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This invitation was sent to <a href="mailto:${params.customerEmail}" style="color:#2563EB;">${params.customerEmail}</a>. Please use the same email when you sign in later.</p>`
+    ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>. It will also be your Customer Portal login ID.</p>`
     : "";
 
   const leadDetails = params.leadId
     ? detailsGrid([{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }])
     : "";
 
+  const intro = isLeadOnly
+    ? `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} has registered your interest in:`
+    : `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an Expression of Interest (EOI) at:`;
+
+  const summary = isLeadOnly
+    ? "Please confirm that you would like this Channel Partner to represent you for this project. Once you accept, we will email your Customer Portal login ID and password."
+    : "Please confirm whether you would like to proceed with this Channel Partner. Once you accept, we will email your Customer Portal login ID and password so you can complete your EOI.";
+
+  const steps = isLeadOnly
+    ? [
+        "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
+        "Check your inbox for your Customer Portal login ID and password.",
+        "Sign in to track this project and your Lead ID.",
+      ]
+    : [
+        "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
+        "Check your inbox for your Customer Portal login ID and password.",
+        "Sign in to complete your Expression of Interest for this project.",
+      ];
+
+  const closingNote = isLeadOnly
+    ? `<p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">This confirmation records your interest in this project. If you did not expect this email, you can safely decline or ignore it.</p>`
+    : `<p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this email, you can safely decline or ignore it.</p>`;
+
   return wrapEmail([
-    emailHeader("Expression of Interest &nbsp;|&nbsp; Step 1 of 3"),
+    emailHeader(
+      isLeadOnly
+        ? "Lead Registration &nbsp;|&nbsp; Step 1 of 2"
+        : "Expression of Interest &nbsp;|&nbsp; Step 1 of 3",
+    ),
     emailBody(`
       <p style="margin:0 0 12px;">Dear <strong style="color:${GOLD};">${params.customerName}</strong>,</p>
-      <p style="margin:0;color:${MUTED};">
-        <strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an Expression of Interest (EOI) at:
-      </p>
+      <p style="margin:0;color:${MUTED};">${intro}</p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
       ${leadDetails}
       ${emailNote}
-      <p style="margin:0 0 8px;color:${MUTED};">Please confirm whether you would like to proceed with this Channel Partner. After you accept, you will receive a second email with your personal EOI link.</p>
-      ${numberedSteps([
-        "Click <strong>Accept</strong> below to confirm your Channel Partner association.",
-        "Check your inbox for the EOI invitation email with your project link.",
-        "Sign in at the Customer Portal with the email and password we send after you accept.",
-      ])}
+      <p style="margin:0 0 8px;color:${MUTED};">${summary}</p>
+      ${numberedSteps(steps)}
       ${buttonRow([
         { label: "Accept & Continue", href: params.acceptUrl, variant: "primary" },
         { label: "Decline", href: params.rejectUrl, variant: "secondary" },
       ])}
-      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this email, you can safely decline or ignore it.</p>
+      ${closingNote}
     `),
     emailSupportBlock(),
     emailFooter(),
@@ -120,7 +154,6 @@ export function invitationEmailHtml(params: {
   if (params.leadId) {
     detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
   }
-  detailItems.push({ label: "Login URL", value: loginUrl, icon: "&#128279;" });
   detailItems.push({ label: "Email", value: params.customerEmail, icon: "&#9993;" });
   if (params.password) {
     detailItems.push({ label: "Temporary Password", value: params.password, icon: "&#128274;" });
@@ -142,7 +175,10 @@ export function invitationEmailHtml(params: {
       ${detailsGrid(detailItems)}
       <div style="text-align:center;">${primaryButton("Go to Customer Login", loginUrl)}</div>
       <p style="margin:16px 0 0;font-size:14px;color:${MUTED};text-align:center;">
-        You can reset your password from the login page if needed.
+        ${params.password
+          ? "Use the temporary password above for your first login."
+          : "Use your existing customer password."}
+        You can reset it from the login page if needed.
       </p>
     `),
     emailSupportBlock(),
@@ -344,10 +380,80 @@ export function leadOnlyAcceptedEmailHtml(params: {
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
       ${details}
       <p style="margin:0 0 16px;color:${MUTED};">
-        Sign in to the Customer Portal with the email and temporary password above. You can reset your password from the login page if needed.
+        ${params.password
+          ? "Sign in to the Customer Portal with the email and temporary password above."
+          : "Sign in to the Customer Portal with your existing password."}
+        You can reset your password from the login page if needed.
       </p>
       ${primaryButton("Open Customer Portal", loginUrl)}
-      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">EOI is currently closed for this project. This confirmation records your interest only.</p>
+      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">Sign in any time to track this project. Your Channel Partner will share updates as they happen.</p>
+    `),
+    emailSupportBlock(),
+    emailFooter(),
+  ]);
+}
+
+export function passwordResetEmailHtml(params: {
+  resetUrl: string;
+  expiresIn?: string;
+}) {
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Reset Your Password", "Password", "info"),
+    emailBody(`
+      <p style="margin:0 0 16px;color:${MUTED};">
+        We received a request to reset your portal password. Use the button below to choose a new password.
+      </p>
+      <div style="text-align:center;">${primaryButton("Reset Password", params.resetUrl)}</div>
+      <p style="margin:16px 0 0;font-size:13px;color:${MUTED};text-align:center;">
+        This button expires in ${params.expiresIn || "1 hour"}. If you did not request a reset, ignore this email.
+      </p>
+    `),
+    emailSupportBlock(),
+    emailFooter(),
+  ]);
+}
+
+export function leadMilestoneEmailHtml(params: {
+  recipientName: string;
+  customerName: string;
+  projectName: string;
+  leadId?: string;
+  milestone: "SITE_VISIT_COMPLETED" | "BOOKED";
+  portalUrl: string;
+  recipientType: "CP" | "CUSTOMER";
+}) {
+  const isBooked = params.milestone === "BOOKED";
+  const title = isBooked ? "Booking Confirmed" : "Site Visit Completed";
+  const status = isBooked ? "Booked" : "Site Visit Done";
+  const message =
+    params.recipientType === "CP"
+      ? isBooked
+        ? `${params.customerName}'s booking for ${params.projectName} has been confirmed. The lead is now marked as Booked in your Partner Portal.`
+        : `${params.customerName}'s site visit for ${params.projectName} has been completed and confirmed. The lead is now marked as Site Visit Done in your Partner Portal.`
+      : isBooked
+        ? `Your booking for ${params.projectName} has been confirmed. You can view the latest status in your Customer Portal.`
+        : `Your site visit for ${params.projectName} has been completed and confirmed. You can view the latest status in your Customer Portal.`;
+
+  const details = [
+    { label: "Project", value: params.projectName, icon: "&#127970;" },
+    ...(params.leadId
+      ? [{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }]
+      : []),
+    { label: "Status", value: status, icon: isBooked ? "&#127881;" : "&#10003;" },
+  ];
+
+  return wrapEmail([
+    emailHeader(),
+    emailHero(title, isBooked ? "Confirmed" : "Completed", "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.recipientName}</strong>,</p>
+      <p style="margin:0 0 16px;color:${MUTED};">${message}</p>
+      ${detailsGrid(details)}
+      <div style="text-align:center;">${primaryButton(
+        params.recipientType === "CP" ? "View Lead Status" : "Open Customer Portal",
+        params.portalUrl,
+      )}</div>
     `),
     emailSupportBlock(),
     emailFooter(),
@@ -359,6 +465,7 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   CP_REGISTRATION_ACK: "Registration Received — Goyal & Co. | Hariyana Group",
   CP_APPROVED: "Your CP Account is Approved — Goyal & Co. | Hariyana Group",
   CUSTOMER_CONFIRMATION: "Confirm Channel Partner Association — {{projectName}}",
+  CUSTOMER_CONFIRMATION_LEAD_ONLY: "Confirm Your Interest — {{projectName}}",
   EOI_INVITATION: "Complete Your EOI — {{projectName}}",
   LEAD_ONLY_ACCEPTED: "Interest confirmed — {{projectName}}",
   EOI_SUBMITTED: "EOI Submitted — {{projectName}}",
@@ -368,6 +475,10 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   CP_REGISTERED: "New CP Registration — Goyal & Co. | Hariyana Group",
   CUSTOMER_SUBMITTED_EOI: "Customer EOI Submitted — {{projectName}}",
   CUSTOMER_REJECTED_CP: "Customer Declined Association — {{projectName}}",
+  SITE_VISIT_COMPLETED_CP: "Site Visit Completed — {{customerName}} | {{projectName}}",
+  SITE_VISIT_COMPLETED_CUSTOMER: "Your Site Visit is Completed — {{projectName}}",
+  LEAD_BOOKED_CP: "Booking Confirmed — {{customerName}} | {{projectName}}",
+  LEAD_BOOKED_CUSTOMER: "Your Booking is Confirmed — {{projectName}}",
 };
 
 export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
@@ -390,6 +501,19 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     acceptUrl: "{{acceptUrl}}",
     rejectUrl: "{{rejectUrl}}",
     leadId: "{{leadId}}",
+    intentType: "EOI",
+  }),
+  CUSTOMER_CONFIRMATION_LEAD_ONLY: customerConfirmationEmailHtml({
+    customerName: "{{customerName}}",
+    customerEmail: "{{customerEmail}}",
+    cpName: "{{cpName}}",
+    companyName: "{{companyName}}",
+    projectName: "{{projectName}}",
+    projectLocation: "{{projectLocation}}",
+    acceptUrl: "{{acceptUrl}}",
+    rejectUrl: "{{rejectUrl}}",
+    leadId: "{{leadId}}",
+    intentType: "LEAD_ONLY",
   }),
   EOI_INVITATION: invitationEmailHtml({
     customerName: "{{customerName}}",
@@ -452,5 +576,41 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     cpName: "{{cpName}}",
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
+  }),
+  SITE_VISIT_COMPLETED_CP: leadMilestoneEmailHtml({
+    recipientName: "{{recipientName}}",
+    customerName: "{{customerName}}",
+    projectName: "{{projectName}}",
+    leadId: "{{leadId}}",
+    milestone: "SITE_VISIT_COMPLETED",
+    portalUrl: "{{portalUrl}}",
+    recipientType: "CP",
+  }),
+  SITE_VISIT_COMPLETED_CUSTOMER: leadMilestoneEmailHtml({
+    recipientName: "{{recipientName}}",
+    customerName: "{{customerName}}",
+    projectName: "{{projectName}}",
+    leadId: "{{leadId}}",
+    milestone: "SITE_VISIT_COMPLETED",
+    portalUrl: "{{portalUrl}}",
+    recipientType: "CUSTOMER",
+  }),
+  LEAD_BOOKED_CP: leadMilestoneEmailHtml({
+    recipientName: "{{recipientName}}",
+    customerName: "{{customerName}}",
+    projectName: "{{projectName}}",
+    leadId: "{{leadId}}",
+    milestone: "BOOKED",
+    portalUrl: "{{portalUrl}}",
+    recipientType: "CP",
+  }),
+  LEAD_BOOKED_CUSTOMER: leadMilestoneEmailHtml({
+    recipientName: "{{recipientName}}",
+    customerName: "{{customerName}}",
+    projectName: "{{projectName}}",
+    leadId: "{{leadId}}",
+    milestone: "BOOKED",
+    portalUrl: "{{portalUrl}}",
+    recipientType: "CUSTOMER",
   }),
 };

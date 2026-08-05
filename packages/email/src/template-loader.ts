@@ -1,4 +1,5 @@
 import { prisma } from "@goyal/db";
+import { getEmailLogoUrl } from "./email-layout";
 
 const ACTION_LINKS: { key: string; label: string }[] = [
   { key: "acceptUrl", label: "Accept association" },
@@ -28,10 +29,13 @@ export function ensureActionLinks(html: string, vars: Record<string, string>): s
     if (result.includes(url)) continue;
 
     missingLinks.push(`
-      <p style="color: #64748B; font-size: 13px; margin: 12px 0 4px;">${label}:</p>
-      <p style="margin: 0 0 12px;">
-        <a href="${url}" style="color: #2563EB; word-break: break-all;">${url}</a>
-      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px auto;">
+        <tr>
+          <td align="center" style="border-radius:8px;background:#C9A84C;">
+            <a href="${url}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">${label}</a>
+          </td>
+        </tr>
+      </table>
     `);
   }
 
@@ -39,12 +43,23 @@ export function ensureActionLinks(html: string, vars: Record<string, string>): s
 
   result += `
     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E2E8F0;">
-      <p style="color: #1A2332; font-weight: 600; font-size: 14px; margin: 0 0 8px;">Your links</p>
+      <p style="color: #1A2332; font-weight: 600; font-size: 14px; margin: 0 0 8px; text-align:center;">Actions</p>
       ${missingLinks.join("")}
     </div>
   `;
 
   return result;
+}
+
+/**
+ * Saved templates keep whatever logo URL was live when they were stored, which
+ * breaks branding after a domain change. Always point logos at the current URL.
+ */
+export function withCurrentLogo(html: string): string {
+  const logoUrl = getEmailLogoUrl();
+  return html.replace(/<img\b[^>]*alt="Goyal[^"]*"[^>]*>/gi, (tag) =>
+    tag.replace(/src="[^"]*"/i, `src="${logoUrl}"`),
+  );
 }
 
 export async function resolveEmailTemplate(
@@ -65,6 +80,7 @@ export async function resolveEmailTemplate(
 
   // Custom admin templates may omit links — always inject missing action URLs.
   html = ensureActionLinks(html, vars);
+  html = withCurrentLogo(html);
 
   return { subject, html };
 }

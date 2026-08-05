@@ -215,7 +215,7 @@ export default function ProjectDetailPage() {
                   <img
                     src={project.locationImageUrl}
                     alt={`${project.name} location`}
-                    className="w-full max-h-[420px] object-cover"
+                    className="aspect-video w-full bg-blue-50 object-contain"
                   />
                   <p className="px-3 py-2 text-xs text-blue-600">Open in Maps</p>
                 </a>
@@ -223,7 +223,7 @@ export default function ProjectDetailPage() {
                 <img
                   src={project.locationImageUrl}
                   alt={`${project.name} location`}
-                  className="w-full max-h-[420px] object-cover rounded-xl border border-border"
+                  className="aspect-video w-full rounded-xl border border-border bg-blue-50 object-contain"
                 />
               )
             ) : project.locationLink ? (

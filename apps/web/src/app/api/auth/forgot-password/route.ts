@@ -3,7 +3,7 @@ import { prisma } from "@goyal/db";
 import { forgotPasswordSchema } from "@goyal/types";
 import { apiResponse, apiError } from "@/lib/api";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
-import { sendEmailWithLog } from "@goyal/email";
+import { getAppBaseUrl, passwordResetEmailHtml, sendEmailWithLog } from "@goyal/email";
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -14,9 +14,9 @@ export async function POST(req: Request) {
   const parsed = forgotPasswordSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    select: { id: true, role: true },
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: parsed.data.email.trim(), mode: "insensitive" } },
+    select: { id: true, email: true, role: true },
   });
 
   if (user && (user.role === "CHANNEL_PARTNER" || user.role === "CUSTOMER")) {
@@ -27,15 +27,15 @@ export async function POST(req: Request) {
       data: { userId: user.id, token, expiresAt },
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const resetPath =
       user.role === "CUSTOMER"
         ? `/customer/reset-password/${token}`
         : `/partner/reset-password/${token}`;
+    const resetUrl = `${getAppBaseUrl()}${resetPath}`;
     await sendEmailWithLog({
-      to: parsed.data.email,
+      to: user.email,
       subject: "Reset your password — Goyal & Co. | Hariyana Group",
-      html: `<p>Click <a href="${baseUrl}${resetPath}">here</a> to reset your password. Link expires in 1 hour.</p>`,
+      html: passwordResetEmailHtml({ resetUrl }),
       type: "PASSWORD_RESET",
     });
   }

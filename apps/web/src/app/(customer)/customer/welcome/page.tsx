@@ -101,7 +101,7 @@ export default function CustomerWelcomePage() {
             <img
               src={brand.logoSrc}
               alt="Goyal Hariyana"
-              className="h-10 w-auto max-w-[200px] object-contain"
+              className="h-14 w-auto max-w-[300px] object-contain"
             />
             <p className="text-xs text-gold font-medium">Customer Portal</p>
           </div>
