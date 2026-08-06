@@ -1,10 +1,18 @@
 import { prisma } from "@goyal/db";
 import { emailTemplatePatchSchema } from "@goyal/types";
+import { syncDefaultEmailTemplates } from "@goyal/email";
 import { withAuth, apiResponse, apiError } from "@/lib/api";
 
-export async function GET() {
+export async function GET(req: Request) {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
+
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("sync") === "1") {
+    const result = await syncDefaultEmailTemplates({ forceLeadEoiTemplates: true });
+    const templates = await prisma.emailTemplate.findMany({ orderBy: { type: "asc" } });
+    return apiResponse({ ...result, templates });
+  }
 
   const templates = await prisma.emailTemplate.findMany({ orderBy: { type: "asc" } });
   return apiResponse(templates);

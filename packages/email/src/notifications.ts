@@ -179,7 +179,7 @@ export class NotificationService {
       to: params.customerEmail,
       subject: email.subject,
       html: email.html,
-      type: "CUSTOMER_CONFIRMATION",
+      type: isLeadOnly ? "CUSTOMER_CONFIRMATION_LEAD_ONLY" : "CUSTOMER_CONFIRMATION",
       entityType: "Lead",
       entityId: params.entityId || params.leadId,
     });
@@ -211,7 +211,7 @@ export class NotificationService {
         password: params.password || "",
       },
       {
-        subject: `Interest confirmed — ${params.projectName}`,
+        subject: `Lead confirmed — ${params.projectName}`,
         html: leadOnlyAcceptedEmailHtml({
           customerName: params.customerName,
           customerEmail: params.customerEmail,

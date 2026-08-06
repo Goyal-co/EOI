@@ -4,4 +4,9 @@ export { NotificationService } from "./notifications";
 export { isAdminNotificationEnabled, isTransactionalEmailType } from "./prefs";
 export * from "./templates";
 export * from "./email-layout";
+export {
+  resolveEmailTemplate,
+  syncDefaultEmailTemplates,
+  isMismatchedEmailTemplate,
+} from "./template-loader";
 export { getAppBaseUrl } from "./urls";

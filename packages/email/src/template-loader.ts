@@ -1,5 +1,9 @@
 import { prisma } from "@goyal/db";
 import { getEmailLogoUrl } from "./email-layout";
+import {
+  DEFAULT_EMAIL_TEMPLATE_BODIES,
+  DEFAULT_EMAIL_TEMPLATE_SUBJECTS,
+} from "./templates";
 
 const ACTION_LINKS: { key: string; label: string }[] = [
   { key: "acceptUrl", label: "Accept association" },
@@ -62,13 +66,33 @@ export function withCurrentLogo(html: string): string {
   );
 }
 
+/** Detect admin/DB templates that still use EOI copy for lead-only flows (or vice versa). */
+export function isMismatchedEmailTemplate(type: string, subject: string, body: string): boolean {
+  const text = `${subject}\n${body}`;
+  const hasEoiPunchCopy = /Expression of Interest|Step 1 of 3|complete your EOI|Accept &amp; Continue to EOI|Confirm Your EOI/i.test(text);
+  const hasLeadPunchCopy = /Lead Registration|Confirm Your Lead|Accept Lead|lead registration only|Lead Confirmed/i.test(text);
+
+  if (type === "CUSTOMER_CONFIRMATION_LEAD_ONLY" || type === "LEAD_ONLY_ACCEPTED") {
+    return hasEoiPunchCopy && !hasLeadPunchCopy;
+  }
+  if (type === "CUSTOMER_CONFIRMATION" || type === "EOI_INVITATION") {
+    return hasLeadPunchCopy && !hasEoiPunchCopy;
+  }
+  return false;
+}
+
 export async function resolveEmailTemplate(
   type: string,
   vars: Record<string, string>,
   fallback: { subject: string; html: string },
 ): Promise<{ subject: string; html: string }> {
   const template = await prisma.emailTemplate.findUnique({ where: { type } });
-  if (!template) {
+  if (!template || isMismatchedEmailTemplate(type, template.subject, template.body)) {
+    if (template) {
+      console.warn(
+        `[Email] Ignoring stale DB template for ${type}; using code fallback`,
+      );
+    }
     return {
       subject: applyTemplatePlaceholders(fallback.subject, vars),
       html: ensureActionLinks(fallback.html, vars),
@@ -83,4 +107,48 @@ export async function resolveEmailTemplate(
   html = withCurrentLogo(html);
 
   return { subject, html };
+}
+
+/**
+ * Ensure every default template exists in DB. Optionally force-refresh known
+ * lead/EOI confirmation templates so production stops sending mixed copy.
+ */
+export async function syncDefaultEmailTemplates(options?: {
+  forceLeadEoiTemplates?: boolean;
+}): Promise<{ created: number; updated: number }> {
+  const forceTypes = new Set([
+    "CUSTOMER_CONFIRMATION",
+    "CUSTOMER_CONFIRMATION_LEAD_ONLY",
+    "EOI_INVITATION",
+    "LEAD_ONLY_ACCEPTED",
+  ]);
+  let created = 0;
+  let updated = 0;
+
+  for (const type of Object.keys(DEFAULT_EMAIL_TEMPLATE_SUBJECTS)) {
+    const subject = DEFAULT_EMAIL_TEMPLATE_SUBJECTS[type];
+    const body = DEFAULT_EMAIL_TEMPLATE_BODIES[type];
+    if (!subject || !body) continue;
+
+    const existing = await prisma.emailTemplate.findUnique({ where: { type } });
+    if (!existing) {
+      await prisma.emailTemplate.create({ data: { type, subject, body } });
+      created += 1;
+      continue;
+    }
+
+    const shouldForce =
+      !!options?.forceLeadEoiTemplates
+      && forceTypes.has(type);
+    const mismatched = isMismatchedEmailTemplate(type, existing.subject, existing.body);
+    if (shouldForce || mismatched) {
+      await prisma.emailTemplate.update({
+        where: { type },
+        data: { subject, body },
+      });
+      updated += 1;
+    }
+  }
+
+  return { created, updated };
 }
