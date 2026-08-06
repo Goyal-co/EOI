@@ -209,114 +209,135 @@ export async function POST(req: Request) {
   const { generatePublicLeadId } = await import("@/lib/leads/id-generator");
   let lead;
   try {
-    lead = await prisma.$transaction(async (tx) => {
-      // Serialize both phone and email identities so simultaneous CP submissions
-      // cannot bypass duplicate or 15-day ownership checks.
-      const identityKeys = [`lead-email:${email}`, `lead-phone:${mobile}`].sort();
-      for (const key of identityKeys) {
-        // $executeRaw — pg_advisory_xact_lock returns void; $queryRaw fails to deserialize it.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
-      }
+    const createdId = await prisma.$transaction(
+      async (tx) => {
+        // Serialize both phone and email identities so simultaneous CP submissions
+        // cannot bypass duplicate or 15-day ownership checks.
+        const identityKeys = [`lead-email:${email}`, `lead-phone:${mobile}`].sort();
+        for (const key of identityKeys) {
+          // $executeRaw — pg_advisory_xact_lock returns void; $queryRaw fails to deserialize it.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+        }
 
-      const existingLead = await tx.lead.findFirst({
-        where: {
-          cpId,
-          projectId: parsed.data.projectId,
-          OR: [
-            { customerMobile: mobile },
-            { customerEmail: { equals: email, mode: "insensitive" } },
-          ],
-          journeyStatus: { not: "REJECTED" },
-        },
-        select: { id: true },
-      });
-      if (existingLead) {
-        throw new LeadCreateConflict(
-          "This customer is already registered on this project. Open the lead to punch another project.",
-          "DUPLICATE_LEAD",
-        );
-      }
-
-      const lockSince = new Date(Date.now() - phoneLockWindowMs());
-      const lockedByOtherCp = await tx.lead.findFirst({
-        where: {
-          cpId: { not: cpId },
-          createdAt: { gte: lockSince },
-          journeyStatus: { not: "REJECTED" },
-          OR: [
-            { customerMobile: mobile },
-            { customerEmail: { equals: email, mode: "insensitive" } },
-          ],
-        },
-        orderBy: { createdAt: "asc" },
-        select: { createdAt: true },
-      });
-      if (lockedByOtherCp) {
-        const unlockAt = new Date(
-          lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
-        );
-        const daysLeft = daysRemainingUntil(unlockAt);
-        throw new LeadCreateConflict(
-          `Another CP registered this phone number or email. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
-          "IDENTITY_LOCKED",
-        );
-      }
-
-      const existingIdentity = await tx.lead.findFirst({
-        where: {
-          leadId: { not: null },
-          OR: [
-            { customerMobile: mobile },
-            { customerEmail: { equals: email, mode: "insensitive" } },
-          ],
-        },
-        orderBy: { createdAt: "asc" },
-        select: { leadId: true },
-      });
-      if (!existingIdentity?.leadId) {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
-      }
-      const leadCount = await tx.lead.count();
-      const publicLeadId =
-        existingIdentity?.leadId
-        || generatePublicLeadId(intentType, project.name, leadCount + 1);
-
-      const createdLead = await tx.lead.create({
-        data: {
-          leadId: publicLeadId,
-          cpId,
-          projectId: parsed.data.projectId,
-          customerName: parsed.data.customerName,
-          customerEmail: email,
-          customerMobile: mobile,
-          configuration: parsed.data.configuration || null,
-          fosName: parsed.data.fosName || null,
-          budget: parsed.data.budget,
-          city: parsed.data.city,
-          notes: parsed.data.notes,
-          intentType,
-          journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
-          confirmationStatus: sendConfirmation ? "PENDING" : null,
-          confirmationSentAt: sendConfirmation ? new Date() : null,
-          leadStatus: "LEAD_REGISTERED",
-          inviteToken,
-          inviteExpiresAt,
-        },
-        include: { project: true, cp: { include: { user: true } } },
-      });
-
-      if (!isLeadOnly) {
-        await tx.eOI.create({
-          data: {
-            leadId: createdLead.id,
-            projectId: createdLead.projectId,
-            cpId: createdLead.cpId,
-            status: "PENDING_SUBMISSION",
+        const existingLead = await tx.lead.findFirst({
+          where: {
+            cpId,
+            projectId: parsed.data.projectId,
+            OR: [
+              { customerMobile: mobile },
+              { customerEmail: { equals: email, mode: "insensitive" } },
+            ],
+            journeyStatus: { not: "REJECTED" },
           },
+          select: { id: true },
         });
-      }
-      return createdLead;
-    }, { isolationLevel: "Serializable" });
+        if (existingLead) {
+          throw new LeadCreateConflict(
+            "This customer is already registered on this project. Open the lead to punch another project.",
+            "DUPLICATE_LEAD",
+          );
+        }
+
+        const lockSince = new Date(Date.now() - phoneLockWindowMs());
+        const lockedByOtherCp = await tx.lead.findFirst({
+          where: {
+            cpId: { not: cpId },
+            createdAt: { gte: lockSince },
+            journeyStatus: { not: "REJECTED" },
+            OR: [
+              { customerMobile: mobile },
+              { customerEmail: { equals: email, mode: "insensitive" } },
+            ],
+          },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        });
+        if (lockedByOtherCp) {
+          const unlockAt = new Date(
+            lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
+          );
+          const daysLeft = daysRemainingUntil(unlockAt);
+          throw new LeadCreateConflict(
+            `Another CP registered this phone number or email. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
+            "IDENTITY_LOCKED",
+          );
+        }
+
+        const existingIdentity = await tx.lead.findFirst({
+          where: {
+            leadId: { not: null },
+            OR: [
+              { customerMobile: mobile },
+              { customerEmail: { equals: email, mode: "insensitive" } },
+            ],
+          },
+          orderBy: { createdAt: "asc" },
+          select: { leadId: true },
+        });
+        if (!existingIdentity?.leadId) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
+        }
+        // Avoid full-table COUNT under the lock — approximate seq from recent max createdAt order.
+        const latestForSeq = existingIdentity?.leadId
+          ? null
+          : await tx.lead.findFirst({
+              where: { leadId: { not: null } },
+              orderBy: { createdAt: "desc" },
+              select: { leadId: true },
+            });
+        let seq = Date.now() % 1_000_000;
+        if (latestForSeq?.leadId) {
+          const match = latestForSeq.leadId.match(/(\d+)$/);
+          if (match) seq = (Number(match[1]) % 1_000_000) + 1;
+        }
+        const publicLeadId =
+          existingIdentity?.leadId
+          || generatePublicLeadId(intentType, project.name, seq);
+
+        const createdLead = await tx.lead.create({
+          data: {
+            leadId: publicLeadId,
+            cpId,
+            projectId: parsed.data.projectId,
+            customerName: parsed.data.customerName,
+            customerEmail: email,
+            customerMobile: mobile,
+            configuration: parsed.data.configuration || null,
+            fosName: parsed.data.fosName || null,
+            budget: parsed.data.budget,
+            city: parsed.data.city,
+            notes: parsed.data.notes,
+            intentType,
+            journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
+            confirmationStatus: sendConfirmation ? "PENDING" : null,
+            confirmationSentAt: sendConfirmation ? new Date() : null,
+            leadStatus: "LEAD_REGISTERED",
+            inviteToken,
+            inviteExpiresAt,
+          },
+          select: { id: true },
+        });
+
+        if (!isLeadOnly) {
+          await tx.eOI.create({
+            data: {
+              leadId: createdLead.id,
+              projectId: parsed.data.projectId,
+              cpId,
+              status: "PENDING_SUBMISSION",
+            },
+          });
+        }
+        return createdLead.id;
+      },
+      // Neon round-trips + advisory locks routinely exceed Prisma's 5s default.
+      { isolationLevel: "Serializable", maxWait: 10_000, timeout: 25_000 },
+    );
+
+    lead = await prisma.lead.findUniqueOrThrow({
+      where: { id: createdId },
+      include: { project: true, cp: { include: { user: true } } },
+    });
   } catch (creationError) {
     if (creationError instanceof LeadCreateConflict) {
       return apiError(creationError.message, 409, creationError.code);
@@ -331,7 +352,7 @@ export async function POST(req: Request) {
         "DUPLICATE_LEAD",
       );
     }
-    if (/serializ|deadlock|40001|40P01/i.test(message)) {
+    if (/serializ|deadlock|40001|40P01|P2028|timed out|timeout/i.test(message)) {
       return apiError("Another submission is in progress for this customer. Please try again.", 409);
     }
     return apiError("Failed to create lead. Please try again.", 500);
