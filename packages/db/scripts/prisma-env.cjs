@@ -1,11 +1,6 @@
 /**
- * Normalize DATABASE_URL / DIRECT_URL for Vercel + Neon, then run Prisma CLI.
- *
- * schema.prisma requires:
- *   url       = env("DATABASE_URL")
- *   directUrl = env("DIRECT_URL")
- *
- * Empty / quoted / missing DIRECT_URL causes P1013 ("scheme is not recognized").
+ * Normalize DATABASE_URL for Vercel/Neon, then run Prisma CLI.
+ * Strips accidental quotes and accepts common Neon/Vercel aliases.
  */
 const { spawnSync } = require("node:child_process");
 
@@ -24,7 +19,14 @@ function isPgUrl(url) {
   return /^(postgresql|postgres):\/\//i.test(url);
 }
 
-function pickUrl(candidates) {
+function pickDatabaseUrl() {
+  const candidates = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_PRISMA_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.DATABASE_URL_UNPOOLED,
+  ];
   for (const raw of candidates) {
     const url = stripQuotes(raw);
     if (url && isPgUrl(url)) return url;
@@ -32,44 +34,24 @@ function pickUrl(candidates) {
   return "";
 }
 
-function applyDatabaseEnv() {
-  const databaseUrl = pickUrl([
-    process.env.DATABASE_URL,
-    process.env.POSTGRES_PRISMA_URL,
-    process.env.POSTGRES_URL,
-    process.env.DATABASE_URL_UNPOOLED,
-    process.env.POSTGRES_URL_NON_POOLING,
-  ]);
+const databaseUrl = pickDatabaseUrl();
+if (!databaseUrl) {
+  console.error(`
+[prisma] Missing or invalid DATABASE_URL (Prisma P1013).
 
-  const directUrl = pickUrl([
-    process.env.DIRECT_URL,
-    process.env.POSTGRES_URL_NON_POOLING,
-    process.env.DATABASE_URL_UNPOOLED,
-    databaseUrl,
-  ]);
-
-  if (!databaseUrl) {
-    console.error(`
-[prisma] Invalid or missing DATABASE_URL (Prisma P1013).
-
-Set in Vercel → Settings → Environment Variables (Production + Preview):
+In Vercel → Settings → Environment Variables, set for Production AND Preview:
 
   DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
-  DIRECT_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
 
-Neon: DATABASE_URL = pooled (-pooler), DIRECT_URL = non-pooled.
-If you only have one URL, set BOTH to that same value.
-
-Do not wrap values in quotes in the Vercel UI.
+Rules:
+  - Value only (no DATABASE_URL= prefix)
+  - No surrounding quotes
+  - Must start with postgresql:// or postgres://
 `);
-    process.exit(1);
-  }
-
-  process.env.DATABASE_URL = databaseUrl;
-  process.env.DIRECT_URL = directUrl || databaseUrl;
+  process.exit(1);
 }
 
-applyDatabaseEnv();
+process.env.DATABASE_URL = databaseUrl;
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
