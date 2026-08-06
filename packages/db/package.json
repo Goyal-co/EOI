@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "db:generate": "prisma generate",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:deploy": "node scripts/migrate-deploy.cjs",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
