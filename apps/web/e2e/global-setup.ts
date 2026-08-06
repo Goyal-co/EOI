@@ -1,17 +1,26 @@
-import { execSync } from "child_process";
-import path from "path";
+import { FullConfig } from "@playwright/test";
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-export default async function globalSetup() {
-  const dbPath = path.resolve(__dirname, "../../../packages/db");
-  const databaseUrl = process.env.DATABASE_URL || "postgresql://goyal:goyal_dev_password@localhost:5433/goyal_eoi?schema=public";
+const CP_EMAIL = process.env.E2E_CP_EMAIL || "work.goyalco@gmail.com";
+const TEMP_PASS = process.env.E2E_CP_PASSWORD || "UiPunch@2026";
+const hashBak = resolve(__dirname, ".cp-hash.bak");
 
+export default async function globalSetup(_config: FullConfig) {
+  const prisma = new PrismaClient();
   try {
-    execSync("npx tsx prisma/seed.ts", {
-      cwd: dbPath,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-      stdio: "inherit",
+    const user = await prisma.user.findUnique({ where: { email: CP_EMAIL } });
+    if (!user) throw new Error(`E2E CP not found: ${CP_EMAIL}`);
+    writeFileSync(hashBak, user.passwordHash || "", "utf8");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(TEMP_PASS, 12), status: "ACTIVE" },
     });
-  } catch {
-    console.warn("Seed skipped — ensure PostgreSQL is running on port 5433");
+    process.env.E2E_CP_EMAIL = CP_EMAIL;
+    process.env.E2E_CP_PASSWORD = TEMP_PASS;
+  } finally {
+    await prisma.$disconnect();
   }
 }
