@@ -11,8 +11,16 @@ export function apiResponse<T>(data: T, status = 200) {
   return NextResponse.json(data, { status });
 }
 
-export function apiError(message: string, status = 400, code?: string) {
-  return NextResponse.json({ error: message, ...(code ? { code } : {}) }, { status });
+export function apiError(
+  message: string,
+  status = 400,
+  code?: string,
+  extra?: Record<string, unknown>,
+) {
+  return NextResponse.json(
+    { error: message, ...(code ? { code } : {}), ...(extra || {}) },
+    { status },
+  );
 }
 
 export async function withAuth(roles?: UserRole[]) {

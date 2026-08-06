@@ -62,6 +62,7 @@ function PartnerLeadsContent() {
   const [siteVisitDate, setSiteVisitDate] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [crossProject, setCrossProject] = useState<AvailableProject | null>(null);
+  const [mapProjectId, setMapProjectId] = useState("");
   const [now, setNow] = useState(Date.now());
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
@@ -85,11 +86,15 @@ function PartnerLeadsContent() {
       .catch(() => {});
   }, []);
 
+  // Live 15-day lock countdown for list + drawer
   useEffect(() => {
-    if (!selectedLead?.lockExpiresAt) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
-  }, [selectedLead?.lockExpiresAt]);
+  }, []);
+
+  useEffect(() => {
+    setMapProjectId("");
+  }, [selectedLead?.id]);
 
   const lockCountdown = (expiresAt?: string) => {
     if (!expiresAt) return "—";
@@ -189,9 +194,9 @@ function PartnerLeadsContent() {
               ? <StatusBadge status="BOOKED" />
               : <span className="text-xs text-muted-foreground">Not booked</span>
           )},
-          { key: "lockExpiresAt", header: "CP Lock", render: (row) => (
-            <span className="text-xs font-medium text-amber-700">
-              {row.lockDaysRemaining ? `${row.lockDaysRemaining} day${row.lockDaysRemaining === 1 ? "" : "s"}` : "Unlocked"}
+          { key: "lockExpiresAt", header: "15-day Lock", render: (row) => (
+            <span className={`font-mono text-xs font-medium ${row.lockDaysRemaining ? "text-amber-700" : "text-muted-foreground"}`}>
+              {lockCountdown(row.lockExpiresAt)}
             </span>
           )},
           { key: "createdAt", header: "Date", render: (row) => formatDate(row.createdAt) },
@@ -380,43 +385,53 @@ function PartnerLeadsContent() {
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
                 <Clock className="h-4 w-4" />
-                15-day CP protection
+                15-day phone &amp; email lock
               </div>
               <p className="mt-2 font-mono text-lg font-semibold text-amber-800">
                 {lockCountdown(selectedLead.lockExpiresAt)}
               </p>
               <p className="mt-1 text-xs text-amber-700">
-                Other CPs cannot register this phone number or email until the timer ends.
+                Other CPs cannot register this phone number or email until the timer ends. After it expires, any CP can punch this customer again.
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Layers3 className="h-4 w-4 text-gold" />
-                <h4 className="text-sm font-semibold text-foreground">Punch another project</h4>
+                <h4 className="text-sm font-semibold text-foreground">Map to another project</h4>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Add the same customer to another project you have access to (EOI if open, Lead if closed).
+              </p>
               {selectedLead.availableProjects?.length ? (
-                <div className="space-y-2">
-                  {selectedLead.availableProjects.map((project) => (
-                    <div
-                      key={project.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+                <div className="space-y-3">
+                  <Select
+                    label="Project"
+                    value={mapProjectId}
+                    onChange={(e) => setMapProjectId(e.target.value)}
+                    options={[
+                      { value: "", label: "Select project…" },
+                      ...selectedLead.availableProjects.map((project) => ({
+                        value: project.id,
+                        label: `${project.name} (${project.action === "EOI" ? "EOI" : "Lead"})`,
+                      })),
+                    ]}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      variant="gold"
+                      size="sm"
+                      disabled={!mapProjectId}
+                      onClick={() => {
+                        const project = selectedLead.availableProjects?.find((p) => p.id === mapProjectId);
+                        if (project) setCrossProject(project);
+                      }}
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {project.location} · {project.eoiStatus === "OPEN" ? "EOI open" : "Lead only"}
-                        </p>
-                      </div>
-                      <Button
-                        variant={project.action === "EOI" ? "gold" : "outline"}
-                        size="sm"
-                        onClick={() => setCrossProject(project)}
-                      >
-                        {project.action === "EOI" ? "Register EOI" : "Punch Lead"}
-                      </Button>
-                    </div>
-                  ))}
+                      {selectedLead.availableProjects.find((p) => p.id === mapProjectId)?.action === "EOI"
+                        ? "Register EOI"
+                        : "Punch Lead"}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -528,7 +543,7 @@ function PartnerLeadsContent() {
           onOpenChange={(open) => {
             if (!open) {
               setCrossProject(null);
-              setSelectedLead(null);
+              setMapProjectId("");
               qc.invalidateQueries({ queryKey: ["partner", "leads"] });
             }
           }}
@@ -544,6 +559,7 @@ function PartnerLeadsContent() {
             city: selectedLead.city,
             notes: selectedLead.notes,
           }}
+          onMapToProject={(project) => setCrossProject(project)}
         />
       )}
 
@@ -553,7 +569,7 @@ function PartnerLeadsContent() {
           onOpenChange={(open) => {
             if (!open) {
               setCrossProject(null);
-              setSelectedLead(null);
+              setMapProjectId("");
               qc.invalidateQueries({ queryKey: ["partner", "leads"] });
             }
           }}
@@ -569,6 +585,7 @@ function PartnerLeadsContent() {
             city: selectedLead.city,
             notes: selectedLead.notes,
           }}
+          onMapToProject={(project) => setCrossProject(project)}
         />
       )}
     </div>

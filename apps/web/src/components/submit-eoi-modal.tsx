@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
   Modal, Button, Input, Select, Textarea, MultiStepForm, useToast,
 } from "@goyal/ui";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Clock, Layers3 } from "lucide-react";
 import type { LeadCreateInput } from "@goyal/types";
 
 const STEPS = [
@@ -13,6 +14,14 @@ const STEPS = [
   { id: "review", title: "Review", description: "Verify details before submitting" },
   { id: "success", title: "Success", description: "Customer saved" },
 ];
+
+type AvailableProject = {
+  id: string;
+  name: string;
+  location: string;
+  eoiStatus: string;
+  action: "EOI" | "LEAD_ONLY";
+};
 
 interface SubmitEOIModalProps {
   open: boolean;
@@ -23,6 +32,24 @@ interface SubmitEOIModalProps {
     LeadCreateInput,
     "customerName" | "mobile" | "email" | "configuration" | "fosName" | "budget" | "city" | "notes"
   >;
+  onMapToProject?: (
+    project: AvailableProject,
+    lead: Pick<
+      LeadCreateInput,
+      "customerName" | "mobile" | "email" | "configuration" | "fosName" | "budget" | "city" | "notes"
+    >,
+  ) => void;
+}
+
+function formatLockCountdown(expiresAt: string | null, now: number) {
+  if (!expiresAt) return "—";
+  const remaining = Math.max(0, new Date(expiresAt).getTime() - now);
+  if (remaining === 0) return "Unlocked";
+  const days = Math.floor(remaining / 86_400_000);
+  const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000);
+  const seconds = Math.floor((remaining % 60_000) / 1_000);
+  return `${days}d ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export function SubmitEOIModal({
@@ -31,13 +58,22 @@ export function SubmitEOIModal({
   projectId,
   projectName,
   initialLead,
+  onMapToProject,
 }: SubmitEOIModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [sentConfirmation, setSentConfirmation] = useState(false);
   const [devLinks, setDevLinks] = useState<{ acceptUrl: string; rejectUrl: string } | null>(null);
   const [emailWarning, setEmailWarning] = useState<string | null>(null);
   const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
+  const [lockExpiresAt, setLockExpiresAt] = useState<string | null>(null);
+  const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([]);
+  const [duplicateMapProjectId, setDuplicateMapProjectId] = useState("");
+  const [showDuplicateMap, setShowDuplicateMap] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState(projectId);
+  const [activeProjectName, setActiveProjectName] = useState(projectName);
+  const [now, setNow] = useState(Date.now());
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -53,14 +89,26 @@ export function SubmitEOIModal({
   const qc = useQueryClient();
 
   useEffect(() => {
+    if (!open) return;
+    setActiveProjectId(projectId);
+    setActiveProjectName(projectName);
+  }, [open, projectId, projectName]);
+
+  useEffect(() => {
     if (!open || !initialLead) return;
     setForm((current) => ({
       ...current,
       ...initialLead,
-      projectId,
+      projectId: activeProjectId,
       intentType: "EOI",
     }));
-  }, [initialLead, open, projectId]);
+  }, [initialLead, open, activeProjectId]);
+
+  useEffect(() => {
+    if (!lockExpiresAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [lockExpiresAt]);
 
   const reset = () => {
     setStep(0);
@@ -68,6 +116,12 @@ export function SubmitEOIModal({
     setDevLinks(null);
     setEmailWarning(null);
     setCreatedLeadId(null);
+    setLockExpiresAt(null);
+    setAvailableProjects([]);
+    setDuplicateMapProjectId("");
+    setShowDuplicateMap(false);
+    setActiveProjectId(projectId);
+    setActiveProjectName(projectName);
     setForm({
       customerName: "",
       mobile: "",
@@ -97,24 +151,84 @@ export function SubmitEOIModal({
         && (form.fosName?.length ?? 0) >= 1
       : true;
 
+  const selectedMapProject = useMemo(
+    () => availableProjects.find((p) => p.id === duplicateMapProjectId) || null,
+    [availableProjects, duplicateMapProjectId],
+  );
+
+  const handleMapProject = () => {
+    if (!selectedMapProject) return;
+    const seed = {
+      customerName: form.customerName,
+      mobile: form.mobile,
+      email: form.email,
+      configuration: form.configuration,
+      fosName: form.fosName,
+      budget: form.budget,
+      city: form.city,
+      notes: form.notes,
+    };
+    if (selectedMapProject.action === "LEAD_ONLY") {
+      if (onMapToProject) {
+        onMapToProject(selectedMapProject, seed);
+        handleClose(false);
+        return;
+      }
+      handleClose(false);
+      router.push("/partner/leads");
+      addToast({
+        type: "info",
+        title: "Open My Leads",
+        message: "Select this customer and use Map to another project to punch a lead.",
+      });
+      return;
+    }
+    setActiveProjectId(selectedMapProject.id);
+    setActiveProjectName(selectedMapProject.name);
+    setForm((current) => ({ ...current, projectId: selectedMapProject.id }));
+    setShowDuplicateMap(false);
+    setDuplicateMapProjectId("");
+    setStep(0);
+    addToast({
+      type: "info",
+      title: "Project switched",
+      message: `Continue EOI for ${selectedMapProject.name}.`,
+    });
+  };
+
   const handleSubmit = async (sendConfirmation: boolean) => {
     setLoading(true);
     try {
       const res = await fetch("/api/partner/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, projectId, intentType: "EOI", sendConfirmation }),
+        body: JSON.stringify({
+          ...form,
+          projectId: activeProjectId,
+          intentType: "EOI",
+          sendConfirmation,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 409 && data.code === "DUPLICATE_LEAD") {
-          throw new Error("A lead already exists for this customer. Resend confirmation from the leads page.");
+          setAvailableProjects(data.availableProjects || []);
+          setLockExpiresAt(data.lockExpiresAt || null);
+          setShowDuplicateMap(true);
+          addToast({
+            type: "warning",
+            title: "Already registered on this project",
+            message: "Use the project dropdown below to map this customer to another project, or open My Leads.",
+          });
+          return;
         }
         throw new Error(data.error || "Failed to submit");
       }
 
       setSentConfirmation(!!data.sentConfirmation);
       setCreatedLeadId(data.lead?.leadId || null);
+      setLockExpiresAt(data.lockExpiresAt || null);
+      setAvailableProjects(data.availableProjects || []);
       setDevLinks(data.devConfirmationLinks || null);
       setEmailWarning(
         data.emailError
@@ -150,17 +264,69 @@ export function SubmitEOIModal({
   };
 
   return (
-    <Modal open={open} onOpenChange={handleClose} title={`Submit EOI — ${projectName}`} size="lg">
+    <Modal open={open} onOpenChange={handleClose} title={`Submit EOI — ${activeProjectName}`} size="lg">
       <MultiStepForm
         steps={STEPS}
         currentStep={step}
         isLastStep={false}
         loading={loading}
-        canProceed={canProceed}
+        canProceed={canProceed && !showDuplicateMap}
         onPrevious={step > 0 && step < 2 ? () => setStep(step - 1) : undefined}
         onNext={step === 0 ? () => setStep(1) : undefined}
         nextLabel="Continue"
       >
+        {showDuplicateMap && (
+          <div className="mb-4 space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <Layers3 className="h-4 w-4" />
+              Customer already on this project
+            </div>
+            <p className="text-xs text-amber-800">
+              Phone and email stay under your 15-day protection. Map this same customer to another project below.
+            </p>
+            {lockExpiresAt && (
+              <p className="font-mono text-sm font-semibold text-amber-900">
+                Lock: {formatLockCountdown(lockExpiresAt, now)}
+              </p>
+            )}
+            {availableProjects.length ? (
+              <>
+                <Select
+                  label="Add to another project"
+                  value={duplicateMapProjectId}
+                  onChange={(e) => setDuplicateMapProjectId(e.target.value)}
+                  options={[
+                    { value: "", label: "Select project…" },
+                    ...availableProjects.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.action === "EOI" ? "EOI" : "Lead"})`,
+                    })),
+                  ]}
+                />
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => { handleClose(false); router.push("/partner/leads"); }}>
+                    Open My Leads
+                  </Button>
+                  <Button
+                    variant="gold"
+                    size="sm"
+                    disabled={!selectedMapProject}
+                    onClick={handleMapProject}
+                  >
+                    {selectedMapProject?.action === "EOI" ? "Register EOI" : "Punch Lead"}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => { handleClose(false); router.push("/partner/leads"); }}>
+                  Open My Leads
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {step === 0 && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
@@ -233,7 +399,7 @@ export function SubmitEOIModal({
           <div className="space-y-4">
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-blue-50 p-4 space-y-2">
-                <div className="flex justify-between"><span className="text-muted-foreground">Project</span><span className="font-medium">{projectName}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Project</span><span className="font-medium">{activeProjectName}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Customer</span><span className="font-medium">{form.customerName}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Mobile</span><span className="font-medium">{form.mobile}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span className="font-medium">{form.email}</span></div>
@@ -242,7 +408,7 @@ export function SubmitEOIModal({
                 {form.budget && <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-medium">{form.budget}</span></div>}
               </div>
               <p className="text-muted-foreground text-xs">
-                Save as draft without emailing the customer, or send a confirmation email now. Draft customers cannot log in until you send confirmation from the leads page.
+                Save as draft without emailing the customer, or send a confirmation email now. Phone and email stay protected for 15 days after punch.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
@@ -280,6 +446,46 @@ export function SubmitEOIModal({
               <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Lead ID</p>
                 <p className="font-mono text-sm font-semibold text-foreground">{createdLeadId}</p>
+              </div>
+            )}
+            {lockExpiresAt && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                  <Clock className="h-4 w-4" />
+                  15-day phone &amp; email lock
+                </div>
+                <p className="mt-1 font-mono text-lg font-semibold text-amber-800">
+                  {formatLockCountdown(lockExpiresAt, now)}
+                </p>
+                <p className="mt-1 text-xs text-amber-700">
+                  Other CPs cannot register this phone or email until the timer ends. You can still add other projects from My Leads.
+                </p>
+              </div>
+            )}
+            {availableProjects.length > 0 && (
+              <div className="mt-4 space-y-2 text-left">
+                <Select
+                  label="Punch another project now"
+                  value={duplicateMapProjectId}
+                  onChange={(e) => setDuplicateMapProjectId(e.target.value)}
+                  options={[
+                    { value: "", label: "Select project…" },
+                    ...availableProjects.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.action === "EOI" ? "EOI" : "Lead"})`,
+                    })),
+                  ]}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!selectedMapProject}
+                    onClick={handleMapProject}
+                  >
+                    {selectedMapProject?.action === "LEAD_ONLY" ? "Punch Lead" : "Continue"}
+                  </Button>
+                </div>
               </div>
             )}
             {devLinks && (

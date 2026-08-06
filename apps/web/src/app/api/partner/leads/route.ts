@@ -12,6 +12,7 @@ import {
   normalizeMobile,
   phoneLockWindowMs,
 } from "@/lib/leads/phone";
+import { getIdentityPunchContext } from "@/lib/leads/identity-context";
 
 class LeadCreateConflict extends Error {
   constructor(
@@ -257,10 +258,10 @@ export async function POST(req: Request) {
             lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
           );
           const daysLeft = daysRemainingUntil(unlockAt);
-          throw new LeadCreateConflict(
-            `Another CP registered this phone number or email. Please try again after ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`,
-            "IDENTITY_LOCKED",
-          );
+        throw new LeadCreateConflict(
+          `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+          "IDENTITY_LOCKED",
+        );
         }
 
         const existingIdentity = await tx.lead.findFirst({
@@ -340,16 +341,34 @@ export async function POST(req: Request) {
     });
   } catch (creationError) {
     if (creationError instanceof LeadCreateConflict) {
+      if (creationError.code === "DUPLICATE_LEAD") {
+        const context = await getIdentityPunchContext(cpId, mobile, email);
+        return apiError(creationError.message, 409, creationError.code, {
+          existingLeadId: context.existingLeadId,
+          leadId: context.publicLeadId,
+          availableProjects: context.availableProjects,
+          lockExpiresAt: context.lockExpiresAt,
+          lockDaysRemaining: context.lockDaysRemaining,
+        });
+      }
       return apiError(creationError.message, 409, creationError.code);
     }
     console.error("[Partner leads] create failed:", creationError);
     const message =
       creationError instanceof Error ? creationError.message : "Failed to create lead";
     if (/unique|duplicate|P2002/i.test(message)) {
+      const context = await getIdentityPunchContext(cpId, mobile, email);
       return apiError(
         "This customer is already registered on this project. Open the lead to punch another project.",
         409,
         "DUPLICATE_LEAD",
+        {
+          existingLeadId: context.existingLeadId,
+          leadId: context.publicLeadId,
+          availableProjects: context.availableProjects,
+          lockExpiresAt: context.lockExpiresAt,
+          lockDaysRemaining: context.lockDaysRemaining,
+        },
       );
     }
     if (/serializ|deadlock|40001|40P01|P2028|timed out|timeout/i.test(message)) {
@@ -357,6 +376,8 @@ export async function POST(req: Request) {
     }
     return apiError("Failed to create lead. Please try again.", 500);
   }
+
+  const identityContext = await getIdentityPunchContext(cpId, mobile, email);
   const publicLeadId = lead.leadId!;
 
   const baseUrl = getAppBaseUrl();
@@ -459,6 +480,9 @@ export async function POST(req: Request) {
     emailMocked,
     crmSynced: !!crmResult.success,
     crmId: titanCrmId,
+    lockExpiresAt: identityContext.lockExpiresAt,
+    lockDaysRemaining: identityContext.lockDaysRemaining,
+    availableProjects: identityContext.availableProjects,
     ...(process.env.NODE_ENV !== "production" && sendConfirmation
       ? { devConfirmationLinks: { acceptUrl, rejectUrl } }
       : {}),

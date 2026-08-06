@@ -23,6 +23,16 @@ export default function PartnerProjectsPage() {
   const projects = (data as Project[] | undefined) || [];
   const [eoiModal, setEoiModal] = useState({ open: false, projectId: "", projectName: "" });
   const [punchModal, setPunchModal] = useState({ open: false, projectId: "", projectName: "" });
+  const [mapSeed, setMapSeed] = useState<{
+    customerName: string;
+    mobile: string;
+    email: string;
+    configuration?: string;
+    fosName?: string;
+    budget?: string;
+    city?: string;
+    notes?: string;
+  } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -58,15 +68,33 @@ export default function PartnerProjectsPage() {
 
       <SubmitEOIModal
         open={eoiModal.open}
-        onOpenChange={(open) => setEoiModal((prev) => ({ ...prev, open }))}
+        onOpenChange={(open) => {
+          setEoiModal((prev) => ({ ...prev, open }));
+          if (!open) setMapSeed(null);
+        }}
         projectId={eoiModal.projectId}
         projectName={eoiModal.projectName}
+        initialLead={mapSeed || undefined}
+        onMapToProject={(project, seed) => {
+          setMapSeed(seed);
+          setEoiModal({ open: false, projectId: "", projectName: "" });
+          setPunchModal({ open: true, projectId: project.id, projectName: project.name });
+        }}
       />
       <PunchLeadModal
         open={punchModal.open}
-        onOpenChange={(open) => setPunchModal((prev) => ({ ...prev, open }))}
+        onOpenChange={(open) => {
+          setPunchModal((prev) => ({ ...prev, open }));
+          if (!open) setMapSeed(null);
+        }}
         projectId={punchModal.projectId}
         projectName={punchModal.projectName}
+        initialLead={mapSeed || undefined}
+        onMapToProject={(project, seed) => {
+          setMapSeed(seed);
+          setPunchModal({ open: false, projectId: "", projectName: "" });
+          setEoiModal({ open: true, projectId: project.id, projectName: project.name });
+        }}
       />
     </div>
   );
