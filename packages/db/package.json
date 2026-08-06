@@ -6,9 +6,9 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc",
-    "db:generate": "prisma generate",
-    "db:migrate:deploy": "node scripts/migrate-deploy.cjs",
-    "db:push": "prisma db push",
+    "db:generate": "node scripts/prisma-env.cjs generate",
+    "db:migrate:deploy": "node scripts/prisma-env.cjs migrate deploy",
+    "db:push": "node scripts/prisma-env.cjs db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
     "lint": "tsc --noEmit"
