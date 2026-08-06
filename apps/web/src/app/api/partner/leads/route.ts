@@ -214,7 +214,8 @@ export async function POST(req: Request) {
       // cannot bypass duplicate or 15-day ownership checks.
       const identityKeys = [`lead-email:${email}`, `lead-phone:${mobile}`].sort();
       for (const key of identityKeys) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+        // $executeRaw — pg_advisory_xact_lock returns void; $queryRaw fails to deserialize it.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
       }
 
       const existingLead = await tx.lead.findFirst({
@@ -273,7 +274,7 @@ export async function POST(req: Request) {
         select: { leadId: true },
       });
       if (!existingIdentity?.leadId) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
       }
       const leadCount = await tx.lead.count();
       const publicLeadId =
@@ -320,7 +321,20 @@ export async function POST(req: Request) {
     if (creationError instanceof LeadCreateConflict) {
       return apiError(creationError.message, 409, creationError.code);
     }
-    throw creationError;
+    console.error("[Partner leads] create failed:", creationError);
+    const message =
+      creationError instanceof Error ? creationError.message : "Failed to create lead";
+    if (/unique|duplicate|P2002/i.test(message)) {
+      return apiError(
+        "This customer is already registered on this project. Open the lead to punch another project.",
+        409,
+        "DUPLICATE_LEAD",
+      );
+    }
+    if (/serializ|deadlock|40001|40P01/i.test(message)) {
+      return apiError("Another submission is in progress for this customer. Please try again.", 409);
+    }
+    return apiError("Failed to create lead. Please try again.", 500);
   }
   const publicLeadId = lead.leadId!;
 
