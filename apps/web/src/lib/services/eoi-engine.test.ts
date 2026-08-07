@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   mockFindUnique: vi.fn(),
   mockUpdateMany: vi.fn(),
+  mockDocumentUpdateMany: vi.fn(),
   mockFindUniqueOrThrow: vi.fn(),
   mockTransaction: vi.fn(),
   mockLeadUpdate: vi.fn(),
@@ -48,6 +49,7 @@ describe("EOIEngine", () => {
     vi.clearAllMocks();
     mocks.mockSystemSettingsFindUnique.mockResolvedValue(null);
     mocks.mockUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.mockDocumentUpdateMany.mockResolvedValue({ count: 0 });
     mocks.mockFindUniqueOrThrow.mockResolvedValue({ id: "eoi-1", status: "SUBMITTED", referenceNumber: "EOI-2026-000001" });
     mocks.mockTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn({
@@ -55,6 +57,7 @@ describe("EOIEngine", () => {
           updateMany: mocks.mockUpdateMany,
           findUniqueOrThrow: mocks.mockFindUniqueOrThrow,
         },
+        document: { updateMany: mocks.mockDocumentUpdateMany },
         approvalAction: { create: mocks.mockApprovalCreate },
         lead: { update: mocks.mockLeadUpdate },
       })
@@ -155,6 +158,12 @@ describe("EOIEngine", () => {
 
     expect(mocks.mockApprovalCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: "APPROVE" }) })
+    );
+    expect(mocks.mockDocumentUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eoiId: "eoi-1" },
+        data: { status: "VERIFIED" },
+      })
     );
   });
 });
