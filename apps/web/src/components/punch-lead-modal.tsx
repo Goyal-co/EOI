@@ -257,7 +257,9 @@ export function PunchLeadModal({
         message: sendConfirmation
           ? (data.sentConfirmation
             ? "Customer will receive a confirmation email to accept interest."
-            : data.emailError || "Use the dev links below or resend from Leads.")
+            : (typeof data.emailError === "string" && data.emailError
+              ? data.emailError
+              : "Use the dev links below or resend from Leads."))
           : "You can send confirmation later from the leads page.",
       });
     } catch (err) {

@@ -261,10 +261,11 @@ export function SubmitEOIModal({
           : "Customer saved",
         message: data.sentConfirmation
           ? "Confirmation email sent to the customer via Brevo"
-          : data.emailError
-            || (data.emailMocked
+          : (typeof data.emailError === "string" && data.emailError
+            ? data.emailError
+            : (data.emailMocked
               ? "Restart the dev server so BREVO_API_KEY loads. Use the dev links below meanwhile."
-              : "Lead saved but email could not be sent. Use the dev links below or resend from Leads."),
+              : "Lead saved but email could not be sent. Use the dev links below or resend from Leads.")),
       });
     } catch (err) {
       addToast({ type: "error", title: "Submission failed", message: err instanceof Error ? err.message : "Try again" });
