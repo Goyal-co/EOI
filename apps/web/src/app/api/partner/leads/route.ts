@@ -14,12 +14,75 @@ import {
 } from "@/lib/leads/phone";
 import { getIdentityPunchContext } from "@/lib/leads/identity-context";
 
+/** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
+export const maxDuration = 60;
+
 class LeadCreateConflict extends Error {
   constructor(
     message: string,
     readonly code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED",
   ) {
     super(message);
+  }
+}
+
+function serializePartnerLead(lead: {
+  id: string;
+  leadId: string | null;
+  titanCrmId: string | null;
+  customerName: string;
+  customerEmail: string;
+  customerMobile: string;
+  configuration: string | null;
+  fosName: string | null;
+  budget: string | null;
+  city: string | null;
+  notes: string | null;
+  intentType: string;
+  journeyStatus: string;
+  confirmationStatus: string | null;
+  project: { id: string; name: string; location: string; eoiStatus: string };
+  cp: { companyName: string | null; user: { name: string | null } };
+}, publicLeadId: string, titanCrmId?: string) {
+  return {
+    id: lead.id,
+    leadId: publicLeadId,
+    titanCrmId: titanCrmId || lead.titanCrmId,
+    customerName: lead.customerName,
+    customerEmail: lead.customerEmail,
+    customerMobile: lead.customerMobile,
+    configuration: lead.configuration,
+    fosName: lead.fosName,
+    budget: lead.budget,
+    city: lead.city,
+    notes: lead.notes,
+    intentType: lead.intentType,
+    journeyStatus: lead.journeyStatus,
+    confirmationStatus: lead.confirmationStatus,
+    project: {
+      id: lead.project.id,
+      name: lead.project.name,
+      location: lead.project.location,
+      eoiStatus: lead.project.eoiStatus,
+    },
+    cp: {
+      companyName: lead.cp.companyName,
+      user: { name: lead.cp.user.name },
+    },
+  };
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -137,11 +200,24 @@ export async function GET(req: Request) {
     );
     const availableProjects = projectAccess
       .map((access) => access.project)
-      .filter((project) => project.status === "ACTIVE" && !existingProjectIds.has(project.id))
+      .filter(
+        (project) =>
+          (project.status === "ACTIVE" || project.status === "UPCOMING")
+          && !existingProjectIds.has(project.id),
+      )
       .map((project) => ({
         id: project.id,
         name: project.name,
         location: project.location,
+        eoiStatus: project.eoiStatus,
+        action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
+      }));
+    const mappedProjects = projectAccess
+      .map((access) => access.project)
+      .filter((project) => existingProjectIds.has(project.id))
+      .map((project) => ({
+        id: project.id,
+        name: project.name,
         eoiStatus: project.eoiStatus,
         action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
       }));
@@ -152,6 +228,7 @@ export async function GET(req: Request) {
       lockDaysRemaining:
         lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,
       availableProjects,
+      mappedProjects,
     };
   });
 
@@ -159,12 +236,26 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  try {
+    return await postPartnerLead(req);
+  } catch (error) {
+    console.error("[Partner leads] unhandled POST error:", error);
+    return apiError("Failed to create lead. Please try again.", 500);
+  }
+}
+
+async function postPartnerLead(req: Request) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
 
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return apiError("Invalid request body", 400);
+  }
   const parsed = leadCreateSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
 
@@ -337,7 +428,10 @@ export async function POST(req: Request) {
 
     lead = await prisma.lead.findUniqueOrThrow({
       where: { id: createdId },
-      include: { project: true, cp: { include: { user: true } } },
+      include: {
+        project: { select: { id: true, name: true, location: true, eoiStatus: true } },
+        cp: { select: { companyName: true, user: { select: { name: true } } } },
+      },
     });
   } catch (creationError) {
     if (creationError instanceof LeadCreateConflict) {
@@ -347,6 +441,7 @@ export async function POST(req: Request) {
           existingLeadId: context.existingLeadId,
           leadId: context.publicLeadId,
           availableProjects: context.availableProjects,
+          mappedProjects: context.mappedProjects,
           lockExpiresAt: context.lockExpiresAt,
           lockDaysRemaining: context.lockDaysRemaining,
         });
@@ -366,6 +461,7 @@ export async function POST(req: Request) {
           existingLeadId: context.existingLeadId,
           leadId: context.publicLeadId,
           availableProjects: context.availableProjects,
+          mappedProjects: context.mappedProjects,
           lockExpiresAt: context.lockExpiresAt,
           lockDaysRemaining: context.lockDaysRemaining,
         },
@@ -419,18 +515,22 @@ export async function POST(req: Request) {
   }
 
   let titanCrmId: string | undefined;
-  const crmResult = await punchPartnerLeadToCrm({
-    leadDbId: lead.id,
-    customerName: lead.customerName,
-    customerEmail: lead.customerEmail,
-    customerMobile: lead.customerMobile,
-    projectName: lead.project.name,
-    city: lead.city,
-    fosName: lead.fosName,
-    notes: lead.notes,
-    intentType,
-    publicLeadId,
-  });
+  const crmResult = await withTimeout(
+    punchPartnerLeadToCrm({
+      leadDbId: lead.id,
+      customerName: lead.customerName,
+      customerEmail: lead.customerEmail,
+      customerMobile: lead.customerMobile,
+      projectName: lead.project.name,
+      city: lead.city,
+      fosName: lead.fosName,
+      notes: lead.notes,
+      intentType,
+      publicLeadId,
+    }),
+    8_000,
+    { success: false },
+  );
   titanCrmId = crmResult.crmId;
 
   try {
@@ -473,7 +573,7 @@ export async function POST(req: Request) {
   });
 
   return apiResponse({
-    lead: { ...lead, leadId: publicLeadId, titanCrmId: titanCrmId || lead.titanCrmId },
+    lead: serializePartnerLead(lead, publicLeadId, titanCrmId),
     intentType,
     sentConfirmation: emailSent,
     emailError,
@@ -483,6 +583,7 @@ export async function POST(req: Request) {
     lockExpiresAt: identityContext.lockExpiresAt,
     lockDaysRemaining: identityContext.lockDaysRemaining,
     availableProjects: identityContext.availableProjects,
+    mappedProjects: identityContext.mappedProjects,
     ...(process.env.NODE_ENV !== "production" && sendConfirmation
       ? { devConfirmationLinks: { acceptUrl, rejectUrl } }
       : {}),

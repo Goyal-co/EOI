@@ -9,10 +9,18 @@ export type AvailablePunchProject = {
   action: "EOI" | "LEAD_ONLY";
 };
 
+export type MappedPunchProject = {
+  id: string;
+  name: string;
+  eoiStatus: string;
+  action: "EOI" | "LEAD_ONLY";
+};
+
 export type IdentityPunchContext = {
   existingLeadId: string | null;
   publicLeadId: string | null;
   availableProjects: AvailablePunchProject[];
+  mappedProjects: MappedPunchProject[];
   lockExpiresAt: string;
   lockDaysRemaining: number;
 };
@@ -54,7 +62,13 @@ export async function getIdentityPunchContext(
             { customerEmail: { equals: emailLower, mode: "insensitive" } },
           ],
         },
-        select: { id: true, projectId: true, leadId: true, createdAt: true },
+        select: {
+          id: true,
+          projectId: true,
+          leadId: true,
+          createdAt: true,
+          project: { select: { id: true, name: true, eoiStatus: true } },
+        },
         orderBy: { createdAt: "asc" },
       }),
       prisma.lead.findFirst({
@@ -84,9 +98,12 @@ export async function getIdentityPunchContext(
     ]);
 
   const existingProjectIds = new Set(cpIdentityLeads.map((l) => l.projectId));
-  const availableProjects = projectAccess
+  const punchableProjects = projectAccess
     .map((access) => access.project)
-    .filter((project) => project.status === "ACTIVE" && !existingProjectIds.has(project.id))
+    .filter((project) => project.status === "ACTIVE" || project.status === "UPCOMING");
+
+  const availableProjects = punchableProjects
+    .filter((project) => !existingProjectIds.has(project.id))
     .map((project) => ({
       id: project.id,
       name: project.name,
@@ -94,6 +111,17 @@ export async function getIdentityPunchContext(
       eoiStatus: project.eoiStatus,
       action: (project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY") as "EOI" | "LEAD_ONLY",
     }));
+
+  const mappedById = new Map<string, MappedPunchProject>();
+  for (const lead of cpIdentityLeads) {
+    if (!lead.project || mappedById.has(lead.project.id)) continue;
+    mappedById.set(lead.project.id, {
+      id: lead.project.id,
+      name: lead.project.name,
+      eoiStatus: lead.project.eoiStatus,
+      action: lead.project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
+    });
+  }
 
   const lockStart =
     firstRegistration?.createdAt
@@ -105,6 +133,7 @@ export async function getIdentityPunchContext(
     existingLeadId: existingOnAnyProject?.id || null,
     publicLeadId: existingOnAnyProject?.leadId || null,
     availableProjects,
+    mappedProjects: [...mappedById.values()],
     lockExpiresAt: lockExpiresAt.toISOString(),
     lockDaysRemaining:
       lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,

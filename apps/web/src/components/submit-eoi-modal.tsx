@@ -209,11 +209,21 @@ export function SubmitEOIModal({
           sendConfirmation,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(
+          res.status >= 500
+            ? "Server error while submitting EOI. Please try again in a moment."
+            : `Unexpected response (${res.status}). Please try again.`,
+        );
+      }
       if (!res.ok) {
         if (res.status === 409 && data.code === "DUPLICATE_LEAD") {
-          setAvailableProjects(data.availableProjects || []);
-          setLockExpiresAt(data.lockExpiresAt || null);
+          setAvailableProjects((data.availableProjects as AvailableProject[]) || []);
+          setLockExpiresAt((data.lockExpiresAt as string) || null);
           setShowDuplicateMap(true);
           addToast({
             type: "warning",
@@ -222,16 +232,16 @@ export function SubmitEOIModal({
           });
           return;
         }
-        throw new Error(data.error || "Failed to submit");
+        throw new Error((data.error as string) || "Failed to submit");
       }
 
       setSentConfirmation(!!data.sentConfirmation);
-      setCreatedLeadId(data.lead?.leadId || null);
-      setLockExpiresAt(data.lockExpiresAt || null);
-      setAvailableProjects(data.availableProjects || []);
-      setDevLinks(data.devConfirmationLinks || null);
+      setCreatedLeadId((data.lead as { leadId?: string } | undefined)?.leadId || null);
+      setLockExpiresAt((data.lockExpiresAt as string) || null);
+      setAvailableProjects((data.availableProjects as AvailableProject[]) || []);
+      setDevLinks((data.devConfirmationLinks as { acceptUrl: string; rejectUrl: string } | null) || null);
       setEmailWarning(
-        data.emailError
+        (data.emailError as string | undefined)
         || (data.emailMocked
           ? "Email was not sent — restart the server after adding BREVO_API_KEY to .env.local"
           : null)

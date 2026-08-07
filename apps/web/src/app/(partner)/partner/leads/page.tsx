@@ -19,6 +19,13 @@ interface AvailableProject {
   action: "EOI" | "LEAD_ONLY";
 }
 
+interface MappedProject {
+  id: string;
+  name: string;
+  eoiStatus: string;
+  action: "EOI" | "LEAD_ONLY";
+}
+
 interface Lead {
   id: string;
   leadId?: string | null;
@@ -40,6 +47,7 @@ interface Lead {
   lockExpiresAt?: string;
   lockDaysRemaining?: number;
   availableProjects?: AvailableProject[];
+  mappedProjects?: MappedProject[];
   project: { id?: string; name: string };
   eoi?: { status: string; referenceNumber?: string; chequeUploaded?: boolean };
 }
@@ -434,9 +442,17 @@ function PartnerLeadsContent() {
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  This customer is already mapped to all projects available to you.
-                </p>
+                <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    This phone/email is already mapped to every project available to you
+                    {(selectedLead.mappedProjects?.length
+                      ? `: ${selectedLead.mappedProjects.map((p) => p.name).join(", ")}`
+                      : ".")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    To add another project, ask admin to assign you more projects, or use a customer that is not yet punched on those projects.
+                  </p>
+                </div>
               )}
             </div>
 
