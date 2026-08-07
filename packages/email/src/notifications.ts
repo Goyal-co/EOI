@@ -39,6 +39,10 @@ export class NotificationService {
     entityId?: string;
     userId?: string;
   }) {
+    if (!params.to?.trim()) {
+      console.warn("[Email] Skipped (empty recipient):", params.type, params.entityId);
+      return { success: false, skipped: true, error: "empty recipient" };
+    }
     if (params.type && !(await shouldSendEmail(params.userId, params.type))) {
       console.info("[Email] Skipped (preferences):", params.type, "to", params.to);
       return { success: true, skipped: true };
@@ -379,33 +383,44 @@ export class NotificationService {
       }),
     ];
 
-    if (params.customerUserId) {
-      deliveries.push(
-        this.emit({
-          userId: params.customerUserId,
-          type: "PROJECT_STATUS_UPDATED",
-          title: customerTitle,
-          body: customerBody,
-          entityType: "Lead",
-          entityId: params.entityId,
-          emailType: customerTemplateType,
-          email: {
-            to: params.customerEmail,
+    const customerTo = (params.customerEmail || "").trim();
+    if (customerTo) {
+      // Always deliver customer milestone mail (transactional). Prefer in-app + email when
+      // a customer portal user exists; otherwise send email-only.
+      if (params.customerUserId) {
+        deliveries.push(
+          this.emit({
+            userId: params.customerUserId,
+            type: "PROJECT_STATUS_UPDATED",
+            title: customerTitle,
+            body: customerBody,
+            entityType: "Lead",
+            entityId: params.entityId,
+            emailType: customerTemplateType,
+            email: {
+              to: customerTo,
+              subject: customerEmail.subject,
+              html: customerEmail.html,
+            },
+          }),
+        );
+      } else {
+        deliveries.push(
+          this.deliverEmail({
+            to: customerTo,
             subject: customerEmail.subject,
             html: customerEmail.html,
-          },
-        }),
-      );
-    } else if (params.customerEmail) {
-      deliveries.push(
-        this.deliverEmail({
-          to: params.customerEmail,
-          subject: customerEmail.subject,
-          html: customerEmail.html,
-          type: customerTemplateType,
-          entityType: "Lead",
-          entityId: params.entityId,
-        }),
+            type: customerTemplateType,
+            entityType: "Lead",
+            entityId: params.entityId,
+          }),
+        );
+      }
+    } else {
+      console.warn(
+        "[notifyLeadMilestone] skipped customer email — no customerEmail on lead",
+        params.entityId,
+        params.leadId,
       );
     }
 

@@ -227,7 +227,7 @@ export async function POST(req: Request) {
 
     const notificationResults = await Promise.allSettled(
       notifyTargets.map((lead) =>
-        notifyMilestone(lead, "SITE_VISIT_COMPLETED", { salesperson }),
+        notifyMilestone(lead.id, "SITE_VISIT_COMPLETED", { salesperson }),
       ),
     );
     logNotificationFailures(notificationResults);
@@ -269,7 +269,8 @@ export async function POST(req: Request) {
   ) {
     const bookedAt = completedAt || new Date();
     const changed = [];
-    const bookedNotify = [];
+    const bookedNotify: string[] = [];
+    const siteVisitNotify: string[] = [];
     for (const lead of leads) {
       const needsSiteVisitEvent = lead.siteVisitStatus !== "COMPLETED";
       const needsBooked =
@@ -287,7 +288,8 @@ export async function POST(req: Request) {
         },
       });
       changed.push(lead);
-      if (needsBooked) bookedNotify.push(lead);
+      if (needsBooked) bookedNotify.push(lead.id);
+      if (needsSiteVisitEvent) siteVisitNotify.push(lead.id);
 
       try {
         const identityId = await ensureLeadHasIdentity(lead);
@@ -331,11 +333,14 @@ export async function POST(req: Request) {
       }
     }
 
-    const notificationResults = await Promise.allSettled(
-      bookedNotify.map((lead) =>
-        notifyMilestone(lead, "BOOKED", { salesperson: salespersonName }),
+    const notificationResults = await Promise.allSettled([
+      ...siteVisitNotify.map((id) =>
+        notifyMilestone(id, "SITE_VISIT_COMPLETED", { salesperson: salespersonName }),
       ),
-    );
+      ...bookedNotify.map((id) =>
+        notifyMilestone(id, "BOOKED", { salesperson: salespersonName }),
+      ),
+    ]);
     logNotificationFailures(notificationResults);
 
     await writeAudit({
@@ -372,17 +377,38 @@ export async function POST(req: Request) {
 }
 
 async function notifyMilestone(
-  lead: Awaited<ReturnType<typeof getLeadForNotification>>,
+  leadId: string,
   milestone: "SITE_VISIT_COMPLETED" | "BOOKED",
   extras?: { salesperson?: string | null },
 ) {
+  const lead = await getLeadForNotification(leadId);
+  const customerEmail = (
+    lead.customerEmail ||
+    lead.customer?.user?.email ||
+    ""
+  ).trim();
+  if (!customerEmail) {
+    console.warn(
+      `[Reception webhook] ${milestone}: no customer email for lead`,
+      lead.id,
+      lead.leadId,
+    );
+  }
+  if (!lead.cp?.user?.email) {
+    console.warn(
+      `[Reception webhook] ${milestone}: no CP email for lead`,
+      lead.id,
+      lead.cpId,
+    );
+  }
+
   return NotificationService.notifyLeadMilestone({
     milestone,
     entityId: lead.id,
     leadId: lead.leadId || undefined,
     customerName: lead.customerName,
-    customerEmail: lead.customerEmail,
-    customerUserId: lead.customer?.user.id,
+    customerEmail,
+    customerUserId: lead.customer?.user?.id,
     cpName: lead.cp.user.name || lead.cp.companyName || "Channel Partner",
     companyName: lead.cp.companyName || undefined,
     cpEmail: lead.cp.user.email,

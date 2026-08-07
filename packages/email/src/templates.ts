@@ -455,8 +455,8 @@ export function leadMilestoneEmailHtml(params: {
   let message: string;
   if (params.recipientType === "CP") {
     message = isBooked
-      ? `${params.customerName}'s booking for ${params.projectName} has been confirmed with you (${cpDisplay}). The lead is now marked as Booked in your Partner Portal.`
-      : `${params.customerName}'s site visit for ${params.projectName} has been completed with you (${cpDisplay}). The lead is now marked as Site Visit Done in your Partner Portal.`;
+      ? `Regarding your lead <strong style="color:${NAVY};">${params.customerName}</strong>: their booking for ${params.projectName} has been confirmed with you (${cpDisplay}). The lead is now marked as Booked in your Partner Portal.`
+      : `Regarding your lead <strong style="color:${NAVY};">${params.customerName}</strong>: their site visit for ${params.projectName} has been completed with you (${cpDisplay}). The lead is now marked as Site Visit Done in your Partner Portal.`;
   } else if (params.recipientType === "ADMIN") {
     message = isBooked
       ? `${params.customerName} has been marked Booked for ${params.projectName} with Channel Partner ${cpDisplay}.`
@@ -468,6 +468,9 @@ export function leadMilestoneEmailHtml(params: {
   }
 
   const details = [
+    ...(params.recipientType === "CP" || params.recipientType === "ADMIN"
+      ? [{ label: "Customer / Lead", value: params.customerName, icon: "&#128100;" }]
+      : []),
     { label: "Project", value: params.projectName, icon: "&#127970;" },
     { label: "Channel Partner", value: cpDisplay, icon: "&#128100;" },
     ...(params.salespersonName && params.salespersonName.trim()
@@ -491,6 +494,11 @@ export function leadMilestoneEmailHtml(params: {
     emailHero(title, isBooked ? "Confirmed" : "Completed", "check"),
     emailBody(`
       <p style="margin:0 0 12px;">Dear <strong>${params.recipientName}</strong>,</p>
+      ${
+        params.recipientType === "CP"
+          ? `<p style="margin:0 0 12px;color:${MUTED};">Lead: <strong style="color:${NAVY};">${params.customerName}</strong></p>`
+          : ""
+      }
       <p style="margin:0 0 16px;color:${MUTED};">${message}</p>
       ${detailsGrid(details)}
       <div style="text-align:center;">${primaryButton(ctaLabel, params.portalUrl)}</div>
