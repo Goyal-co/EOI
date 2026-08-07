@@ -46,6 +46,9 @@ export const leadAssignSchema = z.object({
   /** Channel partner the visitor is with today (when multiple CPs registered the same phone). */
   visitingPartnerCpId: z.string().min(1).max(120).optional(),
   visitingPartnerName: z.string().min(1).max(200).optional(),
+  eoiCpLeadId: z.string().min(1).max(120).optional(),
+  projectId: z.string().min(1).max(120).optional(),
+  projectName: z.string().min(1).max(200).optional(),
 });
 
 export const integrationEventSchema = z.object({

@@ -42,6 +42,13 @@ interface Lead {
   confirmationStatus?: string | null;
   siteVisitStatus?: string;
   siteVisitDate?: string | null;
+  siteVisitHistory?: Array<{
+    id: string;
+    type?: string;
+    occurredAt: string;
+    projectName?: string | null;
+    salesperson?: string | null;
+  }>;
   fosName?: string | null;
   createdAt: string;
   lockExpiresAt?: string;
@@ -399,7 +406,10 @@ function PartnerLeadsContent() {
                 {lockCountdown(selectedLead.lockExpiresAt)}
               </p>
               <p className="mt-1 text-xs text-amber-700">
-                Other CPs cannot register this phone number or email until the timer ends. After it expires, any CP can punch this customer again.
+                Other CPs cannot register this phone/email until the timer ends.
+                After it expires, a prior CP who owned this lead during the lock
+                cannot punch again for 7 more days; other CPs may attach to the
+                same Lead ID.
               </p>
             </div>
 
@@ -465,12 +475,25 @@ function PartnerLeadsContent() {
                   </div>
                   {selectedLead.siteVisitDate && (
                     <p className="text-sm text-muted-foreground">
-                      Date: {formatDate(selectedLead.siteVisitDate)}
+                      Latest: {formatDate(selectedLead.siteVisitDate)}
                     </p>
                   )}
-                  <p className="text-xs text-emerald-700">
-                    Completed when confirmed by reception.
-                  </p>
+                  {selectedLead.siteVisitHistory && selectedLead.siteVisitHistory.length > 0 ? (
+                    <ul className="mt-2 space-y-1 border-t border-emerald-100 pt-2">
+                      {selectedLead.siteVisitHistory.slice(0, 8).map((v) => (
+                        <li key={v.id} className="text-xs text-emerald-900">
+                          {(v.type || "SITE_VISIT").replace(/_/g, " ")} ·{" "}
+                          {new Date(v.occurredAt).toLocaleString("en-IN")}
+                          {v.projectName ? ` · ${v.projectName}` : ""}
+                          {v.salesperson ? ` · ${v.salesperson}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-emerald-700">
+                      Completed when confirmed by reception.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>

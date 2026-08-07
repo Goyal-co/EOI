@@ -131,6 +131,17 @@ enum ConfirmationStatus {
   REJECTED
 }
 
+enum LeadEventType {
+  PUNCHED
+  MAPPED
+  CONFIRMED
+  REJECTED
+  SITE_VISIT
+  BOOKED
+  LOCK_STARTED
+  CP_ATTACHED
+}
+
 enum EmailDeliveryStatus {
   PENDING
   SENT
@@ -190,6 +201,7 @@ model ChannelPartner {
   eois          EOI[]
   projectAccess CPProjectAccess[]
   documents     Document[]
+  leadEvents    LeadEvent[]
 
   @@index([status])
   @@index([reraNumber])
@@ -234,6 +246,7 @@ model Project {
   eois           EOI[]
   cpAccess       CPProjectAccess[]
   eoiRules       EOIRule[]
+  leadEvents     LeadEvent[]
 
   @@index([status])
   @@index([eoiStatus])
@@ -267,6 +280,8 @@ model CPProjectAccess {
 model Lead {
   id              String          @id @default(cuid())
   leadId          String?
+  identityId      String?
+  identity        LeadIdentity?   @relation(fields: [identityId], references: [id])
   titanCrmId      String?
   bookingLeadId   String?
   customerId      String?
@@ -298,10 +313,12 @@ model Lead {
   updatedAt       DateTime        @updatedAt
 
   eoi             EOI?
+  events          LeadEvent[]
 
   @@index([cpId])
   @@index([projectId])
   @@index([leadId])
+  @@index([identityId])
   @@index([leadStatus])
   @@index([journeyStatus])
   @@index([intentType])
@@ -309,6 +326,45 @@ model Lead {
   @@index([customerEmail, projectId, cpId])
   @@index([customerEmail, createdAt])
   @@index([customerMobile, createdAt])
+}
+
+/** Canonical customer footprint — one public Lead ID across CPs and projects. */
+model LeadIdentity {
+  id           String   @id @default(cuid())
+  leadId       String   @unique
+  primaryPhone String
+  primaryEmail String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads  Lead[]
+  events LeadEvent[]
+
+  @@index([primaryPhone])
+  @@index([primaryEmail])
+}
+
+/** Timeline of punches, confirmations, site visits, and bookings for an identity. */
+model LeadEvent {
+  id         String        @id @default(cuid())
+  identityId String
+  identity   LeadIdentity  @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  leadId     String?
+  lead       Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  cpId       String?
+  cp         ChannelPartner? @relation(fields: [cpId], references: [id], onDelete: SetNull)
+  projectId  String?
+  project    Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  type       LeadEventType
+  actorType  String?
+  metadata   Json?
+  occurredAt DateTime      @default(now())
+  createdAt  DateTime      @default(now())
+
+  @@index([identityId, occurredAt])
+  @@index([type])
+  @@index([leadId])
+  @@index([cpId])
 }
 
 model PasswordResetToken {

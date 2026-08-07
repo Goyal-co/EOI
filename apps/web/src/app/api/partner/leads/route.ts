@@ -12,8 +12,11 @@ import {
   normalizeMobile,
   phoneLockWindowMs,
 } from "@/lib/leads/phone";
-import { getIdentityPunchContext } from "@/lib/leads/identity-context";
-import { generatePublicLeadId } from "@/lib/leads/id-generator";
+import {
+  evaluateIdentityLock,
+  getIdentityPunchContext,
+} from "@/lib/leads/identity-context";
+import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
 
 /** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
 export const maxDuration = 60;
@@ -21,7 +24,7 @@ export const maxDuration = 60;
 class LeadCreateConflict extends Error {
   constructor(
     message: string,
-    readonly code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED",
+    readonly code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED" | "PRIOR_CP_COOLDOWN",
   ) {
     super(message);
     this.name = "LeadCreateConflict";
@@ -30,13 +33,13 @@ class LeadCreateConflict extends Error {
 
 function isLeadCreateConflict(
   error: unknown,
-): error is { message: string; code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED" } {
+): error is { message: string; code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED" | "PRIOR_CP_COOLDOWN" } {
   if (error instanceof LeadCreateConflict) return true;
   if (!error || typeof error !== "object") return false;
   const e = error as { name?: string; code?: unknown; message?: unknown };
   return (
     e.name === "LeadCreateConflict"
-    && (e.code === "DUPLICATE_LEAD" || e.code === "IDENTITY_LOCKED")
+    && (e.code === "DUPLICATE_LEAD" || e.code === "IDENTITY_LOCKED" || e.code === "PRIOR_CP_COOLDOWN")
     && typeof e.message === "string"
   );
 }
@@ -230,8 +233,56 @@ export async function GET(req: Request) {
         lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,
       availableProjects,
       mappedProjects,
+      siteVisitHistory: [] as Array<{
+        id: string;
+        occurredAt: string;
+        projectName: string | null;
+        salesperson: string | null;
+        metadata: unknown;
+      }>,
     };
   });
+
+  // Attach this CP's site-visit / booked events for partner history UI
+  const leadIds = result.map((l) => l.id);
+  const identityIds = [
+    ...new Set(
+      leads.map((l) => l.identityId).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (identityIds.length && leadIds.length) {
+    const events = await prisma.leadEvent.findMany({
+      where: {
+        identityId: { in: identityIds },
+        cpId,
+        type: { in: ["SITE_VISIT", "BOOKED"] },
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 200,
+      include: { project: { select: { name: true } } },
+    });
+    const byLead = new Map<string, typeof events>();
+    for (const ev of events) {
+      if (!ev.leadId) continue;
+      const list = byLead.get(ev.leadId) || [];
+      list.push(ev);
+      byLead.set(ev.leadId, list);
+    }
+    for (const row of result) {
+      const list = byLead.get(row.id) || [];
+      row.siteVisitHistory = list.map((ev) => ({
+        id: ev.id,
+        type: ev.type,
+        occurredAt: ev.occurredAt.toISOString(),
+        projectName: ev.project?.name || null,
+        salesperson:
+          ev.metadata && typeof ev.metadata === "object" && "salesperson" in ev.metadata
+            ? String((ev.metadata as { salesperson?: unknown }).salesperson || "") || null
+            : null,
+        metadata: ev.metadata,
+      }));
+    }
+  }
 
   return apiResponse(result);
 }
@@ -299,7 +350,23 @@ async function postPartnerLead(req: Request) {
   const inviteToken = generateInviteToken();
   const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const isLeadOnly = intentType === "LEAD_ONLY";
-  const sendConfirmation = parsed.data.sendConfirmation ?? false;
+
+  // Remap within identity: confirmation email only when mapping to an EOI-OPEN project.
+  const priorCpLeads = await prisma.lead.count({
+    where: {
+      cpId,
+      journeyStatus: { not: "REJECTED" },
+      OR: [
+        { customerMobile: mobile },
+        { customerEmail: { equals: email, mode: "insensitive" } },
+      ],
+    },
+  });
+  const isRemap = priorCpLeads > 0;
+  let sendConfirmation = parsed.data.sendConfirmation ?? false;
+  if (isRemap && project.eoiStatus !== "OPEN") {
+    sendConfirmation = false;
+  }
 
   if (!isLeadOnly && sendConfirmation) {
     if (!(parsed.data.configuration || "").trim()) {
@@ -331,61 +398,32 @@ async function postPartnerLead(req: Request) {
       );
     }
 
-    const lockSince = new Date(Date.now() - phoneLockWindowMs());
-    const lockedByOtherCp = await prisma.lead.findFirst({
-      where: {
-        cpId: { not: cpId },
-        createdAt: { gte: lockSince },
-        journeyStatus: { not: "REJECTED" },
-        OR: [
-          { customerMobile: mobile },
-          { customerEmail: { equals: email, mode: "insensitive" } },
-        ],
-      },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    });
-    if (lockedByOtherCp) {
-      const unlockAt = new Date(
-        lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
-      );
-      const daysLeft = daysRemainingUntil(unlockAt);
-      throw new LeadCreateConflict(
-        `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-        "IDENTITY_LOCKED",
-      );
+    const lockEval = await evaluateIdentityLock({ cpId, mobile, email });
+    if (!lockEval.ok) {
+      throw new LeadCreateConflict(lockEval.message, lockEval.code);
     }
 
-    const existingIdentity = await prisma.lead.findFirst({
-      where: {
-        leadId: { not: null },
-        OR: [
-          { customerMobile: mobile },
-          { customerEmail: { equals: email, mode: "insensitive" } },
-        ],
-      },
-      orderBy: { createdAt: "asc" },
-      select: { leadId: true },
+    const identity = await resolveOrCreateLeadIdentity({
+      mobile,
+      email,
+      intentType,
+      projectName: project.name,
     });
-    const latestForSeq = existingIdentity?.leadId
-      ? null
-      : await prisma.lead.findFirst({
-          where: { leadId: { not: null } },
-          orderBy: { createdAt: "desc" },
-          select: { leadId: true },
-        });
-    let seq = Date.now() % 1_000_000;
-    if (latestForSeq?.leadId) {
-      const match = latestForSeq.leadId.match(/(\d+)$/);
-      if (match) seq = (Number(match[1]) % 1_000_000) + 1;
-    }
-    const publicLeadId =
-      existingIdentity?.leadId
-      || generatePublicLeadId(intentType, project.name, seq);
+
+    // Other CP attaching after lock → CP_ATTACHED; same CP remap → MAPPED; first → PUNCHED
+    const otherCpOnIdentity = await prisma.lead.findFirst({
+      where: {
+        identityId: identity.identityId,
+        cpId: { not: cpId },
+        journeyStatus: { not: "REJECTED" },
+      },
+      select: { id: true },
+    });
 
     const createdLead = await prisma.lead.create({
       data: {
-        leadId: publicLeadId,
+        leadId: identity.publicLeadId,
+        identityId: identity.identityId,
         cpId,
         projectId: parsed.data.projectId,
         customerName: parsed.data.customerName,
@@ -415,6 +453,36 @@ async function postPartnerLead(req: Request) {
           cpId,
           status: "PENDING_SUBMISSION",
         },
+      });
+    }
+
+    const eventType = otherCpOnIdentity
+      ? "CP_ATTACHED"
+      : isRemap
+        ? "MAPPED"
+        : "PUNCHED";
+    await recordLeadEvent({
+      identityId: identity.identityId,
+      type: eventType,
+      leadId: createdLead.id,
+      cpId,
+      projectId: parsed.data.projectId,
+      actorType: "CP",
+      metadata: {
+        intentType,
+        sendConfirmation,
+        isRemap,
+        identityCreated: identity.created,
+      },
+    });
+    if (identity.created) {
+      await recordLeadEvent({
+        identityId: identity.identityId,
+        type: "LOCK_STARTED",
+        leadId: createdLead.id,
+        cpId,
+        projectId: parsed.data.projectId,
+        actorType: "SYSTEM",
       });
     }
 

@@ -3,6 +3,7 @@ import { apiResponse, apiError } from "@/lib/api";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { NotificationService } from "@goyal/email";
+import { recordLeadEvent } from "@/lib/leads/identity";
 
 /**
  * Reception / Booking Inventory → EOI Partner Portal webhook.
@@ -15,10 +16,10 @@ import { NotificationService } from "@goyal/email";
  *   { "event"|"type": "site_visit.completed"|"booking.confirmed",
  *     "leadId"|"publicLeadId": "EOI-…",
  *     "eoiCpLeadId"|"internalLeadId": "<uuid>",
+ *     "cpId": "<channel partner id>",
  *     "phone"|"mobile"|"customerMobile": "9876543210" }
  *
- * Prefer internal EOI lead id or CRM id; public leadId and phone can be shared
- * across projects, so project details should accompany either fallback.
+ * When cpId is provided, only that CP's association is updated/notified.
  */
 export async function POST(req: Request) {
   const secret = process.env.INTEGRATION_WEBHOOK_SECRET?.trim();
@@ -56,8 +57,12 @@ export async function POST(req: Request) {
   const crmLeadId =
     String(raw.titanCrmId || raw.crmLeadId || raw.externalLeadId || "").trim() ||
     null;
+  const cpId = String(raw.cpId || "").trim() || null;
   const projectId = String(raw.projectId || "").trim() || null;
   const projectName = String(raw.projectName || "").trim() || null;
+  const salesperson =
+    String(raw.salespersonName || raw.salesperson || raw.salespersonId || "").trim() ||
+    null;
   const mobile = phoneRaw ? normalizeMobile(phoneRaw) : "";
 
   if (!mobile && !publicLeadId && !internalLeadId && !crmLeadId) {
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
     customer: {
       include: { user: { select: { id: true, name: true, email: true } } },
     },
+    identity: { select: { id: true } },
   } as const;
 
   let matchedByExactId = false;
@@ -105,6 +111,7 @@ export async function POST(req: Request) {
       where: {
         titanCrmId: crmLeadId,
         journeyStatus: { not: "REJECTED" },
+        ...(cpId ? { cpId } : {}),
         ...(projectId ? { projectId } : {}),
         ...(projectName
           ? { project: { name: { equals: projectName, mode: "insensitive" } } }
@@ -120,6 +127,7 @@ export async function POST(req: Request) {
       where: {
         leadId: publicLeadId,
         journeyStatus: { not: "REJECTED" },
+        ...(cpId ? { cpId } : {}),
         ...(projectId ? { projectId } : {}),
         ...(projectName
           ? { project: { name: { equals: projectName, mode: "insensitive" } } }
@@ -137,6 +145,7 @@ export async function POST(req: Request) {
           { customerMobile: mobile },
           { customerMobile: { endsWith: mobile } },
         ],
+        ...(cpId ? { cpId } : {}),
         ...(projectId ? { projectId } : {}),
         ...(projectName
           ? { project: { name: { equals: projectName, mode: "insensitive" } } }
@@ -150,15 +159,27 @@ export async function POST(req: Request) {
     return apiError("Lead not found", 404);
   }
 
+  // Scope to visiting/booking CP when provided (preferred path for multi-CP identity).
+  if (cpId) {
+    const scoped = leads.filter((l) => l.cpId === cpId);
+    if (scoped.length === 0) {
+      return apiError("No lead association found for the provided cpId", 404);
+    }
+    leads = scoped;
+    matchedByExactId = true;
+  }
+
   if (leads.length > 1 && !matchedByExactId) {
     return apiError(
-      "Multiple leads matched. Send eoiCpLeadId, crmLeadId, projectId, or projectName to identify the particular lead.",
+      "Multiple leads matched. Send eoiCpLeadId, cpId, crmLeadId, projectId, or projectName to identify the particular lead.",
       409,
       "AMBIGUOUS_LEAD",
     );
   }
 
-  const completedAt = parseEventDate(raw.completedAt || raw.eventAt || raw.updatedAt);
+  const completedAt = parseEventDate(
+    raw.completedAt || raw.occurredAt || raw.eventAt || raw.updatedAt,
+  );
 
   if (
     event === "site_visit.completed" ||
@@ -166,20 +187,47 @@ export async function POST(req: Request) {
     event === "site_visit" ||
     event === "sitevisit.completed"
   ) {
+    const visitedAt = completedAt || new Date();
     const changed = [];
+    const notifyTargets = [];
     for (const lead of leads) {
-      const result = await prisma.lead.updateMany({
-        where: { id: lead.id, siteVisitStatus: { not: "COMPLETED" } },
+      const wasComplete = lead.siteVisitStatus === "COMPLETED";
+      await prisma.lead.update({
+        where: { id: lead.id },
         data: {
           siteVisitStatus: "COMPLETED",
-          ...(completedAt ? { siteVisitDate: completedAt } : {}),
+          siteVisitDate: visitedAt,
         },
       });
-      if (result.count === 1) changed.push(lead);
+      changed.push(lead);
+      // First completion always notifies; repeat visits notify so CP sees another check-in
+      notifyTargets.push(lead);
+
+      if (lead.identityId || lead.identity?.id) {
+        try {
+          await recordLeadEvent({
+            identityId: lead.identityId || lead.identity!.id,
+            type: "SITE_VISIT",
+            leadId: lead.id,
+            cpId: lead.cpId,
+            projectId: lead.projectId,
+            actorType: "RECEPTION",
+            occurredAt: visitedAt,
+            metadata: {
+              salesperson,
+              publicLeadId: lead.leadId,
+              source: "reception_webhook",
+              repeat: wasComplete,
+            },
+          });
+        } catch (e) {
+          console.error("[Reception webhook] LeadEvent SITE_VISIT failed", e);
+        }
+      }
     }
 
     const notificationResults = await Promise.allSettled(
-      changed.map((lead) => notifyMilestone(lead, "SITE_VISIT_COMPLETED")),
+      notifyTargets.map((lead) => notifyMilestone(lead, "SITE_VISIT_COMPLETED")),
     );
     logNotificationFailures(notificationResults);
 
@@ -192,11 +240,13 @@ export async function POST(req: Request) {
         phone: mobile || undefined,
         leadId: publicLeadId,
         eoiCpLeadId: internalLeadId,
+        cpId,
         count: changed.length,
         matched: leads.length,
         crmLeadId,
         projectId,
         projectName,
+        salesperson,
       },
       ipAddress: getIpFromRequest(req),
     });
@@ -204,8 +254,9 @@ export async function POST(req: Request) {
     return apiResponse({
       success: true,
       updated: changed.length,
-      notified: changed.length,
+      notified: notifyTargets.length,
       event: "site_visit.completed",
+      cpId,
     });
   }
 
@@ -236,6 +287,27 @@ export async function POST(req: Request) {
         },
       });
       if (result.count === 1) changed.push(lead);
+
+      if (lead.identityId || lead.identity?.id) {
+        try {
+          await recordLeadEvent({
+            identityId: lead.identityId || lead.identity!.id,
+            type: "BOOKED",
+            leadId: lead.id,
+            cpId: lead.cpId,
+            projectId: lead.projectId,
+            actorType: "RECEPTION",
+            occurredAt: completedAt || new Date(),
+            metadata: {
+              salesperson,
+              publicLeadId: lead.leadId,
+              source: "reception_webhook",
+            },
+          });
+        } catch (e) {
+          console.error("[Reception webhook] LeadEvent BOOKED failed", e);
+        }
+      }
     }
 
     const notificationResults = await Promise.allSettled(
@@ -252,11 +324,13 @@ export async function POST(req: Request) {
         phone: mobile || undefined,
         leadId: publicLeadId,
         eoiCpLeadId: internalLeadId,
+        cpId,
         count: changed.length,
         matched: leads.length,
         crmLeadId,
         projectId,
         projectName,
+        salesperson,
       },
       ipAddress: getIpFromRequest(req),
     });
@@ -266,6 +340,7 @@ export async function POST(req: Request) {
       updated: changed.length,
       notified: changed.length,
       event: "booking.confirmed",
+      cpId,
     });
   }
 

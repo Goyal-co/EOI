@@ -1,4 +1,5 @@
 const LOCK_DAYS = 15;
+const COOLDOWN_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Normalize Indian mobiles to last 10 digits. */
@@ -12,8 +13,12 @@ export function phoneLockWindowMs(days = LOCK_DAYS) {
   return days * MS_PER_DAY;
 }
 
+export function priorCpCooldownMs(days = COOLDOWN_DAYS) {
+  return days * MS_PER_DAY;
+}
+
 export function daysRemainingUntil(unlockAt: Date, now = new Date()): number {
   return Math.max(1, Math.ceil((unlockAt.getTime() - now.getTime()) / MS_PER_DAY));
 }
 
-export { LOCK_DAYS };
+export { LOCK_DAYS, COOLDOWN_DAYS };

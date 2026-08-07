@@ -6,6 +6,7 @@ import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
 import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
+import { recordLeadEvent } from "@/lib/leads/identity";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -182,6 +183,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           entityId: lead.id,
         });
       }
+
+      if (lead.identityId) {
+        await recordLeadEvent({
+          identityId: lead.identityId,
+          type: "CONFIRMED",
+          leadId: lead.id,
+          cpId: lead.cpId,
+          projectId: lead.projectId,
+          actorType: "CUSTOMER",
+          metadata: { intentType: "LEAD_ONLY" },
+        });
+      }
     } else {
       const emailResult = await NotificationService.notifyEOIInvitation({
         customerEmail: lead.customerEmail,
@@ -196,6 +209,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         leadId: lead.leadId || undefined,
       });
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
+    }
+
+    if (!isLeadOnly && lead.identityId) {
+      await recordLeadEvent({
+        identityId: lead.identityId,
+        type: "CONFIRMED",
+        leadId: lead.id,
+        cpId: lead.cpId,
+        projectId: lead.projectId,
+        actorType: "CUSTOMER",
+        metadata: { intentType: "EOI" },
+      });
     }
 
     await writeAudit({
@@ -237,6 +262,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         customerName: lead.customerName,
         projectName: lead.project.name,
         leadId: lead.id,
+      });
+    }
+
+    if (lead.identityId) {
+      await recordLeadEvent({
+        identityId: lead.identityId,
+        type: "REJECTED",
+        leadId: lead.id,
+        cpId: lead.cpId,
+        projectId: lead.projectId,
+        actorType: "CUSTOMER",
       });
     }
 

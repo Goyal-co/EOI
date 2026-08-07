@@ -65,6 +65,10 @@ services:
         sync: false
       - key: BLOB_READ_WRITE_TOKEN
         sync: false
+      - key: INTEGRATION_WEBHOOK_SECRET
+        sync: false
+      - key: BOOKING_INVENTORY_URL
+        sync: false
 
   # ── Daily email retry cron (midnight UTC) ───────────────────────────────────
   - type: cron
