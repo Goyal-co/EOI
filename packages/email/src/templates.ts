@@ -80,7 +80,9 @@ export function customerConfirmationEmailHtml(params: {
   const isLeadOnly = params.intentType === "LEAD_ONLY";
 
   const emailNote = params.customerEmail
-    ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>. It will also be your Customer Portal login ID.</p>`
+    ? isLeadOnly
+      ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>.</p>`
+      : `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>. It will also be your Customer Portal login ID.</p>`
     : "";
 
   const leadDetails = params.leadId
@@ -92,14 +94,14 @@ export function customerConfirmationEmailHtml(params: {
     : `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an <strong style="color:${NAVY};">Expression of Interest (EOI)</strong> at:`;
 
   const summary = isLeadOnly
-    ? "This is a lead registration only — not an EOI. Please confirm that this Channel Partner may represent your interest in this project. After you accept, we will email your Customer Portal login ID and password."
+    ? "This is a lead registration only — not an EOI. Please confirm that this Channel Partner may represent your interest in this project. After you accept, we will email a thank-you confirmation (no portal login is required for a lead)."
     : "Please confirm that you want to proceed with this Channel Partner for an EOI on this project. After you accept, we will email your Customer Portal login ID and password so you can complete the EOI form.";
 
   const steps = isLeadOnly
     ? [
         "Click <strong>Accept</strong> to confirm this lead registration.",
-        "Check your inbox for your Customer Portal login ID and temporary password.",
-        "Sign in anytime to track this lead and project updates.",
+        "You will receive a thank-you email confirming your interest.",
+        "Your Channel Partner will contact you with next steps — no portal login is required.",
       ]
     : [
         "Click <strong>Accept</strong> to confirm your Channel Partner for this EOI.",
@@ -351,43 +353,56 @@ export function leadOnlyAcceptedEmailHtml(params: {
   projectName: string;
   projectLocation: string;
   leadId?: string;
-  customerLoginUrl?: string;
-  password?: string;
-  customerEmail?: string;
 }) {
-  const loginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
   const detailItems: { label: string; value: string; icon: string }[] = [];
   if (params.leadId) {
     detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
   }
-  if (params.customerEmail) {
-    detailItems.push({ label: "Login Email", value: params.customerEmail, icon: "&#9993;" });
-  }
-  if (params.password) {
-    detailItems.push({ label: "Temporary Password", value: params.password, icon: "&#128274;" });
-  }
   const details = detailItems.length ? detailsGrid(detailItems) : "";
 
   return wrapEmail([
-    emailHeader("Lead Confirmed"),
-    emailHero("Lead Confirmed", "Confirmed", "check"),
+    emailHeader("Thank You"),
+    emailHero("Thank You for Confirming", "Confirmed", "check"),
     emailBody(`
       <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
       <p style="margin:0;color:${MUTED};">
-        Thank you for confirming your <strong style="color:${NAVY};">lead registration</strong> for
+        Thank you for confirming your interest in
         <strong style="color:${NAVY};">${params.projectName}</strong>
         with Channel Partner <strong style="color:${NAVY};">${params.cpName}</strong>.
       </p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
       ${details}
-      <p style="margin:0 0 16px;color:${MUTED};">
-        ${params.password
-          ? "Sign in to the Customer Portal with the email and temporary password above."
-          : "Sign in to the Customer Portal with your existing password."}
-        You can reset your password from the login page if needed.
+      <p style="margin:16px 0 0;color:${MUTED};">
+        Your Channel Partner has been notified and will contact you with the next steps.
+        This confirms a <strong style="color:${NAVY};">lead only</strong> — not an Expression of Interest (EOI).
+        No Customer Portal login is required for this lead.
       </p>
-      ${primaryButton("Open Customer Portal", loginUrl)}
-      <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">This confirms a lead only — not an EOI. Sign in anytime to track this project. Your Channel Partner will share updates as they happen.</p>
+    `),
+    emailSupportBlock(),
+    emailFooter(),
+  ]);
+}
+
+export function cpLeadOnlyAcceptedEmailHtml(params: {
+  cpName: string;
+  customerName: string;
+  projectName: string;
+  leadId?: string;
+}) {
+  const leadLine = params.leadId
+    ? `<p style="margin:12px 0 0;color:${MUTED};">Lead ID: <strong style="color:${NAVY};font-family:monospace;">${params.leadId}</strong></p>`
+    : "";
+  return wrapEmail([
+    emailHeader(),
+    emailHero("Customer Confirmed Lead", undefined, "check"),
+    emailBody(`
+      <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
+      <p style="margin:0 0 12px;color:${MUTED};">
+        <strong style="color:${NAVY};">${params.customerName}</strong> has accepted the lead confirmation for
+        <strong style="color:${NAVY};">${params.projectName}</strong>.
+      </p>
+      ${leadLine}
+      <p style="margin:16px 0 0;color:${MUTED};">You can follow up with the customer on next steps from your partner portal.</p>
     `),
     emailSupportBlock(),
     emailFooter(),
@@ -468,7 +483,8 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   CUSTOMER_CONFIRMATION: "Confirm Your EOI with Channel Partner — {{projectName}}",
   CUSTOMER_CONFIRMATION_LEAD_ONLY: "Confirm Your Lead Registration — {{projectName}}",
   EOI_INVITATION: "Complete Your EOI — {{projectName}}",
-  LEAD_ONLY_ACCEPTED: "Lead confirmed — {{projectName}}",
+  LEAD_ONLY_ACCEPTED: "Thank you for confirming — {{projectName}}",
+  LEAD_ONLY_ACCEPTED_CP: "Customer Confirmed Lead — {{customerName}} | {{projectName}}",
   EOI_SUBMITTED: "EOI Submitted — {{projectName}}",
   EOI_APPROVED: "EOI Approved — {{projectName}}",
   EOI_REJECTED: "EOI Update — {{projectName}}",
@@ -529,13 +545,16 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
   }),
   LEAD_ONLY_ACCEPTED: leadOnlyAcceptedEmailHtml({
     customerName: "{{customerName}}",
-    customerEmail: "{{customerEmail}}",
     cpName: "{{cpName}}",
     projectName: "{{projectName}}",
     projectLocation: "{{projectLocation}}",
     leadId: "{{leadId}}",
-    customerLoginUrl: "{{customerLoginUrl}}",
-    password: "{{password}}",
+  }),
+  LEAD_ONLY_ACCEPTED_CP: cpLeadOnlyAcceptedEmailHtml({
+    cpName: "{{cpName}}",
+    customerName: "{{customerName}}",
+    projectName: "{{projectName}}",
+    leadId: "{{leadId}}",
   }),
   EOI_SUBMITTED: eoiSubmittedEmailHtml({
     customerName: "{{customerName}}",

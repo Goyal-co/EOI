@@ -17,6 +17,7 @@ import {
   cpCustomerSubmittedEmailHtml,
   cpCustomerRejectedEmailHtml,
   leadOnlyAcceptedEmailHtml,
+  cpLeadOnlyAcceptedEmailHtml,
   leadMilestoneEmailHtml,
 } from "./templates";
 
@@ -193,11 +194,8 @@ export class NotificationService {
     projectLocation: string;
     entityId: string;
     leadId?: string;
-    customerLoginUrl?: string;
-    password?: string;
   }) {
     const leadId = params.leadId || params.entityId;
-    const customerLoginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
     const email = await this.resolveEmail(
       "LEAD_ONLY_ACCEPTED",
       {
@@ -207,20 +205,15 @@ export class NotificationService {
         projectName: params.projectName,
         projectLocation: params.projectLocation,
         leadId,
-        customerLoginUrl,
-        password: params.password || "",
       },
       {
-        subject: `Lead confirmed — ${params.projectName}`,
+        subject: `Thank you for confirming — ${params.projectName}`,
         html: leadOnlyAcceptedEmailHtml({
           customerName: params.customerName,
-          customerEmail: params.customerEmail,
           cpName: params.cpName,
           projectName: params.projectName,
           projectLocation: params.projectLocation,
           leadId,
-          customerLoginUrl,
-          password: params.password,
         }),
       },
     );
@@ -232,6 +225,49 @@ export class NotificationService {
       type: "LEAD_ONLY_ACCEPTED",
       entityType: "Lead",
       entityId: params.entityId,
+    });
+  }
+
+  static async notifyCPLeadOnlyAccepted(params: {
+    cpUserId: string;
+    cpEmail: string;
+    cpName: string;
+    customerName: string;
+    projectName: string;
+    leadId?: string;
+    entityId: string;
+  }) {
+    const resolved = await this.resolveEmail(
+      "LEAD_ONLY_ACCEPTED_CP",
+      {
+        cpName: params.cpName,
+        customerName: params.customerName,
+        projectName: params.projectName,
+        leadId: params.leadId || "",
+      },
+      {
+        subject: `Customer Confirmed Lead — ${params.customerName} | ${params.projectName}`,
+        html: cpLeadOnlyAcceptedEmailHtml({
+          cpName: params.cpName,
+          customerName: params.customerName,
+          projectName: params.projectName,
+          leadId: params.leadId,
+        }),
+      },
+    );
+    await this.emit({
+      userId: params.cpUserId,
+      type: "CUSTOMER_CONFIRMATION",
+      title: "Customer Confirmed Lead",
+      body: `${params.customerName} confirmed lead interest for ${params.projectName}`,
+      entityType: "Lead",
+      entityId: params.entityId,
+      email: {
+        to: params.cpEmail,
+        subject: resolved.subject,
+        html: resolved.html,
+      },
+      emailType: "LEAD_ONLY_ACCEPTED_CP",
     });
   }
 

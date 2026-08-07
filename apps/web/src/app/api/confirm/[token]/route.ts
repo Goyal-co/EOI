@@ -5,6 +5,7 @@ import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
+import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -57,6 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return apiError("Confirmation link has expired", 410);
   }
 
+  const isLeadOnly = lead.intentType === "LEAD_ONLY";
   const customerLoginUrl = `${getAppBaseUrl()}/customer/login`;
 
   // Re-opening the same link (or a client retry) must not fail — replay the outcome.
@@ -67,7 +69,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         action: "accepted",
         alreadyAccepted: true,
         intentType: lead.intentType,
-        loginUrl: customerLoginUrl,
+        // Portal login is EOI-only; lead-only customers get a thanks page with no login CTA.
+        ...(isLeadOnly ? {} : { loginUrl: customerLoginUrl }),
         leadId: lead.leadId,
         customerName: lead.customerName,
         customerEmail: lead.customerEmail,
@@ -90,35 +93,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   if (action === "accept") {
-    const isLeadOnly = lead.intentType === "LEAD_ONLY";
-
     let emailSent = false;
     let tempPassword: string | undefined;
 
-    try {
-      const creds = await ensureCustomerCredentials({
-        email: lead.customerEmail,
-        name: lead.customerName,
-        mobile: lead.customerMobile,
-      });
-      tempPassword = creds.password;
-
-      const customer = await prisma.customer.findFirst({
-        where: { user: { email: { equals: lead.customerEmail.trim().toLowerCase(), mode: "insensitive" } } },
-      });
-      if (customer) {
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { customerId: customer.id },
+    // Customer portal credentials are for EOI completion only — never for lead-only.
+    if (!isLeadOnly) {
+      try {
+        const creds = await ensureCustomerCredentials({
+          email: lead.customerEmail,
+          name: lead.customerName,
+          mobile: lead.customerMobile,
         });
+        tempPassword = creds.password;
+
+        const customer = await prisma.customer.findFirst({
+          where: {
+            user: {
+              email: { equals: lead.customerEmail.trim().toLowerCase(), mode: "insensitive" },
+            },
+          },
+        });
+        if (customer) {
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: { customerId: customer.id },
+          });
+        }
+      } catch (e) {
+        console.error("[Confirm] ensureCustomerCredentials failed:", e);
+        return apiError(
+          "We could not create your customer login. Please retry or contact support.",
+          500,
+          "CUSTOMER_CREDENTIALS_FAILED",
+        );
       }
-    } catch (e) {
-      console.error("[Confirm] ensureCustomerCredentials failed:", e);
-      return apiError(
-        "We could not create your customer login. Please retry or contact support.",
-        500,
-        "CUSTOMER_CREDENTIALS_FAILED",
-      );
     }
 
     await prisma.lead.update({
@@ -132,6 +140,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     });
 
     if (isLeadOnly) {
+      // Punch to CRM only after the customer accepts a lead-only confirmation.
+      if (!lead.titanCrmId) {
+        try {
+          await punchPartnerLeadToCrm({
+            leadDbId: lead.id,
+            customerName: lead.customerName,
+            customerEmail: lead.customerEmail,
+            customerMobile: lead.customerMobile,
+            projectName: lead.project.name,
+            city: lead.city,
+            fosName: lead.fosName,
+            notes: lead.notes,
+            intentType: "LEAD_ONLY",
+            publicLeadId: lead.leadId,
+          });
+        } catch (e) {
+          console.error("[Confirm] lead-only CRM punch failed:", e);
+        }
+      }
+
       const emailResult = await NotificationService.notifyLeadOnlyAccepted({
         customerEmail: lead.customerEmail,
         customerName: lead.customerName,
@@ -140,10 +168,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         projectLocation: lead.project.location,
         entityId: lead.id,
         leadId: lead.leadId || lead.id,
-        customerLoginUrl,
-        password: tempPassword,
       });
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
+
+      if (lead.cp.user) {
+        await NotificationService.notifyCPLeadOnlyAccepted({
+          cpUserId: lead.cp.user.id,
+          cpEmail: lead.cp.user.email,
+          cpName: lead.cp.user.name || "Partner",
+          customerName: lead.customerName,
+          projectName: lead.project.name,
+          leadId: lead.leadId || undefined,
+          entityId: lead.id,
+        });
+      }
     } else {
       const emailResult = await NotificationService.notifyEOIInvitation({
         customerEmail: lead.customerEmail,
@@ -172,9 +210,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       success: true,
       action: "accepted",
       intentType: lead.intentType,
-      loginUrl: customerLoginUrl,
+      ...(isLeadOnly ? {} : { loginUrl: customerLoginUrl, passwordEmailed: !!tempPassword }),
       emailSent,
-      passwordEmailed: !!tempPassword,
       leadId: lead.leadId,
       customerName: lead.customerName,
       customerEmail: lead.customerEmail,

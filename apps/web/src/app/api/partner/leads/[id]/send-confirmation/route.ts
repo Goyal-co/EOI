@@ -2,7 +2,6 @@ import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
 import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
-import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
@@ -40,22 +39,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       confirmationSentAt: new Date(),
     },
   });
-
-  // Ensure CRM has the lead when draft → confirmation (in case create skipped / failed earlier).
-  if (!lead.titanCrmId) {
-    await punchPartnerLeadToCrm({
-      leadDbId: lead.id,
-      customerName: lead.customerName,
-      customerEmail: lead.customerEmail,
-      customerMobile: lead.customerMobile,
-      projectName: lead.project.name,
-      city: lead.city,
-      fosName: lead.fosName,
-      notes: lead.notes,
-      intentType: lead.intentType === "LEAD_ONLY" ? "LEAD_ONLY" : "EOI",
-      publicLeadId: lead.leadId,
-    });
-  }
 
   const emailResult = await NotificationService.notifyCustomerConfirmation({
     customerEmail: lead.customerEmail,

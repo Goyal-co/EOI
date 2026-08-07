@@ -15,6 +15,7 @@ interface AcceptResult {
   projectName?: string;
   alreadyAccepted?: boolean;
   passwordEmailed?: boolean;
+  emailSent?: boolean;
 }
 
 export default function ConfirmAcceptPage() {
@@ -65,7 +66,7 @@ export default function ConfirmAcceptPage() {
   const loginUrl = result.loginUrl || "/customer/login";
 
   return (
-    <PublicPageCard title={isLeadOnly ? "Interest Confirmed" : "Confirmation Accepted"}>
+    <PublicPageCard title={isLeadOnly ? "Thank You" : "Confirmation Accepted"}>
       <div className="text-center">
         <div className="flex justify-center mb-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
@@ -76,7 +77,7 @@ export default function ConfirmAcceptPage() {
         <p className="text-muted-foreground">
           {result.customerName ? `Thank you, ${result.customerName}. ` : "Thank you. "}
           {isLeadOnly
-            ? "Your interest has been confirmed."
+            ? "Your interest has been confirmed. Your Channel Partner has been notified and will contact you with next steps."
             : "Your Channel Partner association has been confirmed."}
         </p>
 
@@ -94,7 +95,7 @@ export default function ConfirmAcceptPage() {
                 <span className="font-mono font-medium text-foreground">{result.leadId}</span>
               </div>
             )}
-            {result.customerEmail && (
+            {!isLeadOnly && result.customerEmail && (
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Login ID</span>
                 <span className="font-medium text-foreground break-all">{result.customerEmail}</span>
@@ -103,27 +104,43 @@ export default function ConfirmAcceptPage() {
           </div>
         )}
 
-        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-left">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-            <Mail className="h-4 w-4" />
-            {result.passwordEmailed === false
-              ? "Check your mail for your login ID"
-              : "Check your mail for your ID and password"}
+        {isLeadOnly ? (
+          <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left">
+            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+              <Mail className="h-4 w-4" />
+              Confirmation email sent
+            </div>
+            <p className="mt-2 text-xs text-emerald-800">
+              A thank-you email has been sent
+              {result.customerEmail ? ` to ${result.customerEmail}` : ""}.
+              No Customer Portal login is required for a lead registration.
+            </p>
           </div>
-          <p className="mt-2 text-xs text-amber-800">
-            {result.passwordEmailed === false
-              ? "We have emailed your Customer Portal login ID. Sign in with your existing password, or reset it from the login page."
-              : `We have emailed your Customer Portal login ID and password${
-                  result.customerEmail ? ` to ${result.customerEmail}` : ""
-                }. Use them to sign in, then reset your password from the login page whenever you like.`}
-          </p>
-        </div>
+        ) : (
+          <>
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-left">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                <Mail className="h-4 w-4" />
+                {result.passwordEmailed === false
+                  ? "Check your mail for your login ID"
+                  : "Check your mail for your ID and password"}
+              </div>
+              <p className="mt-2 text-xs text-amber-800">
+                {result.passwordEmailed === false
+                  ? "We have emailed your Customer Portal login ID. Sign in with your existing password, or reset it from the login page."
+                  : `We have emailed your Customer Portal login ID and password${
+                      result.customerEmail ? ` to ${result.customerEmail}` : ""
+                    }. Use them to sign in and complete your EOI form.`}
+              </p>
+            </div>
 
-        <Link href={loginUrl} className="mt-6 block">
-          <Button variant="gold" className="w-full">
-            Continue to Customer Login
-          </Button>
-        </Link>
+            <Link href={loginUrl} className="mt-6 block">
+              <Button variant="gold" className="w-full">
+                Continue to Customer Login
+              </Button>
+            </Link>
+          </>
+        )}
       </div>
     </PublicPageCard>
   );

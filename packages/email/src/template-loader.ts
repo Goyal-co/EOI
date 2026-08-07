@@ -72,7 +72,7 @@ export function isMismatchedEmailTemplate(type: string, subject: string, body: s
   const hasEoiPunchCopy = /Expression of Interest|Step 1 of 3|complete your EOI|Accept &amp; Continue to EOI|Confirm Your EOI/i.test(text);
   const hasLeadPunchCopy = /Lead Registration|Confirm Your Lead|Accept Lead|lead registration only|Lead Confirmed/i.test(text);
 
-  if (type === "CUSTOMER_CONFIRMATION_LEAD_ONLY" || type === "LEAD_ONLY_ACCEPTED") {
+  if (type === "CUSTOMER_CONFIRMATION_LEAD_ONLY" || type === "LEAD_ONLY_ACCEPTED" || type === "LEAD_ONLY_ACCEPTED_CP") {
     return hasEoiPunchCopy && !hasLeadPunchCopy;
   }
   if (type === "CUSTOMER_CONFIRMATION" || type === "EOI_INVITATION") {
@@ -121,6 +121,7 @@ export async function syncDefaultEmailTemplates(options?: {
     "CUSTOMER_CONFIRMATION_LEAD_ONLY",
     "EOI_INVITATION",
     "LEAD_ONLY_ACCEPTED",
+    "LEAD_ONLY_ACCEPTED_CP",
   ]);
   let created = 0;
   let updated = 0;

@@ -7,7 +7,6 @@ import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveLeadIntent } from "@/lib/leads/intent";
-import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 import {
   daysRemainingUntil,
   normalizeMobile,
@@ -86,20 +85,6 @@ function serializePartnerLead(lead: {
       user: { name: lead.cp.user.name },
     },
   };
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
 }
 
 export async function GET(req: Request) {
@@ -528,23 +513,10 @@ async function postPartnerLead(req: Request) {
   }
 
   let titanCrmId: string | undefined;
-  const crmResult = await withTimeout(
-    punchPartnerLeadToCrm({
-      leadDbId: lead.id,
-      customerName: lead.customerName,
-      customerEmail: lead.customerEmail,
-      customerMobile: lead.customerMobile,
-      projectName: lead.project.name,
-      city: lead.city,
-      fosName: lead.fosName,
-      notes: lead.notes,
-      intentType,
-      publicLeadId,
-    }),
-    8_000,
-    { success: false },
-  );
-  titanCrmId = crmResult.crmId;
+  // CRM timing:
+  // - LEAD_ONLY → punch on customer accept (confirm API)
+  // - EOI → punch on EOI form submit (eoi-engine)
+  const crmSynced = false;
 
   try {
     const { publishEvent } = await import("@goyal/integration-hub");
@@ -591,7 +563,7 @@ async function postPartnerLead(req: Request) {
     sentConfirmation: emailSent,
     emailError,
     emailMocked,
-    crmSynced: !!crmResult.success,
+    crmSynced,
     crmId: titanCrmId,
     lockExpiresAt: identityContext.lockExpiresAt,
     lockDaysRemaining: identityContext.lockDaysRemaining,
