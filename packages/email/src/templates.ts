@@ -86,7 +86,7 @@ export function customerConfirmationEmailHtml(params: {
     : "";
 
   const leadDetails = params.leadId
-    ? detailsGrid([{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }])
+    ? detailsGrid([{ label: "Lead ID", value: params.leadId }])
     : "";
 
   const intro = isLeadOnly
@@ -154,11 +154,11 @@ export function invitationEmailHtml(params: {
 
   const detailItems: { label: string; value: string; icon?: string }[] = [];
   if (params.leadId) {
-    detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
+    detailItems.push({ label: "Lead ID", value: params.leadId });
   }
-  detailItems.push({ label: "Email", value: params.customerEmail, icon: "&#9993;" });
+  detailItems.push({ label: "Email", value: params.customerEmail });
   if (params.password) {
-    detailItems.push({ label: "Temporary Password", value: params.password, icon: "&#128274;" });
+    detailItems.push({ label: "Temporary Password", value: params.password });
   }
 
   return wrapEmail([
@@ -203,9 +203,9 @@ export function eoiSubmittedEmailHtml(params: {
       <p style="margin:0 0 12px;">Dear <strong>${params.customerName}</strong>,</p>
       <p style="margin:0 0 16px;color:${MUTED};">Your Expression of Interest for <strong style="color:${NAVY};">${params.projectName}</strong> has been submitted successfully.</p>
       ${detailsGrid([
-        { label: "Project", value: params.projectName, icon: "&#127970;" },
-        { label: "Reference Number", value: params.referenceNumber, icon: "&#128196;" },
-        { label: "Status", value: "Pending Review", icon: "&#9203;" },
+        { label: "Project", value: params.projectName },
+        { label: "Reference Number", value: params.referenceNumber },
+        { label: "Status", value: "Pending Review" },
       ])}
       <p style="margin:0;color:${MUTED};">We will notify you once your EOI is reviewed by our team.</p>
       <div style="text-align:center;">${primaryButton("View My EOI Status", portalUrl)}</div>
@@ -234,9 +234,9 @@ export function eoiApprovedEmailHtml(params: {
         Congratulations! Your EOI for <strong style="color:${GOLD};">${params.projectName}</strong> has been approved.
       </p>
       ${detailsGrid([
-        { label: "Project", value: params.projectName, icon: "&#127970;" },
-        { label: "Confirmation Number", value: params.confirmationNumber, icon: "&#128196;" },
-        { label: "Approved On", value: approvedOn, icon: "&#128197;" },
+        { label: "Project", value: params.projectName },
+        { label: "Confirmation Number", value: params.confirmationNumber },
+        { label: "Approved On", value: approvedOn },
       ])}
       <p style="margin:0;text-align:center;color:${MUTED};">You can login to the customer portal to view your EOI details and track next steps.</p>
       <div style="text-align:center;">${primaryButton("View Confirmation", portalUrl)}</div>
@@ -319,9 +319,9 @@ export function cpCustomerSubmittedEmailHtml(params: {
       <p style="margin:0 0 12px;">Dear <strong>${params.cpName}</strong>,</p>
       <p style="margin:0 0 16px;color:${MUTED};"><strong style="color:${NAVY};">${params.customerName}</strong> submitted an EOI for ${params.projectName}.</p>
       ${detailsGrid([
-        { label: "Project", value: params.projectName, icon: "&#127970;" },
-        { label: "Reference", value: params.referenceNumber, icon: "&#128196;" },
-        { label: "Status", value: "Submitted", icon: "&#9203;" },
+        { label: "Project", value: params.projectName },
+        { label: "Reference", value: params.referenceNumber },
+        { label: "Status", value: "Submitted" },
       ])}
     `),
     emailSupportBlock(),
@@ -354,9 +354,9 @@ export function leadOnlyAcceptedEmailHtml(params: {
   projectLocation: string;
   leadId?: string;
 }) {
-  const detailItems: { label: string; value: string; icon: string }[] = [];
+  const detailItems: { label: string; value: string }[] = [];
   if (params.leadId) {
-    detailItems.push({ label: "Lead ID", value: params.leadId, icon: "&#128196;" });
+    detailItems.push({ label: "Lead ID", value: params.leadId });
   }
   const details = detailItems.length ? detailsGrid(detailItems) : "";
 
@@ -469,17 +469,17 @@ export function leadMilestoneEmailHtml(params: {
 
   const details = [
     ...(params.recipientType === "CP" || params.recipientType === "ADMIN"
-      ? [{ label: "Customer / Lead", value: params.customerName, icon: "&#128100;" }]
+      ? [{ label: "Customer / Lead", value: params.customerName }]
       : []),
-    { label: "Project", value: params.projectName, icon: "&#127970;" },
-    { label: "Channel Partner", value: cpDisplay, icon: "&#128100;" },
+    { label: "Project", value: params.projectName },
+    { label: "Channel Partner", value: cpDisplay },
     ...(params.salespersonName && params.salespersonName.trim()
-      ? [{ label: "Salesperson", value: params.salespersonName, icon: "&#128188;" }]
+      ? [{ label: "Salesperson", value: params.salespersonName }]
       : []),
     ...(params.leadId
-      ? [{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }]
+      ? [{ label: "Lead ID", value: params.leadId }]
       : []),
-    { label: "Status", value: status, icon: isBooked ? "&#127881;" : "&#10003;" },
+    { label: "Status", value: status },
   ];
 
   const ctaLabel =

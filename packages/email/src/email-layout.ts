@@ -24,7 +24,7 @@ export function emailShell(body: string): string {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ECEFF3;padding:24px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(26,35,50,0.08);">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(26,35,50,0.06);">
           ${body}
         </table>
       </td>
@@ -41,9 +41,9 @@ export function emailHeader(stepLabel?: string): string {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
         <tr>
           <td align="center">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:999px;background:#ffffff;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ${BORDER};border-radius:4px;background:#ffffff;">
               <tr>
-                <td style="padding:10px 18px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:${NAVY};text-transform:uppercase;">
+                <td style="padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:0.06em;color:${NAVY};text-transform:uppercase;">
                   ${stepLabel}
                 </td>
               </tr>
@@ -55,40 +55,51 @@ export function emailHeader(stepLabel?: string): string {
 
   return `
     <tr>
-      <td style="padding:32px 32px 24px;text-align:center;background:#ffffff;">
-        <img src="${logoUrl}" alt="Goyal & Co. | Hariyana Group" width="320" style="max-width:320px;width:100%;height:auto;display:block;margin:0 auto;" />
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;">
-          <tr>
-            <td width="30%" style="border-bottom:1px solid ${GOLD};">&nbsp;</td>
-            <td style="padding:0 12px;font-size:11px;color:${MUTED};white-space:nowrap;font-style:italic;">creating landmarks since 1971</td>
-            <td width="30%" style="border-bottom:1px solid ${GOLD};">&nbsp;</td>
-          </tr>
-        </table>
+      <td style="padding:28px 32px 20px;text-align:center;background:#ffffff;border-bottom:1px solid ${BORDER};">
+        <img src="${logoUrl}" alt="Goyal & Co. | Hariyana Group" width="280" style="max-width:280px;width:100%;height:auto;display:block;margin:0 auto;" />
+        <p style="margin:12px 0 0;font-size:11px;letter-spacing:0.04em;color:${MUTED};">Goyal &amp; Co. | Hariyana Group</p>
         ${stepBlock}
       </td>
     </tr>`;
 }
 
-export function emailHero(title: string, highlight?: string, icon?: "check" | "info" | "warning"): string {
-  const iconHtml = icon === "check"
-    ? `<div style="width:56px;height:56px;border-radius:50%;background:rgba(201,168,76,0.12);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
-         <div style="width:40px;height:40px;border-radius:50%;background:${GOLD};color:#fff;font-size:22px;line-height:40px;text-align:center;">&#10003;</div>
-       </div>`
-    : icon === "warning"
-      ? `<div style="width:56px;height:56px;border-radius:50%;background:#FEF3C7;margin:0 auto 16px;line-height:56px;text-align:center;font-size:24px;color:#D97706;">!</div>`
-      : icon === "info"
-        ? `<div style="width:56px;height:56px;border-radius:50%;background:rgba(201,168,76,0.12);margin:0 auto 16px;line-height:56px;text-align:center;font-size:24px;color:${GOLD};">&#9432;</div>`
-        : "";
+export function emailHero(
+  title: string,
+  highlight?: string,
+  icon?: "check" | "info" | "warning",
+): string {
+  const statusLabel =
+    icon === "check"
+      ? highlight || "Confirmed"
+      : icon === "warning"
+        ? highlight || "Action required"
+        : icon === "info"
+          ? highlight || "Update"
+          : highlight;
 
-  const titleHtml = highlight
-    ? title.replace(highlight, `<span style="color:${GOLD};">${highlight}</span>`)
-    : title;
+  const statusColor =
+    icon === "warning" ? "#92400E" : icon === "check" ? "#166534" : NAVY;
+  const statusBg =
+    icon === "warning" ? "#FFFBEB" : icon === "check" ? "#ECFDF5" : LIGHT_BG;
+  const statusBorder =
+    icon === "warning" ? "#FDE68A" : icon === "check" ? "#A7F3D0" : BORDER;
+
+  const statusBadge = statusLabel
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
+         <tr>
+           <td style="padding:6px 12px;border-radius:4px;background:${statusBg};border:1px solid ${statusBorder};font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:${statusColor};">
+             ${statusLabel}
+           </td>
+         </tr>
+       </table>`
+    : "";
 
   return `
     <tr>
-      <td style="padding:8px 32px 0;text-align:center;">
-        ${iconHtml}
-        <h1 style="margin:0 0 8px;font-size:28px;line-height:1.25;color:${NAVY};font-weight:700;">${titleHtml}</h1>
+      <td style="padding:28px 32px 0;text-align:center;">
+        ${statusBadge}
+        <h1 style="margin:0;font-size:24px;line-height:1.35;color:${NAVY};font-weight:700;">${title}</h1>
+        <div style="width:48px;height:2px;background:${GOLD};margin:16px auto 0;"></div>
       </td>
     </tr>`;
 }
@@ -108,35 +119,42 @@ export function projectCard(params: {
   startingPrice?: string;
 }): string {
   return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:8px;">
       <tr>
-        <td style="padding:20px 24px;">
-          <table role="presentation" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="vertical-align:top;padding-right:14px;font-size:28px;color:${GOLD};">&#127970;</td>
-              <td>
-                <p style="margin:0;font-size:20px;font-weight:700;color:${NAVY};">${params.projectName}</p>
-                <p style="margin:6px 0 0;font-size:14px;color:${MUTED};">${params.projectLocation}</p>
-                ${params.startingPrice ? `<p style="margin:12px 0 0;font-size:15px;font-weight:600;color:${GOLD};">Starting ${params.startingPrice}</p>` : ""}
-              </td>
-            </tr>
-          </table>
+        <td style="padding:18px 20px;border-left:3px solid ${GOLD};">
+          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${MUTED};">Project</p>
+          <p style="margin:6px 0 0;font-size:18px;font-weight:700;color:${NAVY};">${params.projectName}</p>
+          <p style="margin:6px 0 0;font-size:14px;color:${MUTED};">${params.projectLocation}</p>
+          ${
+            params.startingPrice
+              ? `<p style="margin:10px 0 0;font-size:14px;font-weight:600;color:${NAVY};">Starting ${params.startingPrice}</p>`
+              : ""
+          }
         </td>
       </tr>
     </table>`;
 }
 
+/** Professional label / value rows — no icons. */
 export function detailsGrid(items: { label: string; value: string; icon?: string }[]): string {
-  const cols = items.map((item) => `
-    <td width="${Math.floor(100 / items.length)}%" style="padding:16px 12px;text-align:center;vertical-align:top;">
-      <div style="font-size:18px;color:${GOLD};margin-bottom:8px;">${item.icon || "&#9679;"}</div>
-      <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:0.08em;color:${MUTED};text-transform:uppercase;">${item.label}</p>
-      <p style="margin:0;font-size:14px;font-weight:700;color:${NAVY};">${item.value}</p>
-    </td>`).join("");
+  if (!items.length) return "";
+  const rows = items
+    .map(
+      (item, index) => `
+    <tr>
+      <td style="padding:12px 16px;width:38%;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:${MUTED};border-top:${
+        index === 0 ? "0" : `1px solid ${BORDER}`
+      };vertical-align:top;">${item.label}</td>
+      <td style="padding:12px 16px;font-size:14px;font-weight:600;color:${NAVY};border-top:${
+        index === 0 ? "0" : `1px solid ${BORDER}`
+      };vertical-align:top;">${item.value}</td>
+    </tr>`,
+    )
+    .join("");
 
   return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#ffffff;border:1px solid ${BORDER};border-radius:12px;box-shadow:0 2px 12px rgba(26,35,50,0.04);">
-      <tr>${cols}</tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background:#ffffff;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;">
+      ${rows}
     </table>`;
 }
 
@@ -147,7 +165,7 @@ export function numberedSteps(steps: string[]): string {
         <table role="presentation" cellpadding="0" cellspacing="0">
           <tr>
             <td style="width:28px;vertical-align:top;">
-              <div style="width:24px;height:24px;border-radius:50%;border:2px solid ${GOLD};color:${GOLD};font-size:12px;font-weight:700;line-height:20px;text-align:center;">${i + 1}</div>
+              <div style="width:24px;height:24px;border-radius:4px;background:${LIGHT_BG};border:1px solid ${BORDER};color:${NAVY};font-size:12px;font-weight:700;line-height:22px;text-align:center;">${i + 1}</div>
             </td>
             <td style="padding-left:12px;font-size:14px;line-height:1.6;color:${MUTED};">${step}</td>
           </tr>
@@ -165,8 +183,8 @@ export function primaryButton(label: string, href: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;">
       <tr>
-        <td align="center" style="border-radius:8px;background:${GOLD};">
-          <a href="${href}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;">${label} &rarr;</a>
+        <td align="center" style="border-radius:6px;background:${GOLD};">
+          <a href="${href}" style="display:inline-block;padding:13px 28px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.02em;">${label}</a>
         </td>
       </tr>
     </table>`;
@@ -176,8 +194,8 @@ export function secondaryButton(label: string, href: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px auto 24px;">
       <tr>
-        <td align="center" style="border-radius:8px;border:2px solid ${NAVY};">
-          <a href="${href}" style="display:inline-block;padding:12px 28px;color:${NAVY};text-decoration:none;font-size:15px;font-weight:600;">${label} &rarr;</a>
+        <td align="center" style="border-radius:6px;border:1px solid ${NAVY};">
+          <a href="${href}" style="display:inline-block;padding:12px 24px;color:${NAVY};text-decoration:none;font-size:14px;font-weight:600;">${label}</a>
         </td>
       </tr>
     </table>`;
@@ -188,10 +206,10 @@ export function buttonRow(buttons: { label: string; href: string; variant?: "pri
     const isPrimary = b.variant !== "secondary";
     return `
       <td style="padding:4px;">
-        <a href="${b.href}" style="display:inline-block;padding:14px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;${
+        <a href="${b.href}" style="display:inline-block;padding:12px 20px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;${
           isPrimary
             ? `background:${GOLD};color:#ffffff;`
-            : `background:#ffffff;color:${NAVY};border:2px solid ${NAVY};`
+            : `background:#ffffff;color:${NAVY};border:1px solid ${NAVY};`
         }">${b.label}</a>
       </td>`;
   }).join("");
@@ -207,8 +225,8 @@ export function infoBox(content: string, variant: "default" | "warning" = "defau
   const border = variant === "warning" ? "#FDE68A" : BORDER;
   const color = variant === "warning" ? "#92400E" : NAVY;
   return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;background:${bg};border:1px solid ${border};border-radius:12px;">
-      <tr><td style="padding:18px 20px;font-size:14px;line-height:1.6;color:${color};">${content}</td></tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;background:${bg};border:1px solid ${border};border-radius:8px;">
+      <tr><td style="padding:16px 18px;font-size:14px;line-height:1.6;color:${color};">${content}</td></tr>
     </table>`;
 }
 
@@ -216,28 +234,13 @@ export function emailSupportBlock(): string {
   return `
     <tr>
       <td style="padding:8px 32px 24px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:8px;">
           <tr>
             <td style="padding:20px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td width="40" style="vertical-align:top;">
-                    <div style="width:36px;height:36px;border-radius:50%;background:rgba(201,168,76,0.15);text-align:center;line-height:36px;font-size:18px;color:${GOLD};">&#128222;</div>
-                  </td>
-                  <td>
-                    <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:${NAVY};">Need Assistance?</p>
-                    <p style="margin:0 0 12px;font-size:13px;color:${MUTED};">Our relationship team is here to help you.</p>
-                    <p style="margin:0 0 6px;font-size:13px;color:${NAVY};">&#128222; +91 80888 66000 &nbsp;|&nbsp; +91 80888 33000</p>
-                    <table role="presentation" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="border-radius:6px;background:${NAVY};">
-                          <a href="mailto:info.bng@goyalco.com" style="display:inline-block;padding:8px 14px;color:#ffffff;text-decoration:none;font-size:12px;font-weight:600;">Email Support</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+              <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:${NAVY};">Need assistance?</p>
+              <p style="margin:0 0 12px;font-size:13px;color:${MUTED};line-height:1.5;">Our relationship team is available to help.</p>
+              <p style="margin:0 0 4px;font-size:13px;color:${NAVY};">Phone: +91 80888 66000 | +91 80888 33000</p>
+              <p style="margin:0;font-size:13px;color:${NAVY};">Email: <a href="mailto:info.bng@goyalco.com" style="color:${NAVY};text-decoration:underline;">info.bng@goyalco.com</a></p>
             </td>
           </tr>
         </table>
@@ -248,12 +251,12 @@ export function emailSupportBlock(): string {
 export function emailFooter(): string {
   return `
     <tr>
-      <td style="padding:0 32px 32px;text-align:center;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${BORDER};padding-top:20px;">
+      <td style="padding:0 32px 28px;text-align:center;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${BORDER};">
           <tr>
-            <td style="text-align:center;">
-              <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${NAVY};">Goyal & Co. | Hariyana Group</p>
-              <p style="margin:0 0 16px;font-size:12px;color:${MUTED};">Building Trust. Creating Landmarks.</p>
+            <td style="padding-top:18px;text-align:center;">
+              <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:${NAVY};">Goyal &amp; Co. | Hariyana Group</p>
+              <p style="margin:0;font-size:12px;color:${MUTED};">Building Trust. Creating Landmarks.</p>
             </td>
           </tr>
         </table>
