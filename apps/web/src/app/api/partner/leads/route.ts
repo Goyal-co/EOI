@@ -252,17 +252,23 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const withVersion = (res: Response) => {
+    res.headers.set("x-eoi-punch", "v3-debug");
+    return res;
+  };
   try {
-    return await postPartnerLead(req);
+    return withVersion(await postPartnerLead(req));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("[Partner leads] unhandled POST error:", detail, error);
-    return NextResponse.json(
-      {
-        error: "Failed to create lead. Please try again.",
-        detail,
-      },
-      { status: 500 },
+    return withVersion(
+      NextResponse.json(
+        {
+          error: "Failed to create lead. Please try again.",
+          detail,
+        },
+        { status: 500 },
+      ),
     );
   }
 }
