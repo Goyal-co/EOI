@@ -59,7 +59,13 @@ export async function GET() {
 
   const ok = checks.database && checks.storage && checks.redis;
   return apiResponse(
-    { status: ok ? "ok" : "degraded", checks, timestamp: new Date().toISOString() },
+    {
+      status: ok ? "ok" : "degraded",
+      checks,
+      punch: "v4",
+      gitSha: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+      timestamp: new Date().toISOString(),
+    },
     ok ? 200 : 503
   );
 }
