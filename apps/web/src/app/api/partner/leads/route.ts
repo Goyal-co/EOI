@@ -1,6 +1,7 @@
 import { prisma } from "@goyal/db";
 import { leadCreateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { NextResponse } from "next/server";
 import { generateInviteToken } from "@goyal/auth";
 import { getAppBaseUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
@@ -13,6 +14,7 @@ import {
   phoneLockWindowMs,
 } from "@/lib/leads/phone";
 import { getIdentityPunchContext } from "@/lib/leads/identity-context";
+import { generatePublicLeadId } from "@/lib/leads/id-generator";
 
 /** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
 export const maxDuration = 60;
@@ -23,7 +25,21 @@ class LeadCreateConflict extends Error {
     readonly code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED",
   ) {
     super(message);
+    this.name = "LeadCreateConflict";
   }
+}
+
+function isLeadCreateConflict(
+  error: unknown,
+): error is { message: string; code: "DUPLICATE_LEAD" | "IDENTITY_LOCKED" } {
+  if (error instanceof LeadCreateConflict) return true;
+  if (!error || typeof error !== "object") return false;
+  const e = error as { name?: string; code?: unknown; message?: unknown };
+  return (
+    e.name === "LeadCreateConflict"
+    && (e.code === "DUPLICATE_LEAD" || e.code === "IDENTITY_LOCKED")
+    && typeof e.message === "string"
+  );
 }
 
 function serializePartnerLead(lead: {
@@ -239,8 +255,15 @@ export async function POST(req: Request) {
   try {
     return await postPartnerLead(req);
   } catch (error) {
-    console.error("[Partner leads] unhandled POST error:", error);
-    return apiError("Failed to create lead. Please try again.", 500);
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("[Partner leads] unhandled POST error:", detail, error);
+    return NextResponse.json(
+      {
+        error: "Failed to create lead. Please try again.",
+        detail: process.env.NODE_ENV === "production" ? detail : undefined,
+      },
+      { status: 500 },
+    );
   }
 }
 
@@ -298,19 +321,10 @@ async function postPartnerLead(req: Request) {
     }
   }
 
-  const { generatePublicLeadId } = await import("@/lib/leads/id-generator");
   let lead;
   try {
     const createdId = await prisma.$transaction(
       async (tx) => {
-        // Serialize both phone and email identities so simultaneous CP submissions
-        // cannot bypass duplicate or 15-day ownership checks.
-        const identityKeys = [`lead-email:${email}`, `lead-phone:${mobile}`].sort();
-        for (const key of identityKeys) {
-          // $executeRaw — pg_advisory_xact_lock returns void; $queryRaw fails to deserialize it.
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
-        }
-
         const existingLead = await tx.lead.findFirst({
           where: {
             cpId,
@@ -349,10 +363,10 @@ async function postPartnerLead(req: Request) {
             lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
           );
           const daysLeft = daysRemainingUntil(unlockAt);
-        throw new LeadCreateConflict(
-          `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-          "IDENTITY_LOCKED",
-        );
+          throw new LeadCreateConflict(
+            `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+            "IDENTITY_LOCKED",
+          );
         }
 
         const existingIdentity = await tx.lead.findFirst({
@@ -366,10 +380,6 @@ async function postPartnerLead(req: Request) {
           orderBy: { createdAt: "asc" },
           select: { leadId: true },
         });
-        if (!existingIdentity?.leadId) {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"lead-public-id-sequence"}, 0))`;
-        }
-        // Avoid full-table COUNT under the lock — approximate seq from recent max createdAt order.
         const latestForSeq = existingIdentity?.leadId
           ? null
           : await tx.lead.findFirst({
@@ -422,8 +432,8 @@ async function postPartnerLead(req: Request) {
         }
         return createdLead.id;
       },
-      // Neon round-trips + advisory locks routinely exceed Prisma's 5s default.
-      { isolationLevel: "Serializable", maxWait: 10_000, timeout: 25_000 },
+      // Avoid Serializable + advisory locks — those were timing out on Vercel (empty 500).
+      { maxWait: 8_000, timeout: 12_000 },
     );
 
     lead = await prisma.lead.findUniqueOrThrow({
@@ -434,7 +444,7 @@ async function postPartnerLead(req: Request) {
       },
     });
   } catch (creationError) {
-    if (creationError instanceof LeadCreateConflict) {
+    if (isLeadCreateConflict(creationError)) {
       if (creationError.code === "DUPLICATE_LEAD") {
         const context = await getIdentityPunchContext(cpId, mobile, email);
         return apiError(creationError.message, 409, creationError.code, {
@@ -470,7 +480,13 @@ async function postPartnerLead(req: Request) {
     if (/serializ|deadlock|40001|40P01|P2028|timed out|timeout/i.test(message)) {
       return apiError("Another submission is in progress for this customer. Please try again.", 409);
     }
-    return apiError("Failed to create lead. Please try again.", 500);
+    return NextResponse.json(
+      {
+        error: "Failed to create lead. Please try again.",
+        detail: message,
+      },
+      { status: 500 },
+    );
   }
 
   const identityContext = await getIdentityPunchContext(cpId, mobile, email);
