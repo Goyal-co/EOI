@@ -57,8 +57,10 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Exclude Next.js internals + public static assets so auth never intercepts them
+  // Exclude Next.js internals, static assets, and all API routes.
+  // API handlers use withAuth()/webhook secrets themselves — running Auth.js
+  // middleware on JSON POSTs can abort the Edge request with an empty 500.
   matcher: [
-    "/((?!_next/|favicon.ico|images/|api/auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|webmanifest)$).*)",
+    "/((?!_next/|favicon.ico|images/|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|webmanifest)$).*)",
   ],
 };
