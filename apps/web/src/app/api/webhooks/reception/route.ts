@@ -227,7 +227,9 @@ export async function POST(req: Request) {
     }
 
     const notificationResults = await Promise.allSettled(
-      notifyTargets.map((lead) => notifyMilestone(lead, "SITE_VISIT_COMPLETED")),
+      notifyTargets.map((lead) =>
+        notifyMilestone(lead, "SITE_VISIT_COMPLETED", { salesperson }),
+      ),
     );
     logNotificationFailures(notificationResults);
 
@@ -311,7 +313,7 @@ export async function POST(req: Request) {
     }
 
     const notificationResults = await Promise.allSettled(
-      changed.map((lead) => notifyMilestone(lead, "BOOKED")),
+      changed.map((lead) => notifyMilestone(lead, "BOOKED", { salesperson })),
     );
     logNotificationFailures(notificationResults);
 
@@ -350,6 +352,7 @@ export async function POST(req: Request) {
 async function notifyMilestone(
   lead: Awaited<ReturnType<typeof getLeadForNotification>>,
   milestone: "SITE_VISIT_COMPLETED" | "BOOKED",
+  extras?: { salesperson?: string | null },
 ) {
   return NotificationService.notifyLeadMilestone({
     milestone,
@@ -359,9 +362,11 @@ async function notifyMilestone(
     customerEmail: lead.customerEmail,
     customerUserId: lead.customer?.user.id,
     cpName: lead.cp.user.name || lead.cp.companyName || "Channel Partner",
+    companyName: lead.cp.companyName || undefined,
     cpEmail: lead.cp.user.email,
     cpUserId: lead.cp.user.id,
     projectName: lead.project.name,
+    salespersonName: extras?.salesperson || undefined,
   });
 }
 

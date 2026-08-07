@@ -435,29 +435,53 @@ export function leadMilestoneEmailHtml(params: {
   customerName: string;
   projectName: string;
   leadId?: string;
+  cpName: string;
+  companyName?: string;
+  salespersonName?: string;
   milestone: "SITE_VISIT_COMPLETED" | "BOOKED";
   portalUrl: string;
-  recipientType: "CP" | "CUSTOMER";
+  recipientType: "CP" | "CUSTOMER" | "ADMIN";
 }) {
   const isBooked = params.milestone === "BOOKED";
   const title = isBooked ? "Booking Confirmed" : "Site Visit Completed";
   const status = isBooked ? "Booked" : "Site Visit Done";
-  const message =
-    params.recipientType === "CP"
-      ? isBooked
-        ? `${params.customerName}'s booking for ${params.projectName} has been confirmed. The lead is now marked as Booked in your Partner Portal.`
-        : `${params.customerName}'s site visit for ${params.projectName} has been completed and confirmed. The lead is now marked as Site Visit Done in your Partner Portal.`
-      : isBooked
-        ? `Your booking for ${params.projectName} has been confirmed. You can view the latest status in your Customer Portal.`
-        : `Your site visit for ${params.projectName} has been completed and confirmed. You can view the latest status in your Customer Portal.`;
+  const cpLabel = params.companyName
+    ? `${params.cpName} (${params.companyName})`
+    : params.cpName;
+
+  let message: string;
+  if (params.recipientType === "CP") {
+    message = isBooked
+      ? `${params.customerName}'s booking for ${params.projectName} has been confirmed with you (${cpLabel}). The lead is now marked as Booked in your Partner Portal.`
+      : `${params.customerName}'s site visit for ${params.projectName} has been completed with you (${cpLabel}). The lead is now marked as Site Visit Done in your Partner Portal.`;
+  } else if (params.recipientType === "ADMIN") {
+    message = isBooked
+      ? `${params.customerName} has been marked Booked for ${params.projectName} with Channel Partner ${cpLabel}.`
+      : `${params.customerName} completed a site visit for ${params.projectName} with Channel Partner ${cpLabel}.`;
+  } else {
+    message = isBooked
+      ? `Your booking for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpLabel}</strong> has been confirmed.`
+      : `Your site visit for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpLabel}</strong> has been completed and confirmed.`;
+  }
 
   const details = [
     { label: "Project", value: params.projectName, icon: "&#127970;" },
+    { label: "Channel Partner", value: cpLabel, icon: "&#128100;" },
+    ...(params.salespersonName
+      ? [{ label: "Salesperson", value: params.salespersonName, icon: "&#128188;" }]
+      : []),
     ...(params.leadId
       ? [{ label: "Lead ID", value: params.leadId, icon: "&#128196;" }]
       : []),
     { label: "Status", value: status, icon: isBooked ? "&#127881;" : "&#10003;" },
   ];
+
+  const ctaLabel =
+    params.recipientType === "CP"
+      ? "View Lead Status"
+      : params.recipientType === "ADMIN"
+        ? "Open Admin Leads"
+        : "Open Customer Portal";
 
   return wrapEmail([
     emailHeader(),
@@ -466,10 +490,7 @@ export function leadMilestoneEmailHtml(params: {
       <p style="margin:0 0 12px;">Dear <strong>${params.recipientName}</strong>,</p>
       <p style="margin:0 0 16px;color:${MUTED};">${message}</p>
       ${detailsGrid(details)}
-      <div style="text-align:center;">${primaryButton(
-        params.recipientType === "CP" ? "View Lead Status" : "Open Customer Portal",
-        params.portalUrl,
-      )}</div>
+      <div style="text-align:center;">${primaryButton(ctaLabel, params.portalUrl)}</div>
     `),
     emailSupportBlock(),
     emailFooter(),
@@ -602,6 +623,9 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
     leadId: "{{leadId}}",
+    cpName: "{{cpName}}",
+    companyName: "{{companyName}}",
+    salespersonName: "{{salespersonName}}",
     milestone: "SITE_VISIT_COMPLETED",
     portalUrl: "{{portalUrl}}",
     recipientType: "CP",
@@ -611,6 +635,9 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
     leadId: "{{leadId}}",
+    cpName: "{{cpName}}",
+    companyName: "{{companyName}}",
+    salespersonName: "{{salespersonName}}",
     milestone: "SITE_VISIT_COMPLETED",
     portalUrl: "{{portalUrl}}",
     recipientType: "CUSTOMER",
@@ -620,6 +647,9 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
     leadId: "{{leadId}}",
+    cpName: "{{cpName}}",
+    companyName: "{{companyName}}",
+    salespersonName: "{{salespersonName}}",
     milestone: "BOOKED",
     portalUrl: "{{portalUrl}}",
     recipientType: "CP",
@@ -629,6 +659,9 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     customerName: "{{customerName}}",
     projectName: "{{projectName}}",
     leadId: "{{leadId}}",
+    cpName: "{{cpName}}",
+    companyName: "{{companyName}}",
+    salespersonName: "{{salespersonName}}",
     milestone: "BOOKED",
     portalUrl: "{{portalUrl}}",
     recipientType: "CUSTOMER",

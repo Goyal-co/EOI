@@ -136,17 +136,39 @@ export async function GET(
       eoiReference: lead.eoi?.referenceNumber || null,
       createdAt: lead.createdAt,
     })),
-    timeline: identity.events.map((event) => ({
-      id: event.id,
-      type: event.type,
-      occurredAt: event.occurredAt,
-      actorType: event.actorType,
-      cpId: event.cpId,
-      cpName: event.cp?.user.name || event.cp?.companyName || null,
-      projectId: event.projectId,
-      projectName: event.project?.name || null,
-      leadAssociationId: event.leadId,
-      metadata: event.metadata,
-    })),
+    timeline: identity.events.map((event) => {
+      const meta =
+        event.metadata && typeof event.metadata === "object"
+          ? (event.metadata as Record<string, unknown>)
+          : {};
+      const salesperson =
+        typeof meta.salesperson === "string" && meta.salesperson.trim()
+          ? meta.salesperson.trim()
+          : null;
+      const cpName = event.cp?.user.name || event.cp?.companyName || null;
+      const projectName = event.project?.name || null;
+      const summaryParts = [
+        event.type.replace(/_/g, " "),
+        cpName ? `CP: ${cpName}` : null,
+        projectName ? `Project: ${projectName}` : null,
+        salesperson ? `Sales: ${salesperson}` : null,
+      ].filter(Boolean);
+
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: event.occurredAt,
+        actorType: event.actorType,
+        cpId: event.cpId,
+        cpName,
+        companyName: event.cp?.companyName || null,
+        projectId: event.projectId,
+        projectName,
+        leadAssociationId: event.leadId,
+        salesperson,
+        summary: summaryParts.join(" · "),
+        metadata: event.metadata,
+      };
+    }),
   });
 }

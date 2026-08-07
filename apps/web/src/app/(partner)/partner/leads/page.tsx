@@ -42,13 +42,6 @@ interface Lead {
   confirmationStatus?: string | null;
   siteVisitStatus?: string;
   siteVisitDate?: string | null;
-  siteVisitHistory?: Array<{
-    id: string;
-    type?: string;
-    occurredAt: string;
-    projectName?: string | null;
-    salesperson?: string | null;
-  }>;
   fosName?: string | null;
   createdAt: string;
   lockExpiresAt?: string;
@@ -475,25 +468,12 @@ function PartnerLeadsContent() {
                   </div>
                   {selectedLead.siteVisitDate && (
                     <p className="text-sm text-muted-foreground">
-                      Latest: {formatDate(selectedLead.siteVisitDate)}
+                      Date: {formatDate(selectedLead.siteVisitDate)}
                     </p>
                   )}
-                  {selectedLead.siteVisitHistory && selectedLead.siteVisitHistory.length > 0 ? (
-                    <ul className="mt-2 space-y-1 border-t border-emerald-100 pt-2">
-                      {selectedLead.siteVisitHistory.slice(0, 8).map((v) => (
-                        <li key={v.id} className="text-xs text-emerald-900">
-                          {(v.type || "SITE_VISIT").replace(/_/g, " ")} ·{" "}
-                          {new Date(v.occurredAt).toLocaleString("en-IN")}
-                          {v.projectName ? ` · ${v.projectName}` : ""}
-                          {v.salesperson ? ` · ${v.salesperson}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-emerald-700">
-                      Completed when confirmed by reception.
-                    </p>
-                  )}
+                  <p className="text-xs text-emerald-700">
+                    Completed when confirmed by reception. Full history is available in Admin.
+                  </p>
                 </div>
               ) : (
                 <>

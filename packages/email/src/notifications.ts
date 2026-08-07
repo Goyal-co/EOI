@@ -279,9 +279,11 @@ export class NotificationService {
     customerEmail: string;
     customerUserId?: string;
     cpName: string;
+    companyName?: string;
     cpEmail: string;
     cpUserId: string;
     projectName: string;
+    salespersonName?: string;
   }) {
     const isBooked = params.milestone === "BOOKED";
     const appUrl = getAppBaseUrl();
@@ -289,12 +291,21 @@ export class NotificationService {
       params.leadId ? `?search=${encodeURIComponent(params.leadId)}` : ""
     }`;
     const customerPortalUrl = `${appUrl}/customer`;
+    const adminLeadsUrl = `${appUrl}/admin/leads${
+      params.leadId ? `?q=${encodeURIComponent(params.leadId)}` : ""
+    }`;
+    const cpLabel = params.companyName
+      ? `${params.cpName} (${params.companyName})`
+      : params.cpName;
     const vars = {
       recipientName: "",
       customerName: params.customerName,
       projectName: params.projectName,
       leadId: params.leadId || "",
       portalUrl: "",
+      cpName: params.cpName,
+      companyName: params.companyName || "",
+      salespersonName: params.salespersonName || "",
     };
 
     const cpTemplateType = isBooked ? "LEAD_BOOKED_CP" : "SITE_VISIT_COMPLETED_CP";
@@ -303,12 +314,30 @@ export class NotificationService {
       : "SITE_VISIT_COMPLETED_CUSTOMER";
     const cpTitle = isBooked ? "Lead Booked" : "Site Visit Completed";
     const cpBody = isBooked
-      ? `${params.customerName}'s booking for ${params.projectName} is confirmed.`
-      : `${params.customerName}'s site visit for ${params.projectName} is completed.`;
+      ? `${params.customerName}'s booking for ${params.projectName} is confirmed (CP: ${cpLabel}).`
+      : `${params.customerName}'s site visit for ${params.projectName} is completed (CP: ${cpLabel}).`;
     const customerTitle = isBooked ? "Booking Confirmed" : "Site Visit Completed";
     const customerBody = isBooked
-      ? `Your booking for ${params.projectName} is confirmed.`
-      : `Your site visit for ${params.projectName} is completed.`;
+      ? `Your booking for ${params.projectName} with ${cpLabel} is confirmed.`
+      : `Your site visit for ${params.projectName} with ${cpLabel} is completed.`;
+    const adminTitle = isBooked ? "Lead Booked" : "Site Visit Completed";
+    const adminBody = isBooked
+      ? `${params.customerName} booked ${params.projectName} with ${cpLabel}.`
+      : `${params.customerName} completed site visit for ${params.projectName} with ${cpLabel}.`;
+
+    const milestoneHtml = (recipientName: string, recipientType: "CP" | "CUSTOMER" | "ADMIN", portalUrl: string) =>
+      leadMilestoneEmailHtml({
+        recipientName,
+        customerName: params.customerName,
+        projectName: params.projectName,
+        leadId: params.leadId,
+        cpName: params.cpName,
+        companyName: params.companyName,
+        salespersonName: params.salespersonName,
+        milestone: params.milestone,
+        portalUrl,
+        recipientType,
+      });
 
     const [cpEmail, customerEmail] = await Promise.all([
       this.resolveEmail(
@@ -316,17 +345,9 @@ export class NotificationService {
         { ...vars, recipientName: params.cpName, portalUrl: cpPortalUrl },
         {
           subject: isBooked
-            ? `Booking Confirmed — ${params.customerName} | ${params.projectName}`
-            : `Site Visit Completed — ${params.customerName} | ${params.projectName}`,
-          html: leadMilestoneEmailHtml({
-            recipientName: params.cpName,
-            customerName: params.customerName,
-            projectName: params.projectName,
-            leadId: params.leadId,
-            milestone: params.milestone,
-            portalUrl: cpPortalUrl,
-            recipientType: "CP",
-          }),
+            ? `Booking Confirmed — ${params.customerName} | ${params.projectName} | ${params.cpName}`
+            : `Site Visit Completed — ${params.customerName} | ${params.projectName} | ${params.cpName}`,
+          html: milestoneHtml(params.cpName, "CP", cpPortalUrl),
         },
       ),
       this.resolveEmail(
@@ -334,17 +355,9 @@ export class NotificationService {
         { ...vars, recipientName: params.customerName, portalUrl: customerPortalUrl },
         {
           subject: isBooked
-            ? `Your Booking is Confirmed — ${params.projectName}`
-            : `Your Site Visit is Completed — ${params.projectName}`,
-          html: leadMilestoneEmailHtml({
-            recipientName: params.customerName,
-            customerName: params.customerName,
-            projectName: params.projectName,
-            leadId: params.leadId,
-            milestone: params.milestone,
-            portalUrl: customerPortalUrl,
-            recipientType: "CUSTOMER",
-          }),
+            ? `Your Booking is Confirmed — ${params.projectName} | ${params.cpName}`
+            : `Your Site Visit is Completed — ${params.projectName} | ${params.cpName}`,
+          html: milestoneHtml(params.customerName, "CUSTOMER", customerPortalUrl),
         },
       ),
     ]);
@@ -383,7 +396,7 @@ export class NotificationService {
           },
         }),
       );
-    } else {
+    } else if (params.customerEmail) {
       deliveries.push(
         this.deliverEmail({
           to: params.customerEmail,
@@ -394,6 +407,44 @@ export class NotificationService {
           entityId: params.entityId,
         }),
       );
+    }
+
+    // In-app + support inbox for admins (history lives in Admin Leads)
+    try {
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        select: { id: true, email: true, name: true },
+        take: 20,
+      });
+      const supportEmail = await getSupportEmail().catch(() => null);
+      for (const admin of admins) {
+        deliveries.push(
+          this.emit({
+            userId: admin.id,
+            type: "PROJECT_STATUS_UPDATED",
+            title: adminTitle,
+            body: adminBody,
+            entityType: "Lead",
+            entityId: params.entityId,
+          }),
+        );
+      }
+      if (supportEmail && (await isAdminNotificationEnabled("projectUpdates").catch(() => true))) {
+        deliveries.push(
+          this.deliverEmail({
+            to: supportEmail,
+            subject: isBooked
+              ? `Lead Booked — ${params.customerName} | ${params.projectName} | ${params.cpName}`
+              : `Site Visit — ${params.customerName} | ${params.projectName} | ${params.cpName}`,
+            html: milestoneHtml("Admin", "ADMIN", adminLeadsUrl),
+            type: isBooked ? "LEAD_BOOKED_CP" : "SITE_VISIT_COMPLETED_CP",
+            entityType: "Lead",
+            entityId: params.entityId,
+          }),
+        );
+      }
+    } catch (e) {
+      console.error("[notifyLeadMilestone] admin notify failed", e);
     }
 
     return Promise.allSettled(deliveries);
