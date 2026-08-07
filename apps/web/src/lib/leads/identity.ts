@@ -45,6 +45,26 @@ export async function resolveOrCreateLeadIdentity(params: {
 
   const existing = await findLeadIdentityByContact(phone, emailLower, client);
   if (existing) {
+    // Keep phone/email normalized and attach any orphan Lead rows to this identity
+    await client.leadIdentity.update({
+      where: { id: existing.id },
+      data: {
+        primaryPhone: existing.primaryPhone || phone,
+        primaryEmail: existing.primaryEmail || emailLower,
+      },
+    });
+    await client.lead.updateMany({
+      where: {
+        identityId: null,
+        OR: [
+          { customerMobile: phone },
+          { customerMobile: { endsWith: phone } },
+          { customerEmail: { equals: emailLower, mode: "insensitive" } },
+          { leadId: existing.leadId },
+        ],
+      },
+      data: { identityId: existing.id },
+    });
     return {
       identityId: existing.id,
       publicLeadId: existing.leadId,
@@ -57,6 +77,7 @@ export async function resolveOrCreateLeadIdentity(params: {
       leadId: { not: null },
       OR: [
         { customerMobile: phone },
+        { customerMobile: { endsWith: phone } },
         { customerEmail: { equals: emailLower, mode: "insensitive" } },
       ],
     },
@@ -85,6 +106,19 @@ export async function resolveOrCreateLeadIdentity(params: {
       primaryPhone: phone,
       primaryEmail: emailLower,
     },
+  });
+
+  await client.lead.updateMany({
+    where: {
+      identityId: null,
+      OR: [
+        { customerMobile: phone },
+        { customerMobile: { endsWith: phone } },
+        { customerEmail: { equals: emailLower, mode: "insensitive" } },
+        { leadId: publicLeadId },
+      ],
+    },
+    data: { identityId: created.id },
   });
 
   return {
@@ -118,4 +152,31 @@ export async function recordLeadEvent(params: {
       occurredAt: params.occurredAt || new Date(),
     },
   });
+}
+
+/** Ensure a Lead row has identityId; create/link identity from phone/email if needed. */
+export async function ensureLeadHasIdentity(lead: {
+  id: string;
+  identityId?: string | null;
+  customerMobile: string;
+  customerEmail: string;
+  leadId?: string | null;
+  intentType?: string | null;
+  project?: { name?: string } | null;
+}) {
+  if (lead.identityId) return lead.identityId;
+  const resolved = await resolveOrCreateLeadIdentity({
+    mobile: lead.customerMobile,
+    email: lead.customerEmail,
+    intentType: lead.intentType === "LEAD_ONLY" ? "LEAD_ONLY" : "EOI",
+    projectName: lead.project?.name || "Project",
+  });
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: {
+      identityId: resolved.identityId,
+      ...(lead.leadId ? {} : { leadId: resolved.publicLeadId }),
+    },
+  });
+  return resolved.identityId;
 }

@@ -6,7 +6,7 @@ import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
 import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
-import { recordLeadEvent } from "@/lib/leads/identity";
+import { recordLeadEvent, ensureLeadHasIdentity } from "@/lib/leads/identity";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -184,9 +184,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         });
       }
 
-      if (lead.identityId) {
+      try {
+        const identityId = await ensureLeadHasIdentity(lead);
         await recordLeadEvent({
-          identityId: lead.identityId,
+          identityId,
           type: "CONFIRMED",
           leadId: lead.id,
           cpId: lead.cpId,
@@ -194,6 +195,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           actorType: "CUSTOMER",
           metadata: { intentType: "LEAD_ONLY" },
         });
+      } catch (e) {
+        console.error("[confirm] LeadEvent CONFIRMED failed", e);
       }
     } else {
       const emailResult = await NotificationService.notifyEOIInvitation({
@@ -211,16 +214,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
     }
 
-    if (!isLeadOnly && lead.identityId) {
-      await recordLeadEvent({
-        identityId: lead.identityId,
-        type: "CONFIRMED",
-        leadId: lead.id,
-        cpId: lead.cpId,
-        projectId: lead.projectId,
-        actorType: "CUSTOMER",
-        metadata: { intentType: "EOI" },
-      });
+    if (!isLeadOnly) {
+      try {
+        const identityId = await ensureLeadHasIdentity(lead);
+        await recordLeadEvent({
+          identityId,
+          type: "CONFIRMED",
+          leadId: lead.id,
+          cpId: lead.cpId,
+          projectId: lead.projectId,
+          actorType: "CUSTOMER",
+          metadata: { intentType: "EOI" },
+        });
+      } catch (e) {
+        console.error("[confirm] LeadEvent CONFIRMED EOI failed", e);
+      }
     }
 
     await writeAudit({
@@ -265,15 +273,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       });
     }
 
-    if (lead.identityId) {
+    try {
+      const identityId = await ensureLeadHasIdentity(lead);
       await recordLeadEvent({
-        identityId: lead.identityId,
+        identityId,
         type: "REJECTED",
         leadId: lead.id,
         cpId: lead.cpId,
         projectId: lead.projectId,
         actorType: "CUSTOMER",
       });
+    } catch (e) {
+      console.error("[confirm] LeadEvent REJECTED failed", e);
     }
 
     await writeAudit({

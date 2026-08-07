@@ -3,7 +3,7 @@ import { apiResponse, apiError } from "@/lib/api";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { NotificationService } from "@goyal/email";
-import { recordLeadEvent } from "@/lib/leads/identity";
+import { recordLeadEvent, ensureLeadHasIdentity } from "@/lib/leads/identity";
 
 /**
  * Reception / Booking Inventory → EOI Partner Portal webhook.
@@ -60,9 +60,9 @@ export async function POST(req: Request) {
   const cpId = String(raw.cpId || "").trim() || null;
   const projectId = String(raw.projectId || "").trim() || null;
   const projectName = String(raw.projectName || "").trim() || null;
-  const salesperson =
-    String(raw.salespersonName || raw.salesperson || raw.salespersonId || "").trim() ||
-    null;
+  const salespersonName = String(raw.salespersonName || "").trim() || null;
+  const salespersonId = String(raw.salespersonId || "").trim() || null;
+  const salesperson = salespersonName || null;
   const mobile = phoneRaw ? normalizeMobile(phoneRaw) : "";
 
   if (!mobile && !publicLeadId && !internalLeadId && !crmLeadId) {
@@ -200,29 +200,28 @@ export async function POST(req: Request) {
         },
       });
       changed.push(lead);
-      // First completion always notifies; repeat visits notify so CP sees another check-in
-      notifyTargets.push(lead);
+      if (!wasComplete) notifyTargets.push(lead);
 
-      if (lead.identityId || lead.identity?.id) {
-        try {
-          await recordLeadEvent({
-            identityId: lead.identityId || lead.identity!.id,
-            type: "SITE_VISIT",
-            leadId: lead.id,
-            cpId: lead.cpId,
-            projectId: lead.projectId,
-            actorType: "RECEPTION",
-            occurredAt: visitedAt,
-            metadata: {
-              salesperson,
-              publicLeadId: lead.leadId,
-              source: "reception_webhook",
-              repeat: wasComplete,
-            },
-          });
-        } catch (e) {
-          console.error("[Reception webhook] LeadEvent SITE_VISIT failed", e);
-        }
+      try {
+        const identityId = await ensureLeadHasIdentity(lead);
+        await recordLeadEvent({
+          identityId,
+          type: "SITE_VISIT",
+          leadId: lead.id,
+          cpId: lead.cpId,
+          projectId: lead.projectId,
+          actorType: "RECEPTION",
+          occurredAt: visitedAt,
+          metadata: {
+            salesperson: salespersonName,
+            salespersonId,
+            publicLeadId: lead.leadId,
+            source: "reception_webhook",
+            repeat: wasComplete,
+          },
+        });
+      } catch (e) {
+        console.error("[Reception webhook] LeadEvent SITE_VISIT failed", e);
       }
     }
 
@@ -268,52 +267,74 @@ export async function POST(req: Request) {
     event === "lead.booked" ||
     event === "booking.confirm"
   ) {
+    const bookedAt = completedAt || new Date();
     const changed = [];
+    const bookedNotify = [];
     for (const lead of leads) {
-      const result = await prisma.lead.updateMany({
-        where: {
-          id: lead.id,
-          OR: [
-            { leadStatus: { not: "BOOKED" } },
-            { journeyStatus: { not: "BOOKED" } },
-            { siteVisitStatus: { not: "COMPLETED" } },
-          ],
-        },
+      const needsSiteVisitEvent = lead.siteVisitStatus !== "COMPLETED";
+      const needsBooked =
+        lead.leadStatus !== "BOOKED" || lead.journeyStatus !== "BOOKED";
+      if (!needsBooked && !needsSiteVisitEvent) continue;
+
+      await prisma.lead.update({
+        where: { id: lead.id },
         data: {
-          leadStatus: "BOOKED",
-          journeyStatus: "BOOKED",
-          siteVisitStatus: "COMPLETED",
-          ...(completedAt && lead.siteVisitStatus !== "COMPLETED"
-            ? { siteVisitDate: completedAt }
+          ...(needsBooked
+            ? { leadStatus: "BOOKED" as const, journeyStatus: "BOOKED" as const }
             : {}),
+          siteVisitStatus: "COMPLETED",
+          ...(needsSiteVisitEvent ? { siteVisitDate: bookedAt } : {}),
         },
       });
-      if (result.count === 1) changed.push(lead);
+      changed.push(lead);
+      if (needsBooked) bookedNotify.push(lead);
 
-      if (lead.identityId || lead.identity?.id) {
-        try {
+      try {
+        const identityId = await ensureLeadHasIdentity(lead);
+        if (needsSiteVisitEvent) {
           await recordLeadEvent({
-            identityId: lead.identityId || lead.identity!.id,
+            identityId,
+            type: "SITE_VISIT",
+            leadId: lead.id,
+            cpId: lead.cpId,
+            projectId: lead.projectId,
+            actorType: "RECEPTION",
+            occurredAt: bookedAt,
+            metadata: {
+              salesperson: salespersonName,
+              salespersonId,
+              publicLeadId: lead.leadId,
+              source: "reception_webhook",
+              impliedBy: "booking.confirmed",
+            },
+          });
+        }
+        if (needsBooked) {
+          await recordLeadEvent({
+            identityId,
             type: "BOOKED",
             leadId: lead.id,
             cpId: lead.cpId,
             projectId: lead.projectId,
             actorType: "RECEPTION",
-            occurredAt: completedAt || new Date(),
+            occurredAt: bookedAt,
             metadata: {
-              salesperson,
+              salesperson: salespersonName,
+              salespersonId,
               publicLeadId: lead.leadId,
               source: "reception_webhook",
             },
           });
-        } catch (e) {
-          console.error("[Reception webhook] LeadEvent BOOKED failed", e);
         }
+      } catch (e) {
+        console.error("[Reception webhook] LeadEvent BOOKED failed", e);
       }
     }
 
     const notificationResults = await Promise.allSettled(
-      changed.map((lead) => notifyMilestone(lead, "BOOKED", { salesperson })),
+      bookedNotify.map((lead) =>
+        notifyMilestone(lead, "BOOKED", { salesperson: salespersonName }),
+      ),
     );
     logNotificationFailures(notificationResults);
 
@@ -332,7 +353,8 @@ export async function POST(req: Request) {
         crmLeadId,
         projectId,
         projectName,
-        salesperson,
+        salesperson: salespersonName,
+        salespersonId,
       },
       ipAddress: getIpFromRequest(req),
     });

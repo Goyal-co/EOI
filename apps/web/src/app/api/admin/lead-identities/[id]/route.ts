@@ -145,7 +145,8 @@ export async function GET(
         typeof meta.salesperson === "string" && meta.salesperson.trim()
           ? meta.salesperson.trim()
           : null;
-      const cpName = event.cp?.user.name || event.cp?.companyName || null;
+      const cpName = event.cp?.user.name || null;
+      const companyName = event.cp?.companyName || null;
       const projectName = event.project?.name || null;
       const summaryParts = [
         event.type.replace(/_/g, " "),
@@ -161,7 +162,7 @@ export async function GET(
         actorType: event.actorType,
         cpId: event.cpId,
         cpName,
-        companyName: event.cp?.companyName || null,
+        companyName,
         projectId: event.projectId,
         projectName,
         leadAssociationId: event.leadId,

@@ -447,8 +447,10 @@ function AdminLeadsContent() {
                           <div>
                             <dt className="text-muted-foreground">Channel Partner</dt>
                             <dd className="font-medium">
-                              {event.cpName || "—"}
-                              {event.companyName ? ` · ${event.companyName}` : ""}
+                              {event.cpName || event.companyName || "—"}
+                              {event.cpName && event.companyName && event.companyName !== event.cpName
+                                ? ` · ${event.companyName}`
+                                : ""}
                             </dd>
                           </div>
                           <div>

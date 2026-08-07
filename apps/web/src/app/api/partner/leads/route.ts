@@ -456,10 +456,10 @@ async function postPartnerLead(req: Request) {
       });
     }
 
-    const eventType = otherCpOnIdentity
-      ? "CP_ATTACHED"
-      : isRemap
-        ? "MAPPED"
+    const eventType = isRemap
+      ? "MAPPED"
+      : otherCpOnIdentity
+        ? "CP_ATTACHED"
         : "PUNCHED";
     await recordLeadEvent({
       identityId: identity.identityId,

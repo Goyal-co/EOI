@@ -445,29 +445,32 @@ export function leadMilestoneEmailHtml(params: {
   const isBooked = params.milestone === "BOOKED";
   const title = isBooked ? "Booking Confirmed" : "Site Visit Completed";
   const status = isBooked ? "Booked" : "Site Visit Done";
-  const cpLabel = params.companyName
-    ? `${params.cpName} (${params.companyName})`
-    : params.cpName;
+  const cpLabel = params.cpName;
+  const companySuffix =
+    params.companyName && params.companyName.trim() && params.companyName !== params.cpName
+      ? ` (${params.companyName})`
+      : "";
+  const cpDisplay = `${cpLabel}${companySuffix}`;
 
   let message: string;
   if (params.recipientType === "CP") {
     message = isBooked
-      ? `${params.customerName}'s booking for ${params.projectName} has been confirmed with you (${cpLabel}). The lead is now marked as Booked in your Partner Portal.`
-      : `${params.customerName}'s site visit for ${params.projectName} has been completed with you (${cpLabel}). The lead is now marked as Site Visit Done in your Partner Portal.`;
+      ? `${params.customerName}'s booking for ${params.projectName} has been confirmed with you (${cpDisplay}). The lead is now marked as Booked in your Partner Portal.`
+      : `${params.customerName}'s site visit for ${params.projectName} has been completed with you (${cpDisplay}). The lead is now marked as Site Visit Done in your Partner Portal.`;
   } else if (params.recipientType === "ADMIN") {
     message = isBooked
-      ? `${params.customerName} has been marked Booked for ${params.projectName} with Channel Partner ${cpLabel}.`
-      : `${params.customerName} completed a site visit for ${params.projectName} with Channel Partner ${cpLabel}.`;
+      ? `${params.customerName} has been marked Booked for ${params.projectName} with Channel Partner ${cpDisplay}.`
+      : `${params.customerName} completed a site visit for ${params.projectName} with Channel Partner ${cpDisplay}.`;
   } else {
     message = isBooked
-      ? `Your booking for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpLabel}</strong> has been confirmed.`
-      : `Your site visit for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpLabel}</strong> has been completed and confirmed.`;
+      ? `Your booking for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpDisplay}</strong> has been confirmed.`
+      : `Your site visit for ${params.projectName} with Channel Partner <strong style="color:${NAVY};">${cpDisplay}</strong> has been completed and confirmed.`;
   }
 
   const details = [
     { label: "Project", value: params.projectName, icon: "&#127970;" },
-    { label: "Channel Partner", value: cpLabel, icon: "&#128100;" },
-    ...(params.salespersonName
+    { label: "Channel Partner", value: cpDisplay, icon: "&#128100;" },
+    ...(params.salespersonName && params.salespersonName.trim()
       ? [{ label: "Salesperson", value: params.salespersonName, icon: "&#128188;" }]
       : []),
     ...(params.leadId
@@ -513,10 +516,10 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   CP_REGISTERED: "New CP Registration — Goyal & Co. | Hariyana Group",
   CUSTOMER_SUBMITTED_EOI: "Customer EOI Submitted — {{projectName}}",
   CUSTOMER_REJECTED_CP: "Customer Declined Association — {{projectName}}",
-  SITE_VISIT_COMPLETED_CP: "Site Visit Completed — {{customerName}} | {{projectName}}",
-  SITE_VISIT_COMPLETED_CUSTOMER: "Your Site Visit is Completed — {{projectName}}",
-  LEAD_BOOKED_CP: "Booking Confirmed — {{customerName}} | {{projectName}}",
-  LEAD_BOOKED_CUSTOMER: "Your Booking is Confirmed — {{projectName}}",
+  SITE_VISIT_COMPLETED_CP: "Site Visit Completed — {{customerName}} | {{projectName}} | {{cpName}}",
+  SITE_VISIT_COMPLETED_CUSTOMER: "Your Site Visit is Completed — {{projectName}} | {{cpName}}",
+  LEAD_BOOKED_CP: "Booking Confirmed — {{customerName}} | {{projectName}} | {{cpName}}",
+  LEAD_BOOKED_CUSTOMER: "Your Booking is Confirmed — {{projectName}} | {{cpName}}",
 };
 
 export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {

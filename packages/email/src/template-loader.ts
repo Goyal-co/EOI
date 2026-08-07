@@ -122,6 +122,10 @@ export async function syncDefaultEmailTemplates(options?: {
     "EOI_INVITATION",
     "LEAD_ONLY_ACCEPTED",
     "LEAD_ONLY_ACCEPTED_CP",
+    "SITE_VISIT_COMPLETED_CP",
+    "SITE_VISIT_COMPLETED_CUSTOMER",
+    "LEAD_BOOKED_CP",
+    "LEAD_BOOKED_CUSTOMER",
   ]);
   let created = 0;
   let updated = 0;

@@ -63,6 +63,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
   if (!lead) return apiError("Lead not found", 404);
 
+  if (
+    lead.siteVisitStatus === "COMPLETED"
+    && (parsed.data.siteVisitStatus !== undefined || parsed.data.siteVisitDate !== undefined)
+  ) {
+    return apiError(
+      "Site visit already completed by reception and cannot be changed by partner",
+      409,
+    );
+  }
+
   let patch;
   try {
     patch = resolveSiteVisit(parsed.data);
