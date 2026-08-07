@@ -260,7 +260,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Failed to create lead. Please try again.",
-        detail: process.env.NODE_ENV === "production" ? detail : undefined,
+        detail,
       },
       { status: 500 },
     );
@@ -323,121 +323,114 @@ async function postPartnerLead(req: Request) {
 
   let lead;
   try {
-    const createdId = await prisma.$transaction(
-      async (tx) => {
-        const existingLead = await tx.lead.findFirst({
-          where: {
-            cpId,
-            projectId: parsed.data.projectId,
-            OR: [
-              { customerMobile: mobile },
-              { customerEmail: { equals: email, mode: "insensitive" } },
-            ],
-            journeyStatus: { not: "REJECTED" },
-          },
-          select: { id: true },
-        });
-        if (existingLead) {
-          throw new LeadCreateConflict(
-            "This customer is already registered on this project. Open the lead to punch another project.",
-            "DUPLICATE_LEAD",
-          );
-        }
+    const existingLead = await prisma.lead.findFirst({
+      where: {
+        cpId,
+        projectId: parsed.data.projectId,
+        OR: [
+          { customerMobile: mobile },
+          { customerEmail: { equals: email, mode: "insensitive" } },
+        ],
+        journeyStatus: { not: "REJECTED" },
+      },
+      select: { id: true },
+    });
+    if (existingLead) {
+      throw new LeadCreateConflict(
+        "This customer is already registered on this project. Open the lead to punch another project.",
+        "DUPLICATE_LEAD",
+      );
+    }
 
-        const lockSince = new Date(Date.now() - phoneLockWindowMs());
-        const lockedByOtherCp = await tx.lead.findFirst({
-          where: {
-            cpId: { not: cpId },
-            createdAt: { gte: lockSince },
-            journeyStatus: { not: "REJECTED" },
-            OR: [
-              { customerMobile: mobile },
-              { customerEmail: { equals: email, mode: "insensitive" } },
-            ],
-          },
-          orderBy: { createdAt: "asc" },
-          select: { createdAt: true },
-        });
-        if (lockedByOtherCp) {
-          const unlockAt = new Date(
-            lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
-          );
-          const daysLeft = daysRemainingUntil(unlockAt);
-          throw new LeadCreateConflict(
-            `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-            "IDENTITY_LOCKED",
-          );
-        }
+    const lockSince = new Date(Date.now() - phoneLockWindowMs());
+    const lockedByOtherCp = await prisma.lead.findFirst({
+      where: {
+        cpId: { not: cpId },
+        createdAt: { gte: lockSince },
+        journeyStatus: { not: "REJECTED" },
+        OR: [
+          { customerMobile: mobile },
+          { customerEmail: { equals: email, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    });
+    if (lockedByOtherCp) {
+      const unlockAt = new Date(
+        lockedByOtherCp.createdAt.getTime() + phoneLockWindowMs(),
+      );
+      const daysLeft = daysRemainingUntil(unlockAt);
+      throw new LeadCreateConflict(
+        `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+        "IDENTITY_LOCKED",
+      );
+    }
 
-        const existingIdentity = await tx.lead.findFirst({
-          where: {
-            leadId: { not: null },
-            OR: [
-              { customerMobile: mobile },
-              { customerEmail: { equals: email, mode: "insensitive" } },
-            ],
-          },
-          orderBy: { createdAt: "asc" },
+    const existingIdentity = await prisma.lead.findFirst({
+      where: {
+        leadId: { not: null },
+        OR: [
+          { customerMobile: mobile },
+          { customerEmail: { equals: email, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+      select: { leadId: true },
+    });
+    const latestForSeq = existingIdentity?.leadId
+      ? null
+      : await prisma.lead.findFirst({
+          where: { leadId: { not: null } },
+          orderBy: { createdAt: "desc" },
           select: { leadId: true },
         });
-        const latestForSeq = existingIdentity?.leadId
-          ? null
-          : await tx.lead.findFirst({
-              where: { leadId: { not: null } },
-              orderBy: { createdAt: "desc" },
-              select: { leadId: true },
-            });
-        let seq = Date.now() % 1_000_000;
-        if (latestForSeq?.leadId) {
-          const match = latestForSeq.leadId.match(/(\d+)$/);
-          if (match) seq = (Number(match[1]) % 1_000_000) + 1;
-        }
-        const publicLeadId =
-          existingIdentity?.leadId
-          || generatePublicLeadId(intentType, project.name, seq);
+    let seq = Date.now() % 1_000_000;
+    if (latestForSeq?.leadId) {
+      const match = latestForSeq.leadId.match(/(\d+)$/);
+      if (match) seq = (Number(match[1]) % 1_000_000) + 1;
+    }
+    const publicLeadId =
+      existingIdentity?.leadId
+      || generatePublicLeadId(intentType, project.name, seq);
 
-        const createdLead = await tx.lead.create({
-          data: {
-            leadId: publicLeadId,
-            cpId,
-            projectId: parsed.data.projectId,
-            customerName: parsed.data.customerName,
-            customerEmail: email,
-            customerMobile: mobile,
-            configuration: parsed.data.configuration || null,
-            fosName: parsed.data.fosName || null,
-            budget: parsed.data.budget,
-            city: parsed.data.city,
-            notes: parsed.data.notes,
-            intentType,
-            journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
-            confirmationStatus: sendConfirmation ? "PENDING" : null,
-            confirmationSentAt: sendConfirmation ? new Date() : null,
-            leadStatus: "LEAD_REGISTERED",
-            inviteToken,
-            inviteExpiresAt,
-          },
-          select: { id: true },
-        });
-
-        if (!isLeadOnly) {
-          await tx.eOI.create({
-            data: {
-              leadId: createdLead.id,
-              projectId: parsed.data.projectId,
-              cpId,
-              status: "PENDING_SUBMISSION",
-            },
-          });
-        }
-        return createdLead.id;
+    const createdLead = await prisma.lead.create({
+      data: {
+        leadId: publicLeadId,
+        cpId,
+        projectId: parsed.data.projectId,
+        customerName: parsed.data.customerName,
+        customerEmail: email,
+        customerMobile: mobile,
+        configuration: parsed.data.configuration || null,
+        fosName: parsed.data.fosName || null,
+        budget: parsed.data.budget,
+        city: parsed.data.city,
+        notes: parsed.data.notes,
+        intentType,
+        journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
+        confirmationStatus: sendConfirmation ? "PENDING" : null,
+        confirmationSentAt: sendConfirmation ? new Date() : null,
+        leadStatus: "LEAD_REGISTERED",
+        inviteToken,
+        inviteExpiresAt,
       },
-      // Avoid Serializable + advisory locks — those were timing out on Vercel (empty 500).
-      { maxWait: 8_000, timeout: 12_000 },
-    );
+      select: { id: true },
+    });
+
+    if (!isLeadOnly) {
+      await prisma.eOI.create({
+        data: {
+          leadId: createdLead.id,
+          projectId: parsed.data.projectId,
+          cpId,
+          status: "PENDING_SUBMISSION",
+        },
+      });
+    }
 
     lead = await prisma.lead.findUniqueOrThrow({
-      where: { id: createdId },
+      where: { id: createdLead.id },
       include: {
         project: { select: { id: true, name: true, location: true, eoiStatus: true } },
         cp: { select: { companyName: true, user: { select: { name: true } } } },
