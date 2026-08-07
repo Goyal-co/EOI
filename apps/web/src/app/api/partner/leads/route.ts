@@ -252,21 +252,19 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const withVersion = (res: Response) => {
-    res.headers.set("x-eoi-punch", "v3-debug");
+  const tag = (res: Response) => {
+    // Lets us confirm which deployment is serving leads.partnergoyalco.com
+    res.headers.set("x-eoi-punch", "v4");
     return res;
   };
   try {
-    return withVersion(await postPartnerLead(req));
+    return tag(await postPartnerLead(req));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("[Partner leads] unhandled POST error:", detail, error);
-    return withVersion(
+    return tag(
       NextResponse.json(
-        {
-          error: "Failed to create lead. Please try again.",
-          detail,
-        },
+        { error: "Failed to create lead. Please try again.", detail },
         { status: 500 },
       ),
     );
@@ -274,26 +272,10 @@ export async function POST(req: Request) {
 }
 
 async function postPartnerLead(req: Request) {
-  const debugStep = req.headers.get("x-punch-debug");
-  const step = (name: string) => {
-    if (debugStep === name || debugStep === "trace") {
-      console.info("[Partner leads] step", name);
-    }
-  };
-  const stopAt = (name: string) => {
-    if (debugStep === name) {
-      return NextResponse.json({ ok: true, stoppedAt: name }, { status: 200 });
-    }
-    return null;
-  };
-
-  step("auth");
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
-  const early = stopAt("auth");
-  if (early) return early;
 
   let body: unknown;
   try {
@@ -301,67 +283,38 @@ async function postPartnerLead(req: Request) {
   } catch {
     return apiError("Invalid request body", 400);
   }
-  step("parse");
   const parsed = leadCreateSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
-  {
-    const earlyParse = stopAt("parse");
-    if (earlyParse) return earlyParse;
-  }
 
   const cpId = session!.user.cpId!;
 
-  step("project");
   const project = await prisma.project.findUnique({
     where: { id: parsed.data.projectId },
     select: { eoiStatus: true, name: true },
   });
   if (!project) return apiError("Project not found", 404);
-  {
-    const earlyProject = stopAt("project");
-    if (earlyProject) return earlyProject;
-  }
 
   let intentType = parsed.data.intentType ?? (project.eoiStatus === "CLOSED" ? "LEAD_ONLY" : "EOI");
 
-  step("intent");
   const resolved = resolveLeadIntent(project.eoiStatus as "OPEN" | "CLOSED", intentType);
   if ("error" in resolved) return apiError(resolved.error, resolved.status);
   intentType = resolved.intentType;
-  {
-    const earlyIntent = stopAt("intent");
-    if (earlyIntent) return earlyIntent;
-  }
 
-  step("access");
   const access = await prisma.cPProjectAccess.findUnique({
     where: { cpId_projectId: { cpId, projectId: parsed.data.projectId } },
   });
   if (!access) return apiError("You do not have access to this project", 403);
-  {
-    const earlyAccess = stopAt("access");
-    if (earlyAccess) return earlyAccess;
-  }
 
   const mobile = normalizeMobile(parsed.data.mobile);
   const email = parsed.data.email.trim().toLowerCase();
   if (mobile.length !== 10) {
     return apiError("Enter a valid 10-digit mobile number");
   }
-  {
-    const earlyMobile = stopAt("mobile");
-    if (earlyMobile) return earlyMobile;
-  }
 
-  step("token");
   const inviteToken = generateInviteToken();
   const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const isLeadOnly = intentType === "LEAD_ONLY";
   const sendConfirmation = parsed.data.sendConfirmation ?? false;
-  {
-    const earlyToken = stopAt("token");
-    if (earlyToken) return earlyToken;
-  }
 
   if (!isLeadOnly && sendConfirmation) {
     if (!(parsed.data.configuration || "").trim()) {
@@ -372,14 +325,8 @@ async function postPartnerLead(req: Request) {
     }
   }
 
-  {
-    const earlyBeforeCreate = stopAt("before-create");
-    if (earlyBeforeCreate) return earlyBeforeCreate;
-  }
-
   let lead;
   try {
-    step("dup-check");
     const existingLead = await prisma.lead.findFirst({
       where: {
         cpId,
@@ -398,12 +345,7 @@ async function postPartnerLead(req: Request) {
         "DUPLICATE_LEAD",
       );
     }
-    {
-      const earlyDup = stopAt("dup-check");
-      if (earlyDup) return earlyDup;
-    }
 
-    step("lock-check");
     const lockSince = new Date(Date.now() - phoneLockWindowMs());
     const lockedByOtherCp = await prisma.lead.findFirst({
       where: {
@@ -428,12 +370,7 @@ async function postPartnerLead(req: Request) {
         "IDENTITY_LOCKED",
       );
     }
-    {
-      const earlyLock = stopAt("lock-check");
-      if (earlyLock) return earlyLock;
-    }
 
-    step("id-gen");
     const existingIdentity = await prisma.lead.findFirst({
       where: {
         leadId: { not: null },
@@ -460,12 +397,7 @@ async function postPartnerLead(req: Request) {
     const publicLeadId =
       existingIdentity?.leadId
       || generatePublicLeadId(intentType, project.name, seq);
-    {
-      const earlyId = stopAt("id-gen");
-      if (earlyId) return earlyId;
-    }
 
-    step("create");
     const createdLead = await prisma.lead.create({
       data: {
         leadId: publicLeadId,
@@ -500,12 +432,7 @@ async function postPartnerLead(req: Request) {
         },
       });
     }
-    {
-      const earlyCreate = stopAt("create");
-      if (earlyCreate) return earlyCreate;
-    }
 
-    step("reload");
     lead = await prisma.lead.findUniqueOrThrow({
       where: { id: createdLead.id },
       include: {
