@@ -4,6 +4,9 @@
  * `prisma generate` only needs a syntactically valid URL — it does not connect.
  * During Vercel `postinstall`, env vars can be missing briefly; use a placeholder
  * so install can finish. `migrate deploy` still requires a real DATABASE_URL.
+ *
+ * Neon pooler hosts (`*-pooler.*`) often hang on `migrate deploy` (DDL via PgBouncer).
+ * For migrate/db push we prefer an unpooled URL, or strip `-pooler` from the host.
  */
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
@@ -26,19 +29,51 @@ function isPgUrl(url) {
   return /^(postgresql|postgres):\/\//i.test(url);
 }
 
-function pickDatabaseUrl() {
-  const candidates = [
-    process.env.DATABASE_URL,
-    process.env.POSTGRES_PRISMA_URL,
-    process.env.POSTGRES_URL,
-    process.env.POSTGRES_URL_NON_POOLING,
-    process.env.DATABASE_URL_UNPOOLED,
-  ];
+function firstPgUrl(candidates) {
   for (const raw of candidates) {
     const url = stripQuotes(raw);
     if (url && isPgUrl(url)) return url;
   }
   return "";
+}
+
+function pickDatabaseUrl() {
+  return firstPgUrl([
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_PRISMA_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.DATABASE_URL_UNPOOLED,
+  ]);
+}
+
+/** Prefer explicit direct/unpooled env vars; else derive from pooler host. */
+function toDirectUrl(pooledUrl) {
+  const explicit = firstPgUrl([
+    process.env.DIRECT_URL,
+    process.env.DATABASE_URL_UNPOOLED,
+    process.env.POSTGRES_URL_NON_POOLING,
+  ]);
+  if (explicit) return explicit;
+
+  try {
+    const u = new URL(pooledUrl);
+    if (u.hostname.includes("-pooler.")) {
+      u.hostname = u.hostname.replace("-pooler.", ".");
+      return u.toString();
+    }
+  } catch {
+    // fall through
+  }
+  return pooledUrl;
+}
+
+function safeHost(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "(invalid-url)";
+  }
 }
 
 const args = process.argv.slice(2);
@@ -48,7 +83,11 @@ if (args.length === 0) {
 }
 
 const isGenerate = args[0] === "generate";
-const databaseUrl = pickDatabaseUrl();
+const needsDirect =
+  args[0] === "migrate"
+  || (args[0] === "db" && (args[1] === "push" || args[1] === "pull"));
+
+let databaseUrl = pickDatabaseUrl();
 
 if (!databaseUrl && !isGenerate) {
   console.error(`
@@ -62,8 +101,25 @@ Rules:
   - Value only (no DATABASE_URL= prefix)
   - No surrounding quotes
   - Must start with postgresql:// or postgres://
+
+Optional (recommended for Neon migrations):
+  DIRECT_URL=postgresql://USER:PASSWORD@HOST-without-pooler/DB?sslmode=require
 `);
   process.exit(1);
+}
+
+if (databaseUrl && needsDirect) {
+  const direct = toDirectUrl(databaseUrl);
+  if (direct !== databaseUrl) {
+    console.info(
+      `[prisma] migrate/db using direct host ${safeHost(direct)} (not pooler ${safeHost(databaseUrl)})`,
+    );
+  } else if (safeHost(databaseUrl).includes("-pooler")) {
+    console.warn(
+      `[prisma] WARNING: still on pooler host ${safeHost(databaseUrl)} — migrate may hang. Set DIRECT_URL.`,
+    );
+  }
+  databaseUrl = direct;
 }
 
 process.env.DATABASE_URL = databaseUrl || PLACEHOLDER_URL;
