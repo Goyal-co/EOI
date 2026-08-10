@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <AuthLayout portalLabel="Partner Portal">
+    <AuthLayout>
       <Card className="p-8 max-w-md mx-auto">
         <h2 className="text-page-title text-center mb-6">Set New Password</h2>
         <form onSubmit={handleSubmit} className="space-y-4">

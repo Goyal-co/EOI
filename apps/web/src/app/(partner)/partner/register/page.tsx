@@ -112,7 +112,6 @@ export default function PartnerRegisterPage() {
 
   return (
     <AuthLayout
-      portalLabel="Partner Portal"
       subtitle="Join our network of property advisor"
       description=""
     >

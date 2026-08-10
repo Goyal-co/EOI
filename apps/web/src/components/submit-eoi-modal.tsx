@@ -232,6 +232,26 @@ export function SubmitEOIModal({
           });
           return;
         }
+        if (res.status === 409 && data.code === "IDENTITY_LOCKED") {
+          addToast({
+            type: "error",
+            title: "Lead locked",
+            message:
+              (typeof data.error === "string" && data.error)
+              || "Another channel partner currently holds this phone/email. Try again after their lock expires.",
+          });
+          return;
+        }
+        if (res.status === 409 && data.code === "PRIOR_CP_COOLDOWN") {
+          addToast({
+            type: "error",
+            title: "Cooldown active",
+            message:
+              (typeof data.error === "string" && data.error)
+              || "You previously owned this lead during a lock. Wait for the 7-day cooldown before submitting again.",
+          });
+          return;
+        }
         throw new Error((data.error as string) || "Failed to submit");
       }
 

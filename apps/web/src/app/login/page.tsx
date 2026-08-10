@@ -41,7 +41,6 @@ export default function AdminLoginPage() {
 
   return (
     <AuthLayout
-      portalLabel="Admin Portal"
       backgroundImage={LOGIN_BG}
       subtitle="Manage projects, EOIs, and channel partners"
       highlightSubtitle="channel partners"
@@ -53,7 +52,7 @@ export default function AdminLoginPage() {
       ]}
       featuresPosition="bottom"
       showDescriptionDivider
-      formCardTitle="Admin Portal"
+      formCardTitle="Sign in"
       formCardSubtitle="Log in to manage projects, EOIs, and channel partners."
       formCardIcon={Shield}
     >

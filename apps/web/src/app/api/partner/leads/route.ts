@@ -8,15 +8,12 @@ import { getSMSProvider } from "@goyal/integrations";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveLeadIntent } from "@/lib/leads/intent";
 import {
-  daysRemainingUntil,
-  normalizeMobile,
-  phoneLockWindowMs,
-} from "@/lib/leads/phone";
-import {
   evaluateIdentityLock,
   getIdentityPunchContext,
+  resolvePartnerLockState,
 } from "@/lib/leads/identity-context";
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
+import { normalizeMobile } from "@/lib/leads/phone";
 
 /** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
 export const maxDuration = 60;
@@ -165,38 +162,31 @@ export async function GET(req: Request) {
   ]);
 
   const now = new Date();
-  const identities = leads.flatMap((lead) => [
-    { customerMobile: lead.customerMobile },
-    { customerEmail: { equals: lead.customerEmail, mode: "insensitive" as const } },
-  ]);
-  const identityHistory = identities.length
-    ? await prisma.lead.findMany({
-        where: {
-          OR: identities,
-          journeyStatus: { not: "REJECTED" },
-          createdAt: { gte: new Date(now.getTime() - phoneLockWindowMs()) },
-        },
-        select: {
-          leadId: true,
-          customerMobile: true,
-          customerEmail: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "asc" },
-      })
-    : [];
 
-  const result = leads.map((lead) => {
+  // Compute lock state per unique phone/email identity (cached)
+  const lockCache = new Map<string, Awaited<ReturnType<typeof resolvePartnerLockState>>>();
+  async function lockFor(mobile: string, email: string) {
+    const key = `${normalizeMobile(mobile)}|${email.trim().toLowerCase()}`;
+    const cached = lockCache.get(key);
+    if (cached) return cached;
+    const state = await resolvePartnerLockState({
+      cpId,
+      mobile: normalizeMobile(mobile),
+      email,
+      now,
+    });
+    lockCache.set(key, state);
+    return state;
+  }
+
+  const result = [];
+  for (const lead of leads) {
     const sameIdentity = (candidate: {
       customerMobile: string;
       customerEmail: string;
     }) =>
       candidate.customerMobile === lead.customerMobile
       || candidate.customerEmail.toLowerCase() === lead.customerEmail.toLowerCase();
-    const firstRegistration = identityHistory.find(sameIdentity);
-    const lockExpiresAt = firstRegistration
-      ? new Date(firstRegistration.createdAt.getTime() + phoneLockWindowMs())
-      : new Date(lead.createdAt.getTime() + phoneLockWindowMs());
     const existingProjectIds = new Set(
       cpIdentityLeads
         .filter(sameIdentity)
@@ -226,22 +216,29 @@ export async function GET(req: Request) {
         action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
       }));
 
-    return {
+    const lock = await lockFor(lead.customerMobile, lead.customerEmail);
+
+    result.push({
       ...lead,
-      lockExpiresAt: lockExpiresAt.toISOString(),
-      lockDaysRemaining:
-        lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,
+      lockStatus: lock.lockStatus,
+      isActiveLockHolder: lock.isActiveLockHolder,
+      lockExpiresAt: lock.lockExpiresAt,
+      lockDaysRemaining: lock.lockDaysRemaining,
+      cooldownExpiresAt: lock.cooldownExpiresAt,
+      cooldownDaysRemaining: lock.cooldownDaysRemaining,
+      canActivate: lock.canActivate,
       availableProjects,
       mappedProjects,
       siteVisitHistory: [] as Array<{
         id: string;
+        type?: string;
         occurredAt: string;
         projectName: string | null;
         salesperson: string | null;
         metadata: unknown;
       }>,
-    };
-  });
+    });
+  }
 
   // Attach this CP's site-visit / booked events for partner history UI
   const leadIds = result.map((l) => l.id);

@@ -12,7 +12,7 @@ export default auth((req) => {
     if (isLoggedIn && role) {
       return NextResponse.redirect(new URL(getPortalForRole(role), req.url));
     }
-    return NextResponse.redirect(new URL("/customer/login", req.url));
+    return NextResponse.redirect(new URL("/partner/login", req.url));
   }
 
   if (isPublicRoute(pathname)) {
@@ -26,9 +26,9 @@ export default auth((req) => {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const loginUrl = pathname.startsWith("/partner") ? "/partner/login"
-      : pathname.startsWith("/customer") ? "/customer/login"
-      : "/login";
+    const loginUrl = pathname.startsWith("/customer") ? "/customer/login"
+      : pathname.startsWith("/login") || pathname.startsWith("/admin") ? "/login"
+      : "/partner/login";
     return NextResponse.redirect(new URL(loginUrl, req.url));
   }
 

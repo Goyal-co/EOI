@@ -86,7 +86,6 @@ export default function PartnerLoginPage() {
 
   return (
     <AuthLayout
-      portalLabel="Partner Portal"
       backgroundImage={LOGIN_BG}
       subtitle="Join our network of property advisor"
       description=""

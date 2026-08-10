@@ -75,7 +75,6 @@ export default function CustomerLoginContent() {
 
   return (
     <AuthLayout
-      portalLabel="Customer Portal"
       backgroundImage={LOGIN_BG}
       subtitle="Welcome to your exclusive portal"
       highlightSubtitle="exclusive portal"

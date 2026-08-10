@@ -8,7 +8,7 @@ export default function CustomerLoginPage() {
   return (
     <Suspense
       fallback={
-        <AuthLayout portalLabel="Customer Portal" subtitle="Loading...">
+        <AuthLayout subtitle="Loading...">
           <LoadingSkeleton rows={4} />
         </AuthLayout>
       }

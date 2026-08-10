@@ -79,29 +79,22 @@ export function customerConfirmationEmailHtml(params: {
 }) {
   const isLeadOnly = params.intentType === "LEAD_ONLY";
 
-  const emailNote = params.customerEmail
-    ? isLeadOnly
-      ? `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>.</p>`
-      : `<p style="margin:16px 0 0;font-size:14px;color:${MUTED};">This request was sent to <strong style="color:${NAVY};">${params.customerEmail}</strong>. It will also be your Customer Portal login ID.</p>`
-    : "";
-
   const leadDetails = params.leadId
     ? detailsGrid([{ label: "Lead ID", value: params.leadId }])
     : "";
 
   const intro = isLeadOnly
-    ? `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} has punched a <strong style="color:${NAVY};">Lead</strong> for you on:`
+    ? `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} has registered your interest on:`
     : `<strong style="color:${NAVY};">${params.cpName}</strong>${params.companyName ? ` (${params.companyName})` : ""} would like to assist you with an <strong style="color:${NAVY};">Expression of Interest (EOI)</strong> at:`;
 
   const summary = isLeadOnly
-    ? "This is a lead registration only — not an EOI. Please confirm that this Channel Partner may represent your interest in this project. After you accept, we will email a thank-you confirmation (no portal login is required for a lead)."
+    ? "Please confirm your association with this Channel Partner for the project below."
     : "Please confirm that you want to proceed with this Channel Partner for an EOI on this project. After you accept, we will email your Customer Portal login ID and password so you can complete the EOI form.";
 
   const steps = isLeadOnly
     ? [
-        "Click <strong>Accept</strong> to confirm this lead registration.",
-        "You will receive a thank-you email confirming your interest.",
-        "Your Channel Partner will contact you with next steps — no portal login is required.",
+        "Click <strong>Accept</strong> to confirm this Channel Partner for the project.",
+        "Your Channel Partner will contact you with next steps.",
       ]
     : [
         "Click <strong>Accept</strong> to confirm your Channel Partner for this EOI.",
@@ -110,7 +103,7 @@ export function customerConfirmationEmailHtml(params: {
       ];
 
   const closingNote = isLeadOnly
-    ? `<p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">This email confirms lead interest only. It is not an Expression of Interest (EOI). If you did not expect this message, decline or ignore it.</p>`
+    ? `<p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this message, decline or ignore it.</p>`
     : `<p style="margin:16px 0 0;font-size:12px;color:#94A3B8;">If you did not expect this EOI confirmation request, you can safely decline or ignore it.</p>`;
 
   return wrapEmail([
@@ -124,7 +117,6 @@ export function customerConfirmationEmailHtml(params: {
       <p style="margin:0;color:${MUTED};">${intro}</p>
       ${projectCard({ projectName: params.projectName, projectLocation: params.projectLocation })}
       ${leadDetails}
-      ${emailNote}
       <p style="margin:0 0 8px;color:${MUTED};">${summary}</p>
       ${numberedSteps(steps)}
       ${buttonRow([

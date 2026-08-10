@@ -8,5 +8,5 @@ export default async function HomePage() {
   if (session?.user?.role) {
     redirect(getPortalForRole(session.user.role as UserRole));
   }
-  redirect("/customer/login");
+  redirect("/partner/login");
 }

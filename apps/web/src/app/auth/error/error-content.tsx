@@ -23,13 +23,18 @@ export default function AuthErrorContent() {
 
   const isCustomerFlow =
     callbackUrl.includes("/customer") || callbackUrl.includes("/invite");
-  const loginHref = isCustomerFlow ? "/customer/login" : "/login";
-  const portalLabel = isCustomerFlow ? "Customer Portal" : "Admin Portal";
+  const isAdminFlow = callbackUrl.includes("/admin") || callbackUrl.includes("/login");
+  const loginHref = isCustomerFlow
+    ? "/customer/login"
+    : isAdminFlow
+      ? "/login"
+      : "/partner/login";
 
   const message = ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.Default;
+  const portalName = isCustomerFlow ? "Customer" : isAdminFlow ? "Admin" : "Partner";
 
   return (
-    <AuthLayout portalLabel={portalLabel} subtitle="Sign-in could not be completed">
+    <AuthLayout subtitle="Sign-in could not be completed">
       <div className="text-center">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
           <AlertCircle className="h-7 w-7 text-error" />
@@ -40,7 +45,7 @@ export default function AuthErrorContent() {
           <p className="mt-2 text-xs text-muted-foreground">Error code: {errorCode}</p>
         )}
         <Link href={`${loginHref}${errorCode ? `?error=${errorCode}` : ""}`} className="mt-8 inline-block">
-          <Button variant="gold">Back to {isCustomerFlow ? "Customer" : "Admin"} Login</Button>
+          <Button variant="gold">Back to {portalName} Login</Button>
         </Link>
       </div>
     </AuthLayout>

@@ -22,7 +22,7 @@ export default function PartnerPendingApprovalContent() {
   }, []);
 
   return (
-    <AuthLayout portalLabel="Partner Portal">
+    <AuthLayout>
       <Card className="text-center p-8">
         <div className="flex justify-center mb-6">
           <div className={`flex h-16 w-16 items-center justify-center rounded-full ${isBlocked ? "bg-red-100" : "bg-amber-100"}`}>

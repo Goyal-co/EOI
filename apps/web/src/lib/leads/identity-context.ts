@@ -169,6 +169,146 @@ export async function evaluateIdentityLock(params: {
   return { ok: true, lockStart: null, lockExpiresAt: null, owningCpIds: [] };
 }
 
+export type PartnerLockStatus = "ACTIVE" | "EXPIRED" | "COOLDOWN" | "NONE";
+
+export type PartnerLockState = {
+  lockStatus: PartnerLockStatus;
+  isActiveLockHolder: boolean;
+  lockExpiresAt: string | null;
+  lockDaysRemaining: number;
+  cooldownExpiresAt: string | null;
+  cooldownDaysRemaining: number;
+  canActivate: boolean;
+};
+
+/**
+ * Lock presentation for a CP viewing their own lead rows.
+ * Timer only when this CP holds an active 15-day lock.
+ */
+export async function resolvePartnerLockState(params: {
+  cpId: string;
+  mobile: string;
+  email: string;
+  now?: Date;
+}): Promise<PartnerLockState> {
+  const now = params.now ?? new Date();
+  const mobile = params.mobile;
+  const emailLower = params.email.trim().toLowerCase();
+  const lockEval = await evaluateIdentityLock({
+    cpId: params.cpId,
+    mobile,
+    email: emailLower,
+    now,
+  });
+
+  if (!lockEval.ok) {
+    if (lockEval.code === "IDENTITY_LOCKED") {
+      // Another CP holds the active lock — this CP's historical rows show expired (no timer)
+      return {
+        lockStatus: "EXPIRED",
+        isActiveLockHolder: false,
+        lockExpiresAt: null,
+        lockDaysRemaining: 0,
+        cooldownExpiresAt: null,
+        cooldownDaysRemaining: 0,
+        canActivate: false,
+      };
+    }
+    // PRIOR_CP_COOLDOWN
+    return {
+      lockStatus: "COOLDOWN",
+      isActiveLockHolder: false,
+      lockExpiresAt: null,
+      lockDaysRemaining: 0,
+      cooldownExpiresAt: lockEval.cooldownExpiresAt?.toISOString() || null,
+      cooldownDaysRemaining: lockEval.cooldownExpiresAt
+        ? daysRemainingUntil(lockEval.cooldownExpiresAt, now)
+        : 0,
+      canActivate: false,
+    };
+  }
+
+  const { lockExpiresAt, owningCpIds } = lockEval;
+  const isHolder = owningCpIds.includes(params.cpId);
+
+  if (lockExpiresAt && now < lockExpiresAt && isHolder) {
+    return {
+      lockStatus: "ACTIVE",
+      isActiveLockHolder: true,
+      lockExpiresAt: lockExpiresAt.toISOString(),
+      lockDaysRemaining: daysRemainingUntil(lockExpiresAt, now),
+      cooldownExpiresAt: null,
+      cooldownDaysRemaining: 0,
+      canActivate: false,
+    };
+  }
+
+  if (lockExpiresAt && now < lockExpiresAt && !isHolder) {
+    return {
+      lockStatus: "EXPIRED",
+      isActiveLockHolder: false,
+      lockExpiresAt: null,
+      lockDaysRemaining: 0,
+      cooldownExpiresAt: null,
+      cooldownDaysRemaining: 0,
+      canActivate: false,
+    };
+  }
+
+  // Lock window ended while still in evaluation payload — free to activate
+  if (lockExpiresAt && now >= lockExpiresAt) {
+    return {
+      lockStatus: "EXPIRED",
+      isActiveLockHolder: false,
+      lockExpiresAt: null,
+      lockDaysRemaining: 0,
+      cooldownExpiresAt: null,
+      cooldownDaysRemaining: 0,
+      canActivate: true,
+    };
+  }
+
+  // No active window in evaluateIdentityLock — check whether this CP has
+  // historical associations for the identity (expired lock cycle finished).
+  const historical = await prisma.lead.findFirst({
+    where: {
+      cpId: params.cpId,
+      journeyStatus: { not: "REJECTED" },
+      OR: [
+        { customerMobile: mobile },
+        { customerEmail: { equals: emailLower, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (historical) {
+    const historicalLockEnd = new Date(historical.createdAt.getTime() + phoneLockWindowMs());
+    if (now >= historicalLockEnd) {
+      return {
+        lockStatus: "EXPIRED",
+        isActiveLockHolder: false,
+        lockExpiresAt: null,
+        lockDaysRemaining: 0,
+        cooldownExpiresAt: null,
+        cooldownDaysRemaining: 0,
+        canActivate: true,
+      };
+    }
+  }
+
+  return {
+    lockStatus: "NONE",
+    isActiveLockHolder: false,
+    lockExpiresAt: null,
+    lockDaysRemaining: 0,
+    cooldownExpiresAt: null,
+    cooldownDaysRemaining: 0,
+    canActivate: false,
+  };
+}
+
 /**
  * Projects this CP can still punch for the same customer identity,
  * plus the 15-day phone+email protection window and prior-CP cooldown.
