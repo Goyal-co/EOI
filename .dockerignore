@@ -14,10 +14,14 @@ node_modules
 .vscode
 .idea
 
-# Secrets — never bake these
+# Secrets — never bake these (paths relative to context; ** required for nested files)
 .env
 .env.*
-!.env.production.example
+**/.env
+**/.env.*
+!**/.env.production.example
+apps/web/.env.local
+apps/web/.env.production
 
 # Deploy sidecar files
 infra

@@ -52,6 +52,7 @@ RUN apk add --no-cache tini wget ca-certificates \
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+COPY --chown=nextjs:nodejs scripts/docker-start.cjs ./docker-start.cjs
 USER nextjs
 EXPOSE 3000
 STOPSIGNAL SIGTERM
@@ -59,4 +60,4 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:3000/api/health?live=1" || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "docker-start.cjs"]
