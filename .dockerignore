@@ -1,11 +1,25 @@
+# Dependencies & build output (image installs on Alpine)
 node_modules
 **/node_modules
 .next
 **/.next
+.turbo
+**/coverage
+**/*.tsbuildinfo
+
+# VCS / editor / CI (not needed in the image)
 .git
 .github
-.turbo
 .cursor
+.vscode
+.idea
+
+# Secrets — never bake these
+.env
+.env.*
+!.env.production.example
+
+# Deploy sidecar files
 infra
 e2e
 e2e-results
@@ -13,10 +27,9 @@ playwright-report
 apps/web/e2e
 apps/web/test-results
 apps/web/playwright-report
-coverage
-**/coverage
-**/.env
-**/.env.local
-**/.env.production
-**/.env.*.local
+
+# Noise
 **/*.md
+**/*.test.ts
+**/*.test.tsx
+docker-compose*.yml
