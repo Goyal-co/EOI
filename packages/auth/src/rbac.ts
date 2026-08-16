@@ -1,4 +1,5 @@
 import type { UserRole } from "@goyal/types";
+import { getPortalHomeHrefForHost, portalKindForRole } from "./portals";
 
 export const PORTAL_ROUTES: Record<UserRole, string> = {
   ADMIN: "/admin",
@@ -12,8 +13,9 @@ export const ROLE_ROUTE_PREFIXES: Record<string, UserRole> = {
   "/customer": "CUSTOMER",
 };
 
-export function getPortalForRole(role: UserRole): string {
-  return PORTAL_ROUTES[role];
+/** Home for a role. Absolute only when the request host is a different portal subdomain. */
+export function getPortalForRole(role: UserRole, hostHeader?: string | null): string {
+  return getPortalHomeHrefForHost(portalKindForRole(role), hostHeader);
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {

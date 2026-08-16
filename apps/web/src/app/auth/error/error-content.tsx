@@ -21,9 +21,17 @@ export default function AuthErrorContent() {
   const errorCode = searchParams.get("error") || "Default";
   const callbackUrl = searchParams.get("callbackUrl") || "";
 
+  const hostHint = callbackUrl.toLowerCase();
   const isCustomerFlow =
-    callbackUrl.includes("/customer") || callbackUrl.includes("/invite");
-  const isAdminFlow = callbackUrl.includes("/admin") || callbackUrl.includes("/login");
+    hostHint.includes("/customer")
+    || hostHint.includes("/invite")
+    || hostHint.includes("customer.");
+  const isPartnerFlow =
+    hostHint.includes("/partner") || hostHint.includes("leads.");
+  const isAdminFlow =
+    !isCustomerFlow
+    && !isPartnerFlow
+    && (hostHint.includes("/admin") || hostHint.includes("admin."));
   const loginHref = isCustomerFlow
     ? "/customer/login"
     : isAdminFlow

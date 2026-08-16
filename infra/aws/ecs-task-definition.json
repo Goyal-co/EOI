@@ -1,0 +1,67 @@
+{
+  "family": "goyal-eoi-web",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "__ECS_EXECUTION_ROLE_ARN__",
+  "taskRoleArn": "__ECS_TASK_ROLE_ARN__",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "web",
+      "image": "__ECR_IMAGE_URI__",
+      "essential": true,
+      "portMappings": [{ "containerPort": 3000, "protocol": "tcp", "name": "http" }],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "HOSTNAME", "value": "0.0.0.0" },
+        { "name": "CRM_PROVIDER", "value": "goyal" },
+        { "name": "GOYAL_CRM_API_URL", "value": "https://goyalhariyanacrm.in/api" },
+        { "name": "S3_FORCE_PATH_STYLE", "value": "false" },
+        { "name": "S3_PREFIX", "value": "eoi" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "__SECRETS_ARN__:DATABASE_URL::" },
+        { "name": "AUTH_SECRET", "valueFrom": "__SECRETS_ARN__:AUTH_SECRET::" },
+        { "name": "PII_ENCRYPTION_KEY", "valueFrom": "__SECRETS_ARN__:PII_ENCRYPTION_KEY::" },
+        { "name": "BREVO_API_KEY", "valueFrom": "__SECRETS_ARN__:BREVO_API_KEY::" },
+        { "name": "EOI_API_KEY", "valueFrom": "__SECRETS_ARN__:EOI_API_KEY::" },
+        { "name": "INTEGRATION_WEBHOOK_SECRET", "valueFrom": "__SECRETS_ARN__:INTEGRATION_WEBHOOK_SECRET::" },
+        { "name": "REDIS_URL", "valueFrom": "__SECRETS_ARN__:REDIS_URL::" },
+        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "__SECRETS_ARN__:GOOGLE_CLIENT_ID::" },
+        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "__SECRETS_ARN__:GOOGLE_CLIENT_SECRET::" },
+        { "name": "S3_ACCESS_KEY", "valueFrom": "__SECRETS_ARN__:S3_ACCESS_KEY::" },
+        { "name": "S3_SECRET_KEY", "valueFrom": "__SECRETS_ARN__:S3_SECRET_KEY::" },
+        { "name": "S3_BUCKET", "valueFrom": "__SECRETS_ARN__:S3_BUCKET::" },
+        { "name": "S3_REGION", "valueFrom": "__SECRETS_ARN__:S3_REGION::" },
+        { "name": "NEXTAUTH_URL", "valueFrom": "__SECRETS_ARN__:NEXTAUTH_URL::" },
+        { "name": "APP_URL", "valueFrom": "__SECRETS_ARN__:APP_URL::" },
+        { "name": "ROOT_DOMAIN", "valueFrom": "__SECRETS_ARN__:ROOT_DOMAIN::" },
+        { "name": "PARTNER_URL", "valueFrom": "__SECRETS_ARN__:PARTNER_URL::" },
+        { "name": "CUSTOMER_URL", "valueFrom": "__SECRETS_ARN__:CUSTOMER_URL::" },
+        { "name": "ADMIN_URL", "valueFrom": "__SECRETS_ARN__:ADMIN_URL::" },
+        { "name": "AUTH_COOKIE_DOMAIN", "valueFrom": "__SECRETS_ARN__:AUTH_COOKIE_DOMAIN::" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/goyal-eoi-web",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "web"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- 'http://127.0.0.1:3000/api/health?live=1' || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 40
+      }
+    }
+  ]
+}

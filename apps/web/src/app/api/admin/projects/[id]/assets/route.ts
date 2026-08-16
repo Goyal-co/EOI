@@ -13,23 +13,7 @@ import { imageSize } from "image-size";
 const MAX_VALIDATION_IMAGE_BYTES = 10 * 1024 * 1024;
 
 async function readActualImageDimensions(fileUrl: string) {
-  const accessibleUrl = await DocumentService.resolveAccessibleUrl(fileUrl);
-  if (!accessibleUrl) throw new Error("Uploaded image could not be accessed");
-
-  const response = await fetch(accessibleUrl, {
-    signal: AbortSignal.timeout(15_000),
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    throw new Error(`Uploaded image could not be read (${response.status})`);
-  }
-
-  const declaredSize = Number(response.headers.get("content-length") || 0);
-  if (declaredSize > MAX_VALIDATION_IMAGE_BYTES) {
-    throw new Error("Image exceeds the 10 MB validation limit");
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = await DocumentService.readStoredBytes(fileUrl);
   if (bytes.byteLength > MAX_VALIDATION_IMAGE_BYTES) {
     throw new Error("Image exceeds the 10 MB validation limit");
   }

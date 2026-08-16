@@ -578,10 +578,28 @@ async function postPartnerLead(req: Request) {
   }
 
   let titanCrmId: string | undefined;
-  // CRM timing:
-  // - LEAD_ONLY → punch on customer accept (confirm API)
-  // - EOI → punch on EOI form submit (eoi-engine)
-  const crmSynced = false;
+  let crmSynced = false;
+  // Punch to Goyal Hariyana CRM as soon as the partner creates the lead so
+  // Reception can list/search it. Accept / EOI-submit paths remain idempotent.
+  try {
+    const { punchPartnerLeadToCrm } = await import("@/lib/services/goyal-crm-sync");
+    const crmResult = await punchPartnerLeadToCrm({
+      leadDbId: lead.id,
+      customerName: lead.customerName,
+      customerEmail: lead.customerEmail,
+      customerMobile: lead.customerMobile,
+      projectName: lead.project.name,
+      city: lead.city,
+      fosName: lead.fosName,
+      notes: lead.notes,
+      intentType,
+      publicLeadId,
+    });
+    crmSynced = !!crmResult.success;
+    titanCrmId = crmResult.crmId;
+  } catch (e) {
+    console.error("[Goyal CRM] immediate punch failed:", e);
+  }
 
   try {
     const { publishEvent } = await import("@goyal/integration-hub");

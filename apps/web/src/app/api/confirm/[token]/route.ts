@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { confirmActionSchema } from "@goyal/types";
 import { apiResponse, apiError } from "@/lib/api";
-import { getAppBaseUrl, NotificationService } from "@goyal/email";
+import { getCustomerBaseUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
@@ -60,7 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   const isLeadOnly = lead.intentType === "LEAD_ONLY";
-  const customerLoginUrl = `${getAppBaseUrl()}/customer/login`;
+    const customerLoginUrl = `${getCustomerBaseUrl()}/customer/login`;
 
   // Re-opening the same link (or a client retry) must not fail — replay the outcome.
   if (lead.confirmationStatus === "ACCEPTED") {

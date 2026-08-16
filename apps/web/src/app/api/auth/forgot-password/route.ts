@@ -3,7 +3,7 @@ import { prisma } from "@goyal/db";
 import { forgotPasswordSchema } from "@goyal/types";
 import { apiResponse, apiError } from "@/lib/api";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
-import { getAppBaseUrl, passwordResetEmailHtml, sendEmailWithLog } from "@goyal/email";
+import { getAppBaseUrl, getCustomerBaseUrl, passwordResetEmailHtml, sendEmailWithLog } from "@goyal/email";
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -31,7 +31,9 @@ export async function POST(req: Request) {
       user.role === "CUSTOMER"
         ? `/customer/reset-password/${token}`
         : `/partner/reset-password/${token}`;
-    const resetUrl = `${getAppBaseUrl()}${resetPath}`;
+    const base =
+      user.role === "CUSTOMER" ? getCustomerBaseUrl() : getAppBaseUrl();
+    const resetUrl = `${base}${resetPath}`;
     await sendEmailWithLog({
       to: user.email,
       subject: "Reset your password — Goyal & Co. | Hariyana Group",

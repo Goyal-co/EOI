@@ -70,55 +70,21 @@ export async function uploadViaPresign(file: File, type: DocumentType): Promise<
     throw new Error("Unsupported or unknown file type. Use JPG, PNG, WebP, PDF, MP4, WebM, or MOV.");
   }
 
-  const presignRes = await fetch("/api/uploads/presign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fileName: file.name,
-      mimeType,
-      type,
-      size: file.size,
-    }),
-  });
+  const form = new FormData();
+  form.append("file", file);
+  form.append("type", type);
 
-  if (!presignRes.ok) {
-    const err = await presignRes.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to prepare upload");
+  const res = await fetch("/api/uploads", { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to upload file");
   }
 
-  const config = (await presignRes.json()) as PresignResponse;
-
-  if (config.mode === "blob") {
-    if (!config.pathname) throw new Error("Invalid blob upload configuration");
-    const { upload } = await import("@vercel/blob/client");
-    const blob = await upload(config.pathname, file, {
-      access: "private",
-      handleUploadUrl: config.handleUploadUrl || "/api/uploads/blob",
-      contentType: mimeType,
-    });
-    return {
-      fileUrl: blob.url,
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType,
-    };
-  }
-
-  if (!config.uploadUrl || !config.fileUrl) {
-    throw new Error("Invalid S3 upload configuration");
-  }
-
-  const putRes = await fetch(config.uploadUrl, {
-    method: "PUT",
-    body: file,
-    headers: { "Content-Type": mimeType },
-  });
-  if (!putRes.ok) throw new Error("Failed to upload file to storage");
-
+  const stored = (await res.json()) as UploadedFileResult;
   return {
-    fileUrl: config.fileUrl,
-    fileName: file.name,
-    fileSize: file.size,
-    mimeType,
+    fileUrl: stored.fileUrl,
+    fileName: stored.fileName || file.name,
+    fileSize: stored.fileSize || file.size,
+    mimeType: stored.mimeType || mimeType,
   };
 }

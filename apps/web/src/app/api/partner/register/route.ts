@@ -52,7 +52,10 @@ async function saveRegistrationDoc(
   type: DocumentType,
   file: File,
 ) {
-  const mimeType = file.type || "application/octet-stream";
+  const mimeType =
+    DocumentService.mimeTypeFromFileName(file.name)
+    || (file.type && file.type !== "application/octet-stream" ? file.type : "")
+    || "application/octet-stream";
   const validationError = DocumentService.validateFile(type, mimeType, file.size);
   if (validationError) throw new Error(validationError);
 

@@ -9,4 +9,4 @@ export {
   syncDefaultEmailTemplates,
   isMismatchedEmailTemplate,
 } from "./template-loader";
-export { getAppBaseUrl } from "./urls";
+export { getAppBaseUrl, getCustomerBaseUrl, getAdminBaseUrl, getPartnerBaseUrl } from "./urls";

@@ -1,5 +1,3 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { prisma } from "@goyal/db";
 import type { DocumentType } from "@goyal/types";
 import type { UserRole } from "@goyal/types";
@@ -9,18 +7,11 @@ import {
   blobGetDownloadUrl,
   blobDelete,
 } from "@/lib/storage/vercel-blob";
+import { appFileUrl, getS3Bucket, s3DeleteObject, s3GetObject, s3HeadObject, s3PutObject, withS3Prefix } from "@/lib/storage/s3";
 
-const s3 = new S3Client({
-  endpoint: process.env.S3_ENDPOINT,
-  region: process.env.S3_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY || "",
-    secretAccessKey: process.env.S3_SECRET_KEY || "",
-  },
-  forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
-});
-
-const BUCKET = process.env.S3_BUCKET || "goyal-eoi-documents";
+function bucketName() {
+  return getS3Bucket();
+}
 
 const ALLOWED_TYPES: Record<string, string[]> = {
   CHEQUE: ["image/jpeg", "image/png", "application/pdf"],
@@ -84,7 +75,7 @@ export class DocumentService {
     }
     const key = this.extractKey(fileUrl);
     if (!key) return;
-    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+    await s3DeleteObject(key);
   }
 
   static getScopedFolder(role: UserRole, userId: string, type: DocumentType): string {
@@ -113,29 +104,14 @@ export class DocumentService {
     size: number;
   }) {
     const safeName = this.sanitizeFileName(params.fileName);
-    const key = `${params.folder}/${Date.now()}-${safeName}`;
-
-    if (getStorageMode() === "blob") {
-      return {
-        mode: "blob" as const,
-        pathname: key,
-        handleUploadUrl: "/api/uploads/blob",
-        key,
-      };
-    }
-
-    const command = new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      ContentType: params.mimeType,
-      ContentLength: params.size,
-    });
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
-    const fileUrl = process.env.S3_ENDPOINT
-      ? `${process.env.S3_ENDPOINT}/${BUCKET}/${key}`
-      : `https://${BUCKET}.s3.amazonaws.com/${key}`;
-
-    return { mode: "s3" as const, uploadUrl, fileUrl, key };
+    const relativeKey = `${params.folder}/${Date.now()}-${safeName}`;
+    const key = withS3Prefix(relativeKey);
+    return {
+      mode: "s3" as const,
+      uploadVia: "server" as const,
+      fileUrl: appFileUrl(key),
+      key,
+    };
   }
 
   static async uploadBuffer(params: {
@@ -146,32 +122,20 @@ export class DocumentService {
     size: number;
   }): Promise<{ fileUrl: string; key: string }> {
     const safeName = this.sanitizeFileName(params.fileName);
-    const key = `${params.folder}/${Date.now()}-${safeName}`;
+    const relativeKey = `${params.folder}/${Date.now()}-${safeName}`;
     const body = Buffer.isBuffer(params.body) ? params.body : Buffer.from(params.body);
 
-    if (getStorageMode() === "blob") {
-      const { put } = await import("@vercel/blob");
-      const blob = await put(key, body, {
-        access: "private",
-        contentType: params.mimeType,
-        token: process.env.BLOB_READ_WRITE_TOKEN,
-      });
-      return { fileUrl: blob.url, key };
+    if (!process.env.S3_ACCESS_KEY?.trim()) {
+      throw new Error("S3 credentials are required to store documents");
     }
 
-    await s3.send(new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: params.mimeType,
-      ContentLength: params.size,
-    }));
-
-    const fileUrl = process.env.S3_ENDPOINT
-      ? `${process.env.S3_ENDPOINT}/${BUCKET}/${key}`
-      : `https://${BUCKET}.s3.amazonaws.com/${key}`;
-
-    return { fileUrl, key };
+    const key = await s3PutObject({
+      key: relativeKey,
+      body,
+      mimeType: params.mimeType,
+      size: params.size,
+    });
+    return { fileUrl: appFileUrl(key), key };
   }
 
   static extractKey(fileUrl: string): string {
@@ -179,6 +143,13 @@ export class DocumentService {
 
     // Strip query string for parsing
     const urlWithoutQuery = fileUrl.split("?")[0];
+    const BUCKET = bucketName();
+
+    const apiFiles = "/api/files/";
+    const apiIdx = urlWithoutQuery.indexOf(apiFiles);
+    if (apiIdx !== -1) {
+      return decodeURIComponent(urlWithoutQuery.slice(apiIdx + apiFiles.length));
+    }
 
     // Path-style: endpoint/bucket/key or /bucket/key
     const bucketMarker = `/${BUCKET}/`;
@@ -220,11 +191,12 @@ export class DocumentService {
 
   static isPrivateStorageUrl(fileUrl: string): boolean {
     if (!fileUrl) return false;
+    if (fileUrl.includes("/api/files/")) return true;
     if (fileUrl.startsWith("/")) return false;
     if (isBlobUrl(fileUrl)) return true;
-    if (fileUrl.startsWith("http://localhost") && !fileUrl.includes(BUCKET)) return false;
+    if (fileUrl.startsWith("http://localhost") && !fileUrl.includes(bucketName())) return false;
     return (
-      fileUrl.includes(BUCKET)
+      fileUrl.includes(bucketName())
       || !!process.env.S3_ENDPOINT && fileUrl.startsWith(process.env.S3_ENDPOINT)
       || /\.s3[.-]/.test(fileUrl)
     );
@@ -236,19 +208,16 @@ export class DocumentService {
       if (!process.env.BLOB_READ_WRITE_TOKEN) return fileUrl;
       return blobGetDownloadUrl(fileUrl);
     }
+    if (fileUrl.includes("/api/files/")) return fileUrl;
     if (!this.isPrivateStorageUrl(fileUrl)) return fileUrl;
     if (!process.env.S3_ACCESS_KEY) return fileUrl;
-    return this.getPresignedDownloadUrl(fileUrl);
+    const key = this.extractKey(fileUrl);
+    return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
   }
 
   static async objectExists(fileUrl: string): Promise<boolean> {
     if (isBlobUrl(fileUrl)) {
-      if (!process.env.BLOB_READ_WRITE_TOKEN) {
-        if (process.env.NODE_ENV === "production") {
-          throw new Error("BLOB_READ_WRITE_TOKEN is required in production");
-        }
-        return true;
-      }
+      if (!process.env.BLOB_READ_WRITE_TOKEN) return false;
       return blobObjectExists(fileUrl);
     }
 
@@ -260,8 +229,7 @@ export class DocumentService {
     }
     try {
       const key = this.extractKey(fileUrl);
-      await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
-      return true;
+      return s3HeadObject(key);
     } catch {
       return false;
     }
@@ -271,9 +239,39 @@ export class DocumentService {
     if (isBlobUrl(fileUrl)) {
       return blobGetDownloadUrl(fileUrl);
     }
+    if (fileUrl.includes("/api/files/")) return fileUrl.split("?")[0];
     const key = this.extractKey(fileUrl);
-    const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-    return getSignedUrl(s3, command, { expiresIn: 900 });
+    return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  static async streamStoredFile(fileUrl: string) {
+    if (isBlobUrl(fileUrl)) {
+      const url = await blobGetDownloadUrl(fileUrl);
+      return fetch(url);
+    }
+    const object = await s3GetObject(this.extractKey(fileUrl));
+    const body = object.Body;
+    if (!body) throw new Error("Empty file");
+    const headers = new Headers();
+    if (object.ContentType) headers.set("Content-Type", object.ContentType);
+    if (object.ContentLength != null) headers.set("Content-Length", String(object.ContentLength));
+    headers.set("Cache-Control", "private, max-age=60");
+    const stream = typeof body.transformToWebStream === "function"
+      ? body.transformToWebStream()
+      : (body as ReadableStream);
+    return new Response(stream, { headers });
+  }
+
+  static async readStoredBytes(fileUrl: string): Promise<Uint8Array> {
+    if (isBlobUrl(fileUrl)) {
+      const url = await blobGetDownloadUrl(fileUrl);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Uploaded image could not be read");
+      return new Uint8Array(await res.arrayBuffer());
+    }
+    const object = await s3GetObject(this.extractKey(fileUrl));
+    if (!object.Body) throw new Error("Empty file");
+    return new Uint8Array(await object.Body.transformToByteArray());
   }
 
   static async saveDocument(params: {
@@ -313,7 +311,7 @@ export class DocumentService {
     } else {
       const key = this.extractKey(doc.fileUrl);
       if (key) {
-        await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+        await s3DeleteObject(key);
       }
     }
     return prisma.document.delete({ where: { id } });

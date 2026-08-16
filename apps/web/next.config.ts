@@ -16,7 +16,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   ...(useStandalone ? { output: "standalone" as const } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
-  transpilePackages: ["@goyal/ui", "@goyal/auth", "@goyal/db", "@goyal/types", "@goyal/email", "@goyal/integrations"],
+  transpilePackages: [
+    "@goyal/ui",
+    "@goyal/auth",
+    "@goyal/db",
+    "@goyal/types",
+    "@goyal/email",
+    "@goyal/integrations",
+    "@goyal/integration-hub",
+    "@goyal/ecosystem-contracts",
+  ],
   images: {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },

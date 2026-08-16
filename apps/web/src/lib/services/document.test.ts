@@ -30,11 +30,19 @@ describe("DocumentService.extractKey", () => {
   it("returns relative paths as keys", () => {
     expect(DocumentService.extractKey("/images/projects/banner.jpg")).toBe("images/projects/banner.jpg");
   });
+
+  it("extracts key from same-origin /api/files proxy URLs", () => {
+    expect(DocumentService.extractKey("/api/files/eoi/admin/user1/banner.jpg")).toBe("eoi/admin/user1/banner.jpg");
+  });
+
+  it("does not rewrite public static image paths into the bucket", () => {
+    expect(DocumentService.isPrivateStorageUrl("/images/projects/banner.jpg")).toBe(false);
+  });
 });
 
 describe("DocumentService.isPrivateStorageUrl", () => {
-  it("treats local static paths as public", () => {
-    expect(DocumentService.isPrivateStorageUrl("/images/projects/banner.jpg")).toBe(false);
+  it("treats /api/files proxy URLs as private", () => {
+    expect(DocumentService.isPrivateStorageUrl("/api/files/eoi/admin/file.pdf")).toBe(true);
   });
 
   it("treats bucket URLs as private", () => {

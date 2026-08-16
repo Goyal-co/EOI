@@ -2,7 +2,7 @@ import { prisma, NotificationType } from "@goyal/db";
 import { sendEmailWithLog, processEmailRetryQueue } from "./email-log";
 import { shouldSendEmail, shouldCreateInAppNotification, isAdminNotificationEnabled, getSupportEmail } from "./prefs";
 import { resolveEmailTemplate } from "./template-loader";
-import { getAppBaseUrl } from "./urls";
+import { getAppBaseUrl, getCustomerBaseUrl, getAdminBaseUrl } from "./urls";
 import {
   cpRegistrationAckEmailHtml,
   cpCredentialsEmailHtml,
@@ -294,8 +294,8 @@ export class NotificationService {
     const cpPortalUrl = `${appUrl}/partner/leads${
       params.leadId ? `?search=${encodeURIComponent(params.leadId)}` : ""
     }`;
-    const customerPortalUrl = `${appUrl}/customer`;
-    const adminLeadsUrl = `${appUrl}/admin/leads${
+    const customerPortalUrl = `${getCustomerBaseUrl()}/customer`;
+    const adminLeadsUrl = `${getAdminBaseUrl()}/admin/leads${
       params.leadId ? `?q=${encodeURIComponent(params.leadId)}` : ""
     }`;
     const cpLabel = params.companyName
@@ -477,7 +477,7 @@ export class NotificationService {
     leadId?: string;
     password?: string;
   }) {
-    const customerLoginUrl = params.customerLoginUrl || `${getAppBaseUrl()}/customer/login`;
+    const customerLoginUrl = params.customerLoginUrl || `${getCustomerBaseUrl()}/customer/login`;
     const email = await this.resolveEmail(
       "EOI_INVITATION",
       {
@@ -562,7 +562,7 @@ export class NotificationService {
     projectName: string;
     referenceNumber: string;
   }) {
-    const customerPortalUrl = `${getAppBaseUrl()}/customer`;
+    const customerPortalUrl = `${getCustomerBaseUrl()}/customer`;
     const email = await this.resolveEmail(
       "EOI_SUBMITTED",
       {
@@ -687,7 +687,7 @@ export class NotificationService {
     approvedDate?: string;
     cpUserId?: string;
   }) {
-    const customerPortalUrl = `${getAppBaseUrl()}/customer`;
+    const customerPortalUrl = `${getCustomerBaseUrl()}/customer`;
     const approvedDate = params.approvedDate || new Date().toISOString();
     const email = await this.resolveEmail(
       "EOI_APPROVED",
@@ -733,7 +733,7 @@ export class NotificationService {
     remarks?: string;
     cpUserId?: string;
   }) {
-    const customerPortalUrl = `${getAppBaseUrl()}/customer`;
+    const customerPortalUrl = `${getCustomerBaseUrl()}/customer`;
     const email = await this.resolveEmail(
       "EOI_REJECTED",
       {
@@ -776,7 +776,7 @@ export class NotificationService {
     projectName: string;
     remarks: string;
   }) {
-    const eoiFormUrl = `${getAppBaseUrl()}/customer/eoi`;
+    const eoiFormUrl = `${getCustomerBaseUrl()}/customer/eoi`;
     const email = await this.resolveEmail(
       "CORRECTION_REQUESTED",
       {

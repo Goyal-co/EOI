@@ -1,46 +1,41 @@
 # syntax=docker/dockerfile:1
+# Production image for VM / ECS. Build from the EOI_CP repo root:
+#   docker build -t goyal-eoi-web .
+#   docker run --env-file .env.production -p 3000:3000 goyal-eoi-web
 
-FROM node:20-alpine AS base
+FROM node:20-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
-
-FROM base AS deps
 COPY package.json package-lock.json ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/auth/package.json ./packages/auth/
-COPY packages/db/package.json ./packages/db/
-COPY packages/email/package.json ./packages/email/
-COPY packages/integrations/package.json ./packages/integrations/
-COPY packages/types/package.json ./packages/types/
-COPY packages/ui/package.json ./packages/ui/
-RUN npm ci
+COPY apps/web/package.json apps/web/package.json
+COPY packages packages
+RUN npm ci --ignore-scripts
 
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx prisma generate --schema=packages/db/prisma/schema.prisma
-RUN npm run build --workspace=@goyal/web
-
-FROM base AS runner
+FROM node:20-alpine AS builder
+WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+ENV NODE_OPTIONS=--max-old-space-size=2048
+# URLs are not baked in; set APP_URL / NEXTAUTH_URL / S3_* at runtime.
+RUN apk add --no-cache libc6-compat openssl
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run db:generate && npm run build --workspace=@goyal/web
 
-COPY --from=builder /app/apps/web/public ./apps/web/public
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs \
+  && apk add --no-cache wget libc6-compat openssl ca-certificates \
+  && update-ca-certificates
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
-
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 USER nextjs
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-ENTRYPOINT ["./docker-entrypoint.sh"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:3000/api/health?live=1" || exit 1
 CMD ["node", "apps/web/server.js"]

@@ -126,12 +126,69 @@ async function postWebhook(path: string, payload: GoyalEoiPayload, key: string) 
   return parsed;
 }
 
+function looksLikeUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
+
+function extractLeads(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  const obj = asRecord(payload);
+  if (!obj) return [];
+  for (const key of ["data", "leads", "items", "results", "rows"]) {
+    if (Array.isArray(obj[key])) return obj[key] as Array<Record<string, unknown>>;
+  }
+  return [];
+}
+
+/** Prefer CRM UUID; fall back to leadCode. */
 function crmIdFromResponse(body: unknown, phone: string): string | undefined {
-  if (!body || typeof body !== "object") return undefined;
-  const o = body as Record<string, unknown>;
+  const o = asRecord(body);
+  if (!o) return undefined;
+  if (typeof o.id === "string" && looksLikeUuid(o.id)) return o.id;
   if (typeof o.leadCode === "string" && o.leadCode) return o.leadCode;
-  if (typeof o.id === "string" && o.id) return o.id;
   if (o.duplicate) return `duplicate-${phone}`;
+  return undefined;
+}
+
+/** Webhook create often returns only leadCode — resolve UUID via GET /eoi/leads. */
+async function enrichCrmUuid(params: {
+  key: string;
+  phone: string;
+  leadCode?: string;
+}): Promise<string | undefined> {
+  const digits = params.phone.replace(/\D/g, "").slice(-10);
+  const qs = new URLSearchParams({
+    api_key: params.key,
+    page: "1",
+    limit: "10",
+    ...(digits ? { phone: digits } : {}),
+  });
+  try {
+    const res = await fetch(`${baseUrl()}/eoi/leads?${qs}`, {
+      method: "GET",
+      headers: { "X-EOI-Api-Key": params.key },
+    });
+    const body = await parseJson(res);
+    if (!res.ok) return undefined;
+    const leads = extractLeads(body);
+    const match =
+      (params.leadCode
+        ? leads.find((l) => String(l.leadCode || "") === params.leadCode)
+        : undefined) ||
+      leads.find((l) => {
+        const p = String(l.phone ?? "").replace(/\D/g, "");
+        return digits && p.endsWith(digits);
+      });
+    if (match && typeof match.id === "string" && looksLikeUuid(match.id)) {
+      return match.id;
+    }
+  } catch (err) {
+    console.warn("[Goyal CRM] enrichCrmUuid failed", err);
+  }
   return undefined;
 }
 
@@ -156,12 +213,25 @@ async function punch(data: Record<string, unknown>): Promise<{ success: boolean;
     body = await postWebhook("/eoi/create", payload, key);
   }
 
-  const crmId = crmIdFromResponse(body, payload.phone);
+  const bodyObj = asRecord(body);
+  const leadCode = typeof bodyObj?.leadCode === "string" ? bodyObj.leadCode : undefined;
+  let crmId = crmIdFromResponse(body, payload.phone);
+
+  if (!crmId || !looksLikeUuid(crmId)) {
+    const enriched = await enrichCrmUuid({
+      key,
+      phone: payload.phone,
+      leadCode: leadCode || (crmId?.startsWith("EOI-") ? crmId : undefined),
+    });
+    if (enriched) crmId = enriched;
+  }
+
   console.log("[Goyal CRM] lead punched", {
     phone: payload.phone,
     projectName: payload.projectName,
     crmId,
-    duplicate: Boolean((body as { duplicate?: boolean } | null)?.duplicate),
+    leadCode,
+    duplicate: Boolean(bodyObj?.duplicate),
   });
 
   return { success: true, crmId };

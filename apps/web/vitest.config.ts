@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@goyal/types": path.resolve(__dirname, "../../packages/types/src"),
+      "@goyal/auth/portals": path.resolve(__dirname, "../../packages/auth/src/portals.ts"),
     },
   },
 });

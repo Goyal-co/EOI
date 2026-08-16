@@ -1,0 +1,80 @@
+name: EOI AWS deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "Dockerfile"
+      - "infra/aws/**"
+      - ".github/workflows/aws-deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: goyal-eoi-web
+  ECS_CLUSTER: goyal-eoi
+  ECS_SERVICE: goyal-eoi-web
+  TASK_FAMILY: goyal-eoi-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_ENV"
+
+      - name: Render task definition
+        env:
+          ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+          ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
+          SECRETS_ARN: ${{ secrets.EOI_SECRETS_ARN }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          text = pathlib.Path("infra/aws/ecs-task-definition.json").read_text()
+          replacements = {
+              "__ECS_EXECUTION_ROLE_ARN__": os.environ["ECS_EXECUTION_ROLE_ARN"],
+              "__ECS_TASK_ROLE_ARN__": os.environ["ECS_TASK_ROLE_ARN"],
+              "__ECR_IMAGE_URI__": os.environ["IMAGE_URI"],
+              "__SECRETS_ARN__": os.environ["SECRETS_ARN"],
+              "__AWS_REGION__": os.environ["AWS_REGION"],
+          }
+          for k, v in replacements.items():
+              if not v:
+                  raise SystemExit(f"missing replacement value for {k}")
+              text = text.replace(k, v)
+          leftover = [k for k in replacements if k in text]
+          if leftover:
+              raise SystemExit(f"unreplaced placeholders: {leftover}")
+          pathlib.Path("task-def.rendered.json").write_text(text)
+          PY
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-def.rendered.json
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
