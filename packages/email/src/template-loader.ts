@@ -81,11 +81,31 @@ export function isMismatchedEmailTemplate(type: string, subject: string, body: s
   return false;
 }
 
+async function emailTemplateTableExists(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ present: boolean }>>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'EmailTemplate'
+       ) AS present`,
+    );
+    return Boolean(rows[0]?.present);
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveEmailTemplate(
   type: string,
   vars: Record<string, string>,
   fallback: { subject: string; html: string },
 ): Promise<{ subject: string; html: string }> {
+  if (!(await emailTemplateTableExists())) {
+    return {
+      subject: applyTemplatePlaceholders(fallback.subject, vars),
+      html: ensureActionLinks(fallback.html, vars),
+    };
+  }
   const template = await prisma.emailTemplate.findUnique({ where: { type } });
   if (!template || isMismatchedEmailTemplate(type, template.subject, template.body)) {
     if (template) {
@@ -127,6 +147,11 @@ export async function syncDefaultEmailTemplates(options?: {
     "LEAD_BOOKED_CP",
     "LEAD_BOOKED_CUSTOMER",
   ]);
+  if (!(await emailTemplateTableExists())) {
+    console.info("[Email] EmailTemplate table missing — skip sync");
+    return { created: 0, updated: 0 };
+  }
+
   let created = 0;
   let updated = 0;
 

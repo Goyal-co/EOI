@@ -16,33 +16,17 @@ for (const key of Object.keys(process.env)) {
   }
 }
 
-function applySchema() {
-  if (process.env.SKIP_DB_PUSH === "1") {
-    console.info("[db] SKIP_DB_PUSH=1 — not applying schema");
-    return;
-  }
-  if (!process.env.DATABASE_URL) {
-    console.error("[db] DATABASE_URL is not set");
-    process.exit(1);
-  }
-
-  const script = path.join(__dirname, "packages/db/scripts/prisma-env.cjs");
-  console.info("[db] applying Prisma schema (db push)...");
-  const result = spawnSync(process.execPath, [script, "db", "push", "--skip-generate"], {
-    stdio: "inherit",
-    env: process.env,
-  });
-
-  if (result.error) {
-    console.error("[db] failed to start prisma:", result.error.message);
-    process.exit(1);
-  }
-  if (result.status !== 0) {
-    console.error("[db] prisma db push failed");
-    process.exit(result.status ?? 1);
-  }
-  console.info("[db] schema ready");
+const bootstrap = path.join(__dirname, "docker-bootstrap.cjs");
+const result = spawnSync(process.execPath, [bootstrap], {
+  stdio: "inherit",
+  env: process.env,
+});
+if (result.error) {
+  console.error("[bootstrap] failed to start:", result.error.message);
+  process.exit(1);
+}
+if (result.status !== 0) {
+  process.exit(result.status ?? 1);
 }
 
-applySchema();
 require("./apps/web/server.js");

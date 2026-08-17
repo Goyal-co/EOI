@@ -10,7 +10,12 @@ export async function register() {
         );
       }
     } catch (error) {
-      console.warn("[Email] Template sync skipped:", error);
+      const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code) : "";
+      if (code === "P2021") {
+        console.info("[Email] Template sync skipped until schema is applied");
+      } else {
+        console.warn("[Email] Template sync skipped");
+      }
     }
   }
 }
