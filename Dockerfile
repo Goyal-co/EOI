@@ -53,6 +53,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --chown=nextjs:nodejs scripts/docker-start.cjs ./docker-start.cjs
+COPY certs/ap-south-1-bundle.pem /ap-south-1-bundle.pem
+RUN chmod 644 /ap-south-1-bundle.pem
 USER nextjs
 EXPOSE 3000
 STOPSIGNAL SIGTERM
