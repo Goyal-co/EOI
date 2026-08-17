@@ -50,6 +50,25 @@ function pushSchema() {
   console.info("[db] schema created");
 }
 
+async function ensureEmailTemplateTable(prisma) {
+  if (await tableExists(prisma, "EmailTemplate")) return;
+  console.info("[db] creating EmailTemplate table");
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "EmailTemplate" (
+      "id" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
+      "subject" TEXT NOT NULL,
+      "body" TEXT NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "EmailTemplate_pkey" PRIMARY KEY ("id")
+    )
+  `);
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "EmailTemplate_type_key" ON "EmailTemplate"("type")`,
+  );
+}
+
 async function ensureSchema() {
   if (process.env.SKIP_DB_PUSH === "1") {
     console.info("[db] SKIP_DB_PUSH=1 — skipping");
@@ -65,6 +84,12 @@ async function ensureSchema() {
     await prisma.$disconnect();
   }
   pushSchema();
+  const verify = new PrismaClient();
+  try {
+    await ensureEmailTemplateTable(verify);
+  } finally {
+    await verify.$disconnect();
+  }
 }
 
 async function ensureAdmin() {

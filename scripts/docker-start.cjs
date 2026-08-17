@@ -16,6 +16,7 @@ for (const key of Object.keys(process.env)) {
   }
 }
 
+console.info("[boot] docker-start — bootstrap then Next.js");
 const bootstrap = path.join(__dirname, "docker-bootstrap.cjs");
 const result = spawnSync(process.execPath, [bootstrap], {
   stdio: "inherit",
