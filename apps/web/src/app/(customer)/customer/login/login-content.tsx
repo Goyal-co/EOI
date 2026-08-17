@@ -58,6 +58,7 @@ export default function CustomerLoginContent() {
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
+        portal: "customer",
         redirect: false,
         callbackUrl: "/customer/welcome",
       });

@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiError } from "@/lib/api";
+import { withAuth, apiError, withApiRoute } from "@/lib/api";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 
 function escapeCsv(value: unknown): string {
@@ -10,7 +10,7 @@ function escapeCsv(value: unknown): string {
   return str;
 }
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("admin.export.get", async (req: Request) => {
   const ip = getClientIp(req);
   const limited = await rateLimitAsync(`export:${ip}`, 10, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many export requests. Try again later.", 429);
@@ -85,4 +85,4 @@ export async function GET(req: Request) {
       "Content-Disposition": `attachment; filename="eois-${Date.now()}.csv"`,
     },
   });
-}
+});

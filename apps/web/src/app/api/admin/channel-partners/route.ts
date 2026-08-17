@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 
-export async function GET() {
+export const GET = withApiRoute("admin.channel-partners.get", async () => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -29,4 +29,4 @@ export async function GET() {
     city: cp.city,
     createdAt: cp.createdAt,
   })));
-}
+});

@@ -1,10 +1,10 @@
 import { prisma } from "@goyal/db";
 import { adminSettingsSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { getSystemSettings, invalidateSystemSettingsCache } from "@/lib/services/system-settings";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 
-export async function GET() {
+export const GET = withApiRoute("admin.settings.get", async () => {
   const { error, session } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -21,9 +21,9 @@ export async function GET() {
     eoiRules: settings.eoiRules,
     permissions: settings.permissions,
   });
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("admin.settings.put", async (req: Request) => {
   const { error, session } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -77,4 +77,4 @@ export async function PUT(req: Request) {
   });
 
   return apiResponse(updated);
-}
+});

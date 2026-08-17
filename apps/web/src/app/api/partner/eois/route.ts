@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("partner.eois.get", async (req: Request) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -27,4 +27,4 @@ export async function GET(req: Request) {
   });
 
   return apiResponse(eois);
-}
+});

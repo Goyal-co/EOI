@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { z } from "zod";
 
@@ -7,7 +7,7 @@ const checkStatusSchema = z.object({
   email: z.string().email(),
 });
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("partner.check-status.post", async (req: Request) => {
   const ip = getClientIp(req);
   const limited = rateLimit(`check-status:${ip}`, 10, 60 * 60 * 1000);
   if (!limited.ok) {
@@ -36,4 +36,4 @@ export async function POST(req: Request) {
   }
 
   return apiResponse({ status: "invalid" as const });
-}
+});

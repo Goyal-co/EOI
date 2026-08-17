@@ -1,12 +1,15 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@goyal/db";
 import { cpRegisterStep1Schema, cpRegisterStep2Schema, type DocumentType } from "@goyal/types";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { NotificationService } from "@goyal/email";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { isUniqueConstraintError } from "@goyal/db";
 import { checkCpRegistrationEmail } from "@/lib/registration/email-conflict";
 import { DocumentService } from "@/lib/services/document";
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
 
 async function parseRegisterBody(req: Request): Promise<{
   step: number;
@@ -76,10 +79,11 @@ async function saveRegistrationDoc(
     fileSize: file.size,
     mimeType,
     cpId,
+    skipStorageCheck: true,
   });
 }
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("partner.register", async (req: Request) => {
   const ip = getClientIp(req);
   const limited = rateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many registration attempts. Try again later.", 429);
@@ -89,8 +93,8 @@ export async function POST(req: Request) {
   let files: Partial<Record<"reraCert" | "gstCert" | "cheque" | "panDoc", File>>;
   try {
     ({ step, data, files } = await parseRegisterBody(req));
-  } catch {
-    return apiError("Invalid registration payload");
+  } catch (cause) {
+    return apiError("Invalid registration payload", 400, undefined, { cause });
   }
 
   if (step === 1) {
@@ -137,8 +141,31 @@ export async function POST(req: Request) {
     try {
       let userId: string;
       let cpId: string;
+      let createdNewUser = false;
 
-      if (emailCheck.convertUserId) {
+      if (emailCheck.resumeUserId) {
+        const user = await prisma.user.update({
+          where: { id: emailCheck.resumeUserId },
+          data: {
+            passwordHash,
+            name: step1.data.fullName,
+            status: "PENDING",
+            cpProfile: {
+              update: {
+                companyName: step2.data.companyName,
+                mobile: step1.data.mobile,
+                reraNumber: step2.data.reraNumber,
+                panNumber: step2.data.panNumber,
+                gstNumber: step2.data.gstNumber || null,
+                status: "PENDING",
+              },
+            },
+          },
+          include: { cpProfile: true },
+        });
+        userId = user.id;
+        cpId = user.cpProfile!.id;
+      } else if (emailCheck.convertUserId) {
         const user = await prisma.$transaction(async (tx) => {
           const customer = await tx.customer.findUnique({
             where: { userId: emailCheck.convertUserId! },
@@ -197,6 +224,7 @@ export async function POST(req: Request) {
         });
         userId = user.id;
         cpId = user.cpProfile!.id;
+        createdNewUser = true;
       }
 
       try {
@@ -207,9 +235,15 @@ export async function POST(req: Request) {
           await saveRegistrationDoc(cpId, userId, "GST_CERT", files.gstCert);
         }
       } catch (uploadErr) {
+        await prisma.document.deleteMany({ where: { cpId } }).catch(() => undefined);
+        if (createdNewUser) {
+          await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
+        }
         return apiError(
           uploadErr instanceof Error ? uploadErr.message : "Failed to upload registration documents",
           400,
+          undefined,
+          { cause: uploadErr },
         );
       }
 
@@ -218,10 +252,14 @@ export async function POST(req: Request) {
         cpName: step1.data.fullName,
       });
 
-      const admins = await prisma.user.findMany({ where: { role: "ADMIN" } });
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        select: { id: true, email: true },
+      });
       for (const admin of admins) {
         await NotificationService.notifyCPRegistered({
           adminUserId: admin.id,
+          adminEmail: admin.email,
           cpName: step1.data.fullName,
           companyName: step2.data.companyName,
         });
@@ -230,11 +268,11 @@ export async function POST(req: Request) {
       return apiResponse({ success: true, userId }, 201);
     } catch (error) {
       if (isUniqueConstraintError(error, "email")) {
-        return apiError("Email already registered", 409, "DUPLICATE_EMAIL");
+        return apiError("Email already registered", 409, "DUPLICATE_EMAIL", { cause: error });
       }
       throw error;
     }
   }
 
   return apiError("Invalid step");
-}
+});

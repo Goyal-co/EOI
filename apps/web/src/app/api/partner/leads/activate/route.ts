@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import {
   evaluateIdentityLock,
   getIdentityPunchContext,
@@ -17,7 +17,7 @@ const activateSchema = z.object({
  * Validate that this CP may re-activate an expired identity and return
  * punch-context so the UI can open the punch/map modal prefilled.
  */
-export async function POST(req: Request) {
+export const POST = withApiRoute("partner.leads.activate", async (req: Request) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -98,4 +98,4 @@ export async function POST(req: Request) {
     lockExpiresAt: punchContext.lockExpiresAt,
     lockDaysRemaining: punchContext.lockDaysRemaining,
   });
-}
+});

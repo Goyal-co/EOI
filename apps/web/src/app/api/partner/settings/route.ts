@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { partnerSettingsSchema } from "@goyal/types";
 import { getSystemSettings } from "@/lib/services/system-settings";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 
 const DEFAULTS = {
   emailNotifications: true,
@@ -13,7 +13,7 @@ const DEFAULTS = {
   shareAnalytics: false,
 };
 
-export async function GET() {
+export const GET = withApiRoute("partner.settings.get", async () => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
 
@@ -33,9 +33,9 @@ export async function GET() {
       cpCanViewAnalytics: system.permissions.cpCanViewAnalytics,
     },
   });
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("partner.settings.put", async (req: Request) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
 
@@ -60,4 +60,4 @@ export async function PUT(req: Request) {
   });
 
   return apiResponse(merged);
-}
+});

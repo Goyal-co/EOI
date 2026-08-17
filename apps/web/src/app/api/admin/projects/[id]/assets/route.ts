@@ -6,8 +6,9 @@ import {
   PROJECT_LOCATION_WIDTH,
   projectAssetSchema,
 } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
+import { logServerWarn } from "@/lib/server-log";
 import { imageSize } from "image-size";
 
 const MAX_VALIDATION_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -25,7 +26,7 @@ async function readActualImageDimensions(fileUrl: string) {
   return { width: dimensions.width, height: dimensions.height };
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute("admin.project-assets.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -35,9 +36,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     orderBy: { createdAt: "desc" },
   });
   return apiResponse(assets);
-}
+});
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute("admin.project-assets.create", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -67,6 +68,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         validationError instanceof Error
           ? validationError.message
           : "Could not validate image dimensions",
+        400,
+        undefined,
+        { cause: validationError },
       );
     }
   }
@@ -96,9 +100,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   return apiResponse(asset, 201);
-}
+});
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute("admin.project-assets.delete", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -114,8 +118,8 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   try {
     await DocumentService.deleteStoredFile(asset.fileUrl);
-  } catch {
-    // continue with DB delete
+  } catch (cause) {
+    logServerWarn("admin.project-assets.delete", "Failed to delete stored file", { fileUrl: asset.fileUrl }, cause);
   }
 
   if (asset.type === "BANNER" || asset.type === "LOCATION") {
@@ -139,4 +143,4 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   await prisma.projectAsset.delete({ where: { id: assetId } });
   return apiResponse({ success: true });
-}
+});

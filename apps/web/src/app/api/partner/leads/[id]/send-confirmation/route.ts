@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
-import { getAppBaseUrl, NotificationService } from "@goyal/email";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { getCustomerConfirmUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute("partner.leads.send-confirmation", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -20,6 +20,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   });
 
   if (!lead) return apiError("Lead not found", 404);
+  if (!lead.inviteToken) return apiError("This lead has no confirmation token. Create a new lead.", 400);
   if (lead.confirmationStatus === "ACCEPTED") {
     return apiError("Customer has already accepted confirmation", 409);
   }
@@ -27,9 +28,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return apiError("Customer rejected the association. Create a new lead.", 409);
   }
 
-  const baseUrl = getAppBaseUrl();
-  const acceptUrl = `${baseUrl}/confirm/${lead.inviteToken}/accept`;
-  const rejectUrl = `${baseUrl}/confirm/${lead.inviteToken}/reject`;
+  const acceptUrl = getCustomerConfirmUrl(lead.inviteToken, "accept");
+  const rejectUrl = getCustomerConfirmUrl(lead.inviteToken, "reject");
 
   await prisma.lead.update({
     where: { id: lead.id },
@@ -77,4 +77,4 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       ? { devConfirmationLinks: { acceptUrl, rejectUrl } }
       : {}),
   });
-}
+});

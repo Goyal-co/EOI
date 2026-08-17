@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("admin.leads.get", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -42,4 +42,4 @@ export async function GET(req: Request) {
     eoiStatus: l.eoi?.status || "N/A",
     dateAdded: l.createdAt,
   })));
-}
+});

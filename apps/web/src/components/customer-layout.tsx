@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
 import { CustomerProjectSwitcher } from "@/components/customer/customer-project-switcher";
+import { useRequireRole } from "@/lib/use-require-role";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/customer", icon: LayoutDashboard },
@@ -24,6 +25,7 @@ export function CustomerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
+  useRequireRole("CUSTOMER");
 
   return (
     <>

@@ -1,14 +1,14 @@
 import { prisma } from "@goyal/db";
 import { confirmActionSchema } from "@goyal/types";
-import { apiResponse, apiError } from "@/lib/api";
-import { getCustomerBaseUrl, NotificationService } from "@goyal/email";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
+import { getCustomerLoginUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { ensureCustomerCredentials } from "@/lib/customer/credentials";
 import { punchPartnerLeadToCrm } from "@/lib/services/goyal-crm-sync";
 import { recordLeadEvent, ensureLeadHasIdentity } from "@/lib/leads/identity";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export const GET = withApiRoute("confirm.get", async (_req: Request, { params }: { params: Promise<{ token: string }> }) => {
   const { token } = await params;
 
   const lead = await prisma.lead.findUnique({
@@ -34,9 +34,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     intentType: lead.intentType,
     leadId: lead.leadId,
   });
-}
+});
 
-export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
+export const POST = withApiRoute("confirm.post", async (req: Request, { params }: { params: Promise<{ token: string }> }) => {
   const ip = getClientIp(req);
   const limited = await rateLimitAsync(`confirm:${ip}`, 10, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many requests. Try again later.", 429);
@@ -60,7 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   const isLeadOnly = lead.intentType === "LEAD_ONLY";
-    const customerLoginUrl = `${getCustomerBaseUrl()}/customer/login`;
+    const customerLoginUrl = getCustomerLoginUrl();
 
   // Re-opening the same link (or a client retry) must not fail — replay the outcome.
   if (lead.confirmationStatus === "ACCEPTED") {
@@ -299,4 +299,4 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   return apiError("Invalid action");
-}
+});

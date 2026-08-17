@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 
 /**
  * Integration: resolve canonical lead identity + ALL CP×project associations
@@ -7,7 +7,7 @@ import { apiResponse, apiError } from "@/lib/api";
  *
  * Auth: Bearer INTEGRATION_WEBHOOK_SECRET or X-Integration-Secret.
  */
-export async function GET(req: Request) {
+export const GET = withApiRoute("integration.leads.by-identity", async (req: Request) => {
   const secret = process.env.INTEGRATION_WEBHOOK_SECRET?.trim();
   if (!secret) return apiError("INTEGRATION_WEBHOOK_SECRET is not configured", 500);
 
@@ -236,4 +236,4 @@ export async function GET(req: Request) {
       createdAt: lead.createdAt,
     })),
   });
-}
+});

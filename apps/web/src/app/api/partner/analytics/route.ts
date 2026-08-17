@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { computeGrowth, getPeriodWindows, dateRangeFilter } from "@/lib/analytics/growth";
 import { getSystemSettings } from "@/lib/services/system-settings";
 
-export async function GET() {
+export const GET = withApiRoute("partner.analytics.get", async () => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -156,4 +156,4 @@ export async function GET() {
     journeyCounts: journeyMap,
     recentLeads: leads,
   });
-}
+});

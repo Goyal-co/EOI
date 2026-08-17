@@ -1,8 +1,8 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { maskFormData } from "@/lib/services/form-data-pii";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute("admin.eois.id.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -44,4 +44,4 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     chequeDoc: eoi.documents.find((d) => d.type === "CHEQUE"),
     approvalActions: eoi.approvalActions,
   });
-}
+});

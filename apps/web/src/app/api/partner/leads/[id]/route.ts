@@ -1,6 +1,6 @@
 import { prisma } from "@goyal/db";
 import { leadPatchSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 
 function resolveSiteVisit(data: {
   siteVisitStatus?: "NOT_SCHEDULED" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
@@ -47,7 +47,7 @@ function resolveSiteVisit(data: {
   return patch;
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute("partner.leads.patch", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -77,7 +77,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     patch = resolveSiteVisit(parsed.data);
   } catch (e) {
-    return apiError(e instanceof Error ? e.message : "Invalid site visit update");
+    return apiError(e instanceof Error ? e.message : "Invalid site visit update", 400, undefined, { cause: e });
   }
 
   if (parsed.data.siteVisitStatus === "SCHEDULED" && !parsed.data.siteVisitDate && !lead.siteVisitDate) {
@@ -90,4 +90,4 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   return apiResponse(updated);
-}
+});

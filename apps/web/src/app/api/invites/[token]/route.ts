@@ -1,8 +1,8 @@
 import { validateInviteToken } from "@goyal/auth";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export const GET = withApiRoute("invites.token.get", async (_req: Request, { params }: { params: Promise<{ token: string }> }) => {
   const { token } = await params;
   const result = await validateInviteToken(token);
 
@@ -23,4 +23,4 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     cpName: lead!.cp.user.name || "Channel Partner",
     companyName: lead!.cp.companyName,
   });
-}
+});

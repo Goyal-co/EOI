@@ -92,10 +92,19 @@ export function getPortalOrigins() {
     || trimOrigin(process.env.PUBLIC_URL)
     || trimOrigin(process.env.NEXTAUTH_URL)
     || trimOrigin(process.env.NEXT_PUBLIC_APP_URL);
+  const root = configuredRootDomain();
+  const scheme = publicScheme();
+  const derived = (kind: PortalKind) => (root ? `${scheme}://${PORTAL_DNS_LABEL[kind]}.${root}` : null);
   return {
     partner: trimOrigin(process.env.PARTNER_URL) || trimOrigin(process.env.NEXT_PUBLIC_PARTNER_URL) || app,
-    customer: trimOrigin(process.env.CUSTOMER_URL) || trimOrigin(process.env.NEXT_PUBLIC_CUSTOMER_URL),
-    admin: trimOrigin(process.env.ADMIN_URL) || trimOrigin(process.env.NEXT_PUBLIC_ADMIN_URL),
+    customer:
+      trimOrigin(process.env.CUSTOMER_URL)
+      || trimOrigin(process.env.NEXT_PUBLIC_CUSTOMER_URL)
+      || derived("customer"),
+    admin:
+      trimOrigin(process.env.ADMIN_URL)
+      || trimOrigin(process.env.NEXT_PUBLIC_ADMIN_URL)
+      || derived("admin"),
   };
 }
 
@@ -154,7 +163,7 @@ export function originForPortal(kind: PortalKind, hostHeader?: string | null): s
   return getPortalOrigin(kind) || siblingOrigin(kind, hostHeader);
 }
 
-const SHARED_PREFIXES = ["/api", "/confirm", "/invite", "/auth"];
+const SHARED_PREFIXES = ["/api", "/confirm", "/invite", "/auth", "/health"];
 
 function hasPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);

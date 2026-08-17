@@ -66,9 +66,9 @@ RUN chmod 644 /ap-south-1-bundle.pem \
 USER nextjs
 EXPOSE 3000
 STOPSIGNAL SIGTERM
-# Liveness only. Full /api/health still checks DB, S3, Redis.
+# Liveness only. Full /health still checks DB, S3, Redis.
 # db push on first boot can take a while against RDS.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD wget -qO- "http://127.0.0.1:3000/api/health?live=1" || exit 1
+    CMD wget -qO- "http://127.0.0.1:3000/health?live=1" || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "docker-start.cjs"]

@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute("admin.users.id.patch", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -23,4 +23,4 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   return apiResponse(updated);
-}
+});

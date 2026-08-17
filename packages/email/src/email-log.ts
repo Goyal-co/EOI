@@ -63,8 +63,8 @@ export async function enqueueEmailRetry(emailLogId: string): Promise<void> {
     await redis.connect();
     await redis.lpush("email:retry", emailLogId);
     await redis.quit();
-  } catch {
-    // Redis unavailable — retry handled via DB status
+  } catch (error) {
+    console.warn(`[warn] scope=email.retry msg=Redis unavailable for email retry queue`, error);
   }
 }
 

@@ -1,6 +1,6 @@
 import { prisma } from "@goyal/db";
 import { projectSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
 function normalizeLocationLink(value: string | undefined): string | null {
@@ -8,7 +8,7 @@ function normalizeLocationLink(value: string | undefined): string | null {
   return value.trim();
 }
 
-export async function GET() {
+export const GET = withApiRoute("admin.projects.get", async () => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -39,9 +39,9 @@ export async function GET() {
       }))
     )
   );
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("admin.projects.post", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -76,4 +76,4 @@ export async function POST(req: Request) {
   }
 
   return apiResponse(project, 201);
-}
+});

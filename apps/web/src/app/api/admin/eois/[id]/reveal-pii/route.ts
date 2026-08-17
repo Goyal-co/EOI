@@ -1,10 +1,10 @@
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { prisma } from "@goyal/db";
 import { decryptFormData } from "@/lib/services/form-data-pii";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute("admin.eois.id.reveal-pii.post", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const ip = getClientIp(req);
   const limited = await rateLimitAsync(`reveal-pii:${ip}`, 20, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many requests. Try again later.", 429);
@@ -36,4 +36,4 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     formData: decryptFormData(rawFormData),
     piiMasked: false,
   });
-}
+});

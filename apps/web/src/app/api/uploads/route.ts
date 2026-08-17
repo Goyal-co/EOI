@@ -1,4 +1,4 @@
-import { withAuth, apiError, apiResponse } from "@/lib/api";
+import { withAuth, apiError, apiResponse, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
 import { inferMimeType } from "@/lib/uploads/client-upload";
@@ -7,7 +7,7 @@ import type { DocumentType, UserRole } from "@goyal/types";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("uploads.create", async (req: Request) => {
   const ip = getClientIp(req);
   const limited = await rateLimitAsync(`upload:${ip}`, 30, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many upload requests. Try again later.", 429);
@@ -48,4 +48,4 @@ export async function POST(req: Request) {
     mimeType,
     key: stored.key,
   });
-}
+});

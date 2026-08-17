@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { adminProjectPatchSchema, projectEoiRuleSchema } from "@goyal/types";
 import { NotificationService, isAdminNotificationEnabled } from "@goyal/email";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
 function normalizeLocationLink(value: string | undefined): string | null | undefined {
@@ -9,7 +9,7 @@ function normalizeLocationLink(value: string | undefined): string | null | undef
   if (!value.trim()) return null;
   return value.trim();
 }
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute("admin.projects.id.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -24,9 +24,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     startingPrice: Number(project.startingPrice),
     bannerUrl: await resolveProjectBannerUrl(project.bannerUrl),
   });
-}
+});
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute("admin.projects.id.patch", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -94,13 +94,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   return apiResponse(project);
-}
+});
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute("admin.projects.id.delete", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
 
   await prisma.project.delete({ where: { id } });
   return apiResponse({ success: true });
-}
+});

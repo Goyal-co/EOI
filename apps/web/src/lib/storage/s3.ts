@@ -95,7 +95,11 @@ export async function s3HealthCheck(): Promise<boolean> {
   try {
     await getS3Client().send(new HeadBucketCommand({ Bucket: getS3Bucket() }));
     return true;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[warn] scope=s3.health msg=HeadBucket failed bucket=${getS3Bucket()}`,
+      err instanceof Error ? err.message : err,
+    );
     return false;
   }
 }

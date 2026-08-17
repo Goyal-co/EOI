@@ -14,6 +14,11 @@ const ORIGIN_KEYS = [
   "NEXT_PUBLIC_APP_URL",
   "NEXTAUTH_URL",
   "NEXT_PUBLIC_ROOT_DOMAIN",
+  "ROOT_DOMAIN",
+  "APP_URL",
+  "PARTNER_URL",
+  "CUSTOMER_URL",
+  "ADMIN_URL",
 ] as const;
 
 const saved: Record<string, string | undefined> = {};
@@ -99,6 +104,7 @@ describe("rewritePathForPortal", () => {
   it("leaves already-prefixed and shared paths alone", () => {
     expect(rewritePathForPortal("/partner/leads", "partner")).toBe("/partner/leads");
     expect(rewritePathForPortal("/api/health", "partner")).toBe("/api/health");
+    expect(rewritePathForPortal("/health", "customer")).toBe("/health");
     expect(rewritePathForPortal("/confirm/abc", "customer")).toBe("/confirm/abc");
   });
 });

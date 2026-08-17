@@ -51,11 +51,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        portal: { label: "Portal", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = normalizeEmail(String(credentials.email));
+        const portal = String(credentials.portal || "").toLowerCase() || "unknown";
         const user = await prisma.user.findFirst({
           where: { email: { equals: email, mode: "insensitive" } },
           include: {
@@ -64,19 +66,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
-        if (!user || !user.passwordHash) return null;
+        if (!user || !user.passwordHash) {
+          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: user not found or has no password`);
+          return null;
+        }
 
         const valid = await bcrypt.compare(
           credentials.password as string,
           user.passwordHash
         );
-        if (!valid) return null;
+        if (!valid) {
+          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: invalid password`);
+          return null;
+        }
 
-        if (user.status !== "ACTIVE" && user.status !== "PENDING") return null;
+        const expectedRole: Record<string, UserRole> = {
+          admin: "ADMIN",
+          partner: "CHANNEL_PARTNER",
+          customer: "CUSTOMER",
+        };
+        if (portal && expectedRole[portal] && user.role !== expectedRole[portal]) {
+          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} role=${user.role} msg=login failed: wrong portal for role`);
+          return null;
+        }
+
+        if (user.status !== "ACTIVE" && user.status !== "PENDING") {
+          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} status=${user.status} msg=login failed: account status not allowed`);
+          return null;
+        }
 
         if (user.role === "CHANNEL_PARTNER") {
-          if (user.cpProfile?.status === "BLOCKED") return null;
-          if (user.cpProfile?.status !== "APPROVED") return null;
+          if (user.cpProfile?.status === "BLOCKED") {
+            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: channel partner blocked`);
+            return null;
+          }
+          if (user.cpProfile?.status !== "APPROVED") {
+            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} cpStatus=${user.cpProfile?.status || "missing"} msg=login failed: channel partner not approved`);
+            return null;
+          }
         }
 
         return {
@@ -115,7 +142,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               },
               include: { eoi: true },
             });
-            if (!linkedLead) return "/customer/login?error=AccessDenied";
+            if (!linkedLead) {
+              console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: customer has no accepted EOI lead`);
+              return "/customer/login?error=AccessDenied";
+            }
             if (!existingUser.googleId) {
               await prisma.user.update({
                 where: { id: existingUser.id },
@@ -139,8 +169,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
           }
           if (existingUser.role === "CHANNEL_PARTNER") {
+            console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: email registered as partner`);
             return "/customer/login?error=EmailRegisteredAsPartner";
           }
+          console.warn(`[warn] scope=auth.google email=${email} role=${existingUser.role} msg=google sign-in denied: email already registered`);
           return "/customer/login?error=EmailAlreadyRegistered";
         }
 
@@ -194,12 +226,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
           } catch (error) {
             if (isUniqueConstraintError(error, "email")) {
+              console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: unique email constraint`);
               return "/customer/login?error=EmailAlreadyRegistered";
             }
+            console.error(`[error] scope=auth.google email=${email} msg=google customer create failed`, error);
             throw error;
           }
         }
 
+        console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: no invited EOI lead`);
         return "/customer/login?error=AccessDenied";
       }
       return true;

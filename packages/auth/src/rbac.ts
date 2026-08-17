@@ -42,6 +42,7 @@ export function isPublicRoute(pathname: string): boolean {
     "/api/auth",
     "/api/confirm",
     "/api/invites",
+    "/health",
     "/api/health",
     "/api/webhooks",
     "/api/partner/register",

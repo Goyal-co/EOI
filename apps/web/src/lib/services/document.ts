@@ -282,9 +282,12 @@ export class DocumentService {
     mimeType?: string;
     eoiId?: string;
     cpId?: string;
+    skipStorageCheck?: boolean;
   }) {
-    const exists = await this.objectExists(params.fileUrl);
-    if (!exists) throw new Error("Uploaded file not found in storage");
+    if (!params.skipStorageCheck) {
+      const exists = await this.objectExists(params.fileUrl);
+      if (!exists) throw new Error("Uploaded file not found in storage");
+    }
 
     return prisma.document.create({
       data: {

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
 import { useState } from "react";
+import { useRequireRole } from "@/lib/use-require-role";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -28,6 +29,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
+  useRequireRole("ADMIN");
 
   return (
     <>

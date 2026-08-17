@@ -6,3 +6,24 @@ export async function register() {
     // before Next starts; admin /api/admin/email-templates can sync later.
   }
 }
+
+export async function onRequestError(
+  err: { digest?: string } & Error,
+  request: { path: string; method: string; headers: { [key: string]: string | string[] } },
+  context: { routerKind: string; routePath: string; routeType: string },
+) {
+  const { logServerError } = await import("./lib/server-log");
+  logServerError(
+    `next.${context.routeType}`,
+    err.message || "Unhandled request error",
+    {
+      method: request.method,
+      path: request.path,
+      route: context.routePath,
+      router: context.routerKind,
+      digest: err.digest,
+      status: 500,
+    },
+    err,
+  );
+}

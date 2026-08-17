@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
 import { cpStatusUpdateSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
-import { NotificationService } from "@goyal/email";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
+import { getPartnerBaseUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute("admin.channel-partners.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -37,9 +37,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }, {} as Record<string, number>),
     },
   });
-}
+});
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute("admin.channel-partners.patch", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -127,7 +127,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   if (status === "APPROVED" && cp.user) {
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/partner/login`;
+    const loginUrl = `${getPartnerBaseUrl()}/partner/login`;
     await NotificationService.notifyCPApproved({
       cpUserId: cp.user.id,
       cpEmail: cp.user.email,
@@ -147,4 +147,5 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
   }
 
-  return apiResponse(updated);}
+  return apiResponse(updated);
+});

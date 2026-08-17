@@ -1,9 +1,10 @@
 import { prisma } from "@goyal/db";
 import { leadCreateSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { logServerError } from "@/lib/server-log";
 import { NextResponse } from "next/server";
 import { generateInviteToken } from "@goyal/auth";
-import { getAppBaseUrl, NotificationService } from "@goyal/email";
+import { getCustomerConfirmUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveLeadIntent } from "@/lib/leads/intent";
@@ -87,7 +88,7 @@ function serializePartnerLead(lead: {
   };
 }
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -282,9 +283,9 @@ export async function GET(req: Request) {
   }
 
   return apiResponse(result);
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("partner.leads.create", async (req: Request) => {
   const tag = (res: Response) => {
     // Lets us confirm which deployment is serving leads.partnergoyalco.com
     res.headers.set("x-eoi-punch", "v4");
@@ -294,7 +295,7 @@ export async function POST(req: Request) {
     return tag(await postPartnerLead(req));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    console.error("[Partner leads] unhandled POST error:", detail, error);
+    logServerError("partner.leads.create", "Unhandled POST error", { status: 500 }, error);
     return tag(
       NextResponse.json(
         { error: "Failed to create lead. Please try again.", detail },
@@ -302,7 +303,7 @@ export async function POST(req: Request) {
       ),
     );
   }
-}
+});
 
 async function postPartnerLead(req: Request) {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
@@ -539,9 +540,8 @@ async function postPartnerLead(req: Request) {
   const identityContext = await getIdentityPunchContext(cpId, mobile, email);
   const publicLeadId = lead.leadId!;
 
-  const baseUrl = getAppBaseUrl();
-  const acceptUrl = `${baseUrl}/confirm/${inviteToken}/accept`;
-  const rejectUrl = `${baseUrl}/confirm/${inviteToken}/reject`;
+  const acceptUrl = getCustomerConfirmUrl(inviteToken, "accept");
+  const rejectUrl = getCustomerConfirmUrl(inviteToken, "reject");
 
   let emailSent = false;
   let emailError: string | undefined;

@@ -1,8 +1,8 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ assetId: string }> }) {
+export const GET = withApiRoute("partner.assets.assetId.download.get", async (_req: Request, { params }: { params: Promise<{ assetId: string }> }) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
 
@@ -31,4 +31,4 @@ export async function GET(_req: Request, { params }: { params: Promise<{ assetId
     mimeType: DocumentService.mimeTypeFromFileName(asset.fileName) || "application/octet-stream",
     type: asset.type,
   });
-}
+});

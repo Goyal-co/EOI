@@ -1,12 +1,12 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { daysRemainingUntil, phoneLockWindowMs, priorCpCooldownMs } from "@/lib/leads/phone";
 
 /** Full identity drawer: associations + timeline + lock state. */
-export async function GET(
+export const GET = withApiRoute("admin.lead-identities.get", async (
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
-) {
+) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -172,4 +172,4 @@ export async function GET(
       };
     }),
   });
-}
+});

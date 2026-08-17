@@ -1,4 +1,4 @@
-import { getCustomerBaseUrl } from "./urls";
+import { getCustomerLoginUrl, getCustomerPortalUrl, getCustomerEoiUrl } from "./urls";
 import {
   wrapEmail,
   emailHeader,
@@ -142,7 +142,7 @@ export function invitationEmailHtml(params: {
   leadId?: string;
   password?: string;
 }) {
-  const loginUrl = params.customerLoginUrl || `${getCustomerBaseUrl()}/customer/login`;
+  const loginUrl = params.customerLoginUrl || getCustomerLoginUrl();
 
   const detailItems: { label: string; value: string; icon?: string }[] = [];
   if (params.leadId) {
@@ -186,7 +186,7 @@ export function eoiSubmittedEmailHtml(params: {
   referenceNumber: string;
   customerPortalUrl?: string;
 }) {
-  const portalUrl = params.customerPortalUrl || `${getCustomerBaseUrl()}/customer`;
+  const portalUrl = params.customerPortalUrl || getCustomerPortalUrl();
 
   return wrapEmail([
     emailHeader(),
@@ -214,7 +214,7 @@ export function eoiApprovedEmailHtml(params: {
   approvedDate?: string;
   customerPortalUrl?: string;
 }) {
-  const portalUrl = params.customerPortalUrl || `${getCustomerBaseUrl()}/customer`;
+  const portalUrl = params.customerPortalUrl || getCustomerPortalUrl();
   const approvedOn = formatApprovalDate(params.approvedDate);
 
   return wrapEmail([
@@ -245,7 +245,7 @@ export function eoiRejectedEmailHtml(params: {
   remarks?: string;
   customerPortalUrl?: string;
 }) {
-  const portalUrl = params.customerPortalUrl || `${getCustomerBaseUrl()}/customer`;
+  const portalUrl = params.customerPortalUrl || getCustomerPortalUrl();
 
   return wrapEmail([
     emailHeader(),
@@ -267,7 +267,7 @@ export function correctionRequestedEmailHtml(params: {
   remarks: string;
   eoiFormUrl?: string;
 }) {
-  const formUrl = params.eoiFormUrl || `${getCustomerBaseUrl()}/customer/eoi`;
+  const formUrl = params.eoiFormUrl || getCustomerEoiUrl();
 
   return wrapEmail([
     emailHeader(),

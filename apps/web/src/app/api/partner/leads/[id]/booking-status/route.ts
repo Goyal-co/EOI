@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 
 async function fetchBookingStatus(leadId: string) {
   const hubUrl = process.env.BOOKING_INVENTORY_URL ?? process.env.INTEGRATION_HUB_URL;
@@ -15,7 +15,7 @@ async function fetchBookingStatus(leadId: string) {
   return res.json();
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute("partner.leads.id.booking-status.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER", "ADMIN"]);
   if (error) return error;
 
@@ -59,4 +59,4 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
     timeline,
   });
-}
+});

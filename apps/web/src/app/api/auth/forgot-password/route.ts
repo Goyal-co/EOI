@@ -1,11 +1,11 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@goyal/db";
 import { forgotPasswordSchema } from "@goyal/types";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { rateLimitAsync, getClientIp } from "@/lib/rate-limit";
-import { getAppBaseUrl, getCustomerBaseUrl, passwordResetEmailHtml, sendEmailWithLog } from "@goyal/email";
+import { getCustomerResetPasswordUrl, getPartnerBaseUrl, passwordResetEmailHtml, sendEmailWithLog } from "@goyal/email";
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("auth.forgot-password", async (req: Request) => {
   const ip = getClientIp(req);
   const limited = await rateLimitAsync(`forgot-password:${ip}`, 5, 60 * 60 * 1000);
   if (!limited.ok) return apiError("Too many requests. Try again later.", 429);
@@ -27,13 +27,10 @@ export async function POST(req: Request) {
       data: { userId: user.id, token, expiresAt },
     });
 
-    const resetPath =
+    const resetUrl =
       user.role === "CUSTOMER"
-        ? `/customer/reset-password/${token}`
-        : `/partner/reset-password/${token}`;
-    const base =
-      user.role === "CUSTOMER" ? getCustomerBaseUrl() : getAppBaseUrl();
-    const resetUrl = `${base}${resetPath}`;
+        ? getCustomerResetPasswordUrl(token)
+        : `${getPartnerBaseUrl()}/partner/reset-password/${token}`;
     await sendEmailWithLog({
       to: user.email,
       subject: "Reset your password — Goyal & Co. | Hariyana Group",
@@ -43,4 +40,4 @@ export async function POST(req: Request) {
   }
 
   return apiResponse({ success: true, message: "If an account exists, a reset link has been sent." });
-}
+});

@@ -1,5 +1,5 @@
 import { processEmailRetryQueue } from "@goyal/email";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,15 +10,15 @@ function isAuthorizedCron(req: Request): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("cron.email-retry.post", async (req: Request) => {
   if (!isAuthorizedCron(req)) {
     return apiError("Unauthorized", 401);
   }
 
   const processed = await processEmailRetryQueue(25);
   return apiResponse({ processed });
-}
+});
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("cron.email-retry.get", async (req: Request) => {
   return POST(req);
-}
+});

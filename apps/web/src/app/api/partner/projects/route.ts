@@ -1,8 +1,8 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
-export async function GET() {
+export const GET = withApiRoute("partner.projects.get", async () => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -43,4 +43,4 @@ export async function GET() {
       }))
     )
   );
-}
+});

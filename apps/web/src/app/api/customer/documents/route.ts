@@ -1,11 +1,11 @@
 import { prisma } from "@goyal/db";
 import { documentUploadSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { resolveCustomerEoi } from "@/lib/customer/eoi-resolver";
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("customer.documents.get", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -17,9 +17,9 @@ export async function GET(req: Request) {
 
   const documents = await DocumentService.getDocumentsByEOI(eoi.id);
   return apiResponse(documents);
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("customer.documents.post", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -57,4 +57,4 @@ export async function POST(req: Request) {
     ipAddress: getIpFromRequest(req),
   });
   return apiResponse(doc, 201);
-}
+});

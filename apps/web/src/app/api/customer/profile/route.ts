@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { customerProfileSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
-export async function GET() {
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
+export const GET = withApiRoute("customer.profile.get", async () => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -11,9 +11,9 @@ export async function GET() {
   });
 
   return apiResponse(customer);
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("customer.profile.put", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -31,4 +31,4 @@ export async function PUT(req: Request) {
     data: { name: parsed.data.fullName },
   });
   return apiResponse(customer);
-}
+});

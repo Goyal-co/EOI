@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
 import { emailTemplatePatchSchema } from "@goyal/types";
 import { syncDefaultEmailTemplates } from "@goyal/email";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("admin.email-templates.get", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -16,9 +16,9 @@ export async function GET(req: Request) {
 
   const templates = await prisma.emailTemplate.findMany({ orderBy: { type: "asc" } });
   return apiResponse(templates);
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("admin.email-templates.put", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -40,4 +40,4 @@ export async function PUT(req: Request) {
   });
 
   return apiResponse(template);
-}
+});

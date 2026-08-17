@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { notificationMarkReadSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
-export async function GET(req: Request) {
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
+export const GET = withApiRoute("notifications.get", async (req: Request) => {
   const { error, session } = await withAuth();
   if (error) return error;
 
@@ -22,9 +22,9 @@ export async function GET(req: Request) {
   });
 
   return apiResponse({ notifications, unreadCount });
-}
+});
 
-export async function PATCH(req: Request) {
+export const PATCH = withApiRoute("notifications.patch", async (req: Request) => {
   const { error, session } = await withAuth();
   if (error) return error;
 
@@ -45,4 +45,4 @@ export async function PATCH(req: Request) {
   }
 
   return apiResponse({ success: true });
-}
+});

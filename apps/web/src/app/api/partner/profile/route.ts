@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
 import { partnerProfileSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 
-export async function GET() {
+export const GET = withApiRoute("partner.profile.get", async () => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -26,9 +26,9 @@ export async function GET() {
     officeAddress: user.cpProfile.officeAddress,
     city: user.cpProfile.city,
   });
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("partner.profile.put", async (req: Request) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -72,4 +72,4 @@ export async function PUT(req: Request) {
   });
 
   return apiResponse(updated);
-}
+});

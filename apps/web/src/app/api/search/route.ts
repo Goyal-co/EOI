@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 import type { UserRole } from "@goyal/types";
 
 interface SearchResult {
@@ -9,7 +9,7 @@ interface SearchResult {
   href: string;
 }
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("search.get", async (req: Request) => {
   const { error, session } = await withAuth();
   if (error) return error;
 
@@ -91,4 +91,4 @@ export async function GET(req: Request) {
   }
 
   return apiResponse({ results: results.slice(0, 10) });
-}
+});

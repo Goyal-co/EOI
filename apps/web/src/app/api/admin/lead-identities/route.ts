@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { daysRemainingUntil, phoneLockWindowMs, priorCpCooldownMs } from "@/lib/leads/phone";
 
 /** List canonical lead identities (one row per public Lead ID). */
-export async function GET(req: Request) {
+export const GET = withApiRoute("admin.lead-identities.list", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -87,4 +87,4 @@ export async function GET(req: Request) {
       };
     }),
   );
-}
+});

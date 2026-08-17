@@ -88,7 +88,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
 
     if (!res.ok) {
       const err = await res.text();
-      console.error("[Email] Brevo API error:", err);
+      console.error(`[error] scope=email.brevo status=${res.status} to=${options.to} subject=${options.subject} msg=Brevo API error`, err);
       return { success: false, error: err };
     }
 
@@ -96,7 +96,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
     console.log("[Email] Brevo sent:", data.messageId);
     return { success: true, id: data.messageId };
   } catch (error) {
-    console.error("[Email] Brevo request failed:", error);
+    console.error(`[error] scope=email.brevo to=${options.to} subject=${options.subject} msg=Brevo request failed`, error);
     return { success: false, error: String(error) };
   }
 }

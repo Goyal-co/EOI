@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { NotificationService } from "@goyal/email";
@@ -21,7 +21,7 @@ import { recordLeadEvent, ensureLeadHasIdentity } from "@/lib/leads/identity";
  *
  * When cpId is provided, only that CP's association is updated/notified.
  */
-export async function POST(req: Request) {
+export const POST = withApiRoute("webhooks.reception", async (req: Request) => {
   const secret = process.env.INTEGRATION_WEBHOOK_SECRET?.trim();
   if (!secret) {
     return apiError("INTEGRATION_WEBHOOK_SECRET is not configured", 500);
@@ -374,7 +374,7 @@ export async function POST(req: Request) {
   }
 
   return apiError(`Unsupported event: ${event || "(empty)"}`);
-}
+});
 
 async function notifyMilestone(
   leadId: string,

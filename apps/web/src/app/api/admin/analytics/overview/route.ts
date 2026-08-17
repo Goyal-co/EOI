@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 import { computeGrowth, getPeriodWindows, dateRangeFilter } from "@/lib/analytics/growth";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 
-export async function GET() {
+export const GET = withApiRoute("admin.analytics.overview.get", async () => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -218,4 +218,4 @@ export async function GET() {
       })),
     },
   });
-}
+});

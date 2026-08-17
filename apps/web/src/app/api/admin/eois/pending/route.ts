@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 
-export async function GET() {
+export const GET = withApiRoute("admin.eois.pending.get", async () => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -36,4 +36,4 @@ export async function GET() {
       ? { id: e.documents.find((d) => d.type === "CHEQUE")!.id, fileUrl: e.documents.find((d) => d.type === "CHEQUE")!.fileUrl }
       : undefined,
   })));
-}
+});

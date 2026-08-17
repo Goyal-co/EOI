@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse } from "@/lib/api";
+import { withAuth, apiResponse, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 
 type ProjectAssetRow = {
@@ -77,7 +77,7 @@ function mapEoiEntry(eoi: {
   };
 }
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("customer.dashboard.get", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -150,4 +150,4 @@ export async function GET(req: Request) {
     activeEoiId: active.eoiId,
     ...active,
   });
-}
+});

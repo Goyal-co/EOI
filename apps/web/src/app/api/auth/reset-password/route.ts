@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@goyal/db";
 import { resetPasswordSchema } from "@goyal/types";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("auth.reset-password.post", async (req: Request) => {
   const body = await req.json();
   const parsed = resetPasswordSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
@@ -29,4 +29,4 @@ export async function POST(req: Request) {
   await prisma.passwordResetToken.delete({ where: { id: record.id } });
 
   return apiResponse({ success: true });
-}
+});

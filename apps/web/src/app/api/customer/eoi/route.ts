@@ -1,6 +1,6 @@
 import { prisma, Prisma } from "@goyal/db";
 import { customerEoiStepSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { EOIEngine } from "@/lib/services/eoi-engine";
 import { encryptFormData } from "@/lib/services/form-data-pii";
 import { getSystemSettings } from "@/lib/services/system-settings";
@@ -14,7 +14,7 @@ import {
 const EDITABLE_STATUSES = ["DRAFT", "PENDING_SUBMISSION", "CORRECTION_REQUESTED"];
 const LOCKED_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "CLOSED"];
 
-export async function GET(req: Request) {
+export const GET = withApiRoute("customer.eoi.get", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -36,9 +36,9 @@ export async function GET(req: Request) {
   });
 
   return apiResponse(full);
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = withApiRoute("customer.eoi.put", async (req: Request) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -179,4 +179,4 @@ export async function PUT(req: Request) {
   });
 
   return apiResponse(updated);
-}
+});

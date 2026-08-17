@@ -1,9 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 import { customerOwnsProjectAsset } from "@/lib/customer/eoi-resolver";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ assetId: string }> }) {
+export const GET = withApiRoute("customer.assets.assetId.download.get", async (_req: Request, { params }: { params: Promise<{ assetId: string }> }) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -23,4 +23,4 @@ export async function GET(_req: Request, { params }: { params: Promise<{ assetId
     mimeType: DocumentService.mimeTypeFromFileName(asset.fileName) || "application/octet-stream",
     type: asset.type,
   });
-}
+});

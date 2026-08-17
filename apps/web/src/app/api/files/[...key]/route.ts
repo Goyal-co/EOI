@@ -1,5 +1,5 @@
 import { auth } from "@goyal/auth";
-import { apiError } from "@/lib/api";
+import { apiError, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 import { getS3Prefix } from "@/lib/storage/s3";
 
@@ -48,7 +48,7 @@ function canReadKey(
   );
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ key: string[] }> }) {
+export const GET = withApiRoute("files.get", async (_req: Request, { params }: { params: Promise<{ key: string[] }> }) => {
   const { key: segments } = await params;
   const key = (segments || []).map((part) => decodeURIComponent(part)).join("/");
   if (!isSafeObjectKey(key)) return apiError("Not found", 404);
@@ -60,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
 
   try {
     return await DocumentService.streamStoredFile(key);
-  } catch {
-    return apiError("File not found", 404);
+  } catch (cause) {
+    return apiError("File not found", 404, undefined, { cause });
   }
-}
+});

@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
 import { useState } from "react";
+import { useRequireRole } from "@/lib/use-require-role";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/partner", icon: LayoutDashboard },
@@ -23,6 +24,7 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
+  useRequireRole("CHANNEL_PARTNER");
 
   return (
     <>

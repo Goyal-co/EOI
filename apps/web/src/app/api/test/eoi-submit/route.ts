@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { apiResponse, apiError } from "@/lib/api";
+import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { EOIEngine } from "@/lib/services/eoi-engine";
 import { encryptFormData } from "@/lib/services/form-data-pii";
 import bcrypt from "bcryptjs";
@@ -11,7 +11,7 @@ function isTestEnv(req: Request) {
   return req.headers.get("x-test-secret") === secret;
 }
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("test.eoi-submit.post", async (req: Request) => {
   if (!isTestEnv(req)) return apiError("Not found", 404);
 
   const body = await req.json();
@@ -125,4 +125,4 @@ export async function POST(req: Request) {
   });
 
   return apiResponse({ eoiId: lead.eoi.id, referenceNumber: result.referenceNumber });
-}
+});

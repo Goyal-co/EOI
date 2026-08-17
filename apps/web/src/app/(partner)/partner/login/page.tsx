@@ -34,6 +34,7 @@ export default function PartnerLoginPage() {
       const result = await signIn("credentials", {
         email,
         password,
+        portal: "partner",
         redirect: false,
       });
 

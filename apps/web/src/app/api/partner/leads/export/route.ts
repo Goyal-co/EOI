@@ -1,5 +1,5 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiError, requireApprovedCP } from "@/lib/api";
+import { withAuth, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { getSystemSettings } from "@/lib/services/system-settings";
 
 function escapeCsv(value: unknown): string {
@@ -10,7 +10,7 @@ function escapeCsv(value: unknown): string {
   return str;
 }
 
-export async function GET() {
+export const GET = withApiRoute("partner.leads.export.get", async () => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
@@ -50,4 +50,4 @@ export async function GET() {
       "Content-Disposition": `attachment; filename="leads-${Date.now()}.csv"`,
     },
   });
-}
+});

@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@goyal/db";
 import { adminUserCreateSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 
-export async function GET() {
+export const GET = withApiRoute("admin.users.get", async () => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -14,9 +14,9 @@ export async function GET() {
   });
 
   return apiResponse(admins);
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withApiRoute("admin.users.post", async (req: Request) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
 
@@ -41,4 +41,4 @@ export async function POST(req: Request) {
   });
 
   return apiResponse(user, 201);
-}
+});

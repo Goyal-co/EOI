@@ -11,8 +11,8 @@ export interface CpEmailCheckResult {
   allowed: boolean;
   code?: CpEmailConflictCode;
   message?: string;
-  /** Existing user id when customer account can be converted to CP */
-  convertUserId?: string;
+  /** Existing CP user id when a previous attempt created the account but docs failed */
+  resumeUserId?: string;
   leadOnly?: boolean;
 }
 
@@ -37,6 +37,17 @@ export async function checkCpRegistrationEmail(email: string): Promise<CpEmailCh
   }
 
   if (existingUser.role === "CHANNEL_PARTNER") {
+    const cp = await prisma.channelPartner.findUnique({
+      where: { userId: existingUser.id },
+      include: { _count: { select: { documents: true } } },
+    });
+    if (cp?.status === "PENDING" && cp._count.documents === 0) {
+      return {
+        allowed: true,
+        resumeUserId: existingUser.id,
+        message: "Previous registration was incomplete. Submit again to attach your documents.",
+      };
+    }
     return {
       allowed: false,
       code: "DUPLICATE_CP",

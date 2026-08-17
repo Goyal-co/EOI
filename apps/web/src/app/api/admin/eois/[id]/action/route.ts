@@ -1,5 +1,5 @@
 import { approvalActionSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError } from "@/lib/api";
+import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { EOIEngine } from "@/lib/services/eoi-engine";
 import { getSystemSettings } from "@/lib/services/system-settings";
 import type { EOIStatus } from "@goyal/types";
@@ -10,7 +10,7 @@ const ACTION_STATUS_MAP = {
   REQUEST_CORRECTION: "CORRECTION_REQUESTED" as EOIStatus,
 };
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute("admin.eois.id.action.post", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["ADMIN"]);
   if (error) return error;
   const { id } = await params;
@@ -42,4 +42,4 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (message.includes("status changed")) return apiError(message, 409);
     return apiError(message, 400);
   }
-}
+});
