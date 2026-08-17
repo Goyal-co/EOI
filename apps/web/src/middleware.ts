@@ -6,6 +6,7 @@ import {
   portalHrefForHost,
   resolvePortalFromHost,
   rewritePathForPortal,
+  crossPortalRedirectUrl,
   type PortalKind,
 } from "@goyal/auth/portals";
 import type { UserRole } from "@goyal/types";
@@ -31,6 +32,19 @@ export default auth((req) => {
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.hostname;
   const portal = resolvePortalFromHost(host);
   const pathname = portal ? rewritePathForPortal(rawPath, portal) : rawPath;
+
+  const crossPortal = crossPortalRedirectUrl({
+    pathname: rawPath.startsWith("/customer") || rawPath.startsWith("/partner") || rawPath.startsWith("/admin")
+      ? rawPath
+      : pathname,
+    hostHeader: host,
+    role: isLoggedIn ? role : null,
+  });
+  if (crossPortal) {
+    const dest = toUrl(crossPortal, req.url);
+    if (search) dest.search = search;
+    return NextResponse.redirect(dest);
+  }
 
   const finish = (res: NextResponse) => {
     const redirected = Boolean(res.headers.get("location"));

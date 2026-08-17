@@ -5,6 +5,7 @@ import {
   isPathRoutingHost,
   resolvePortalFromHost,
   rewritePathForPortal,
+  crossPortalRedirectUrl,
 } from "@goyal/auth/portals";
 
 const ORIGIN_KEYS = [
@@ -132,5 +133,42 @@ describe("getPortalHomeHrefForHost", () => {
       "https://customer.vm.example/customer",
     );
     expect(getPortalHomeHrefForHost("partner", "10.0.0.8:3000")).toBe("/partner");
+  });
+});
+
+describe("crossPortalRedirectUrl", () => {
+  it("moves customer paths off the partner host", () => {
+    setPortalEnv();
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/customer/login",
+        hostHeader: "leads.partnergoyalco.com",
+      }),
+    ).toBe("https://customer.partnergoyalco.com/customer/login");
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/customer/eoi",
+        hostHeader: "leads.partnergoyalco.com",
+        role: "CUSTOMER",
+      }),
+    ).toBe("https://customer.partnergoyalco.com/customer/eoi");
+  });
+
+  it("leaves confirm links and same-portal paths alone", () => {
+    setPortalEnv();
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/confirm/abc/accept",
+        hostHeader: "leads.partnergoyalco.com",
+        role: "CUSTOMER",
+      }),
+    ).toBeNull();
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/customer/eoi",
+        hostHeader: "customer.partnergoyalco.com",
+        role: "CUSTOMER",
+      }),
+    ).toBeNull();
   });
 });

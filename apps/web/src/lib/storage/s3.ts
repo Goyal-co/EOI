@@ -81,7 +81,11 @@ export async function s3HeadObject(key: string): Promise<boolean> {
   try {
     await getS3Client().send(new HeadObjectCommand({ Bucket: getS3Bucket(), Key: key.replace(/^\/+/, "") }));
     return true;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[warn] scope=s3.head key=${key.replace(/^\/+/, "")} msg=HeadObject failed`,
+      err instanceof Error ? err.message : err,
+    );
     return false;
   }
 }

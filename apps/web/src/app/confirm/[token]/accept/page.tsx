@@ -18,6 +18,18 @@ interface AcceptResult {
   emailSent?: boolean;
 }
 
+function customerPortalLoginHref(loginUrl?: string) {
+  if (loginUrl?.startsWith("http://") || loginUrl?.startsWith("https://")) return loginUrl;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase();
+    if (host.startsWith("leads.") || host.startsWith("partner.") || host.startsWith("admin.")) {
+      const customerHost = host.replace(/^(leads|partner|admin)\./, "customer.");
+      return `${window.location.protocol}//${customerHost}/login`;
+    }
+  }
+  return loginUrl || "/customer/login";
+}
+
 export default function ConfirmAcceptPage() {
   const { token } = useParams<{ token: string }>();
   const [loading, setLoading] = useState(true);
@@ -63,7 +75,7 @@ export default function ConfirmAcceptPage() {
   }
 
   const isLeadOnly = result.intentType === "LEAD_ONLY";
-  const loginUrl = result.loginUrl || "/customer/login";
+  const loginUrl = customerPortalLoginHref(result.loginUrl);
 
   return (
     <PublicPageCard title={isLeadOnly ? "Thank You" : "Confirmation Accepted"}>

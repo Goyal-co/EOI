@@ -169,6 +169,47 @@ function hasPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
+export function isSharedPortalPath(pathname: string): boolean {
+  return SHARED_PREFIXES.some((p) => hasPrefix(pathname, p));
+}
+
+function portalKindFromPath(pathname: string): PortalKind | null {
+  if (hasPrefix(pathname, "/customer")) return "customer";
+  if (hasPrefix(pathname, "/partner")) return "partner";
+  if (hasPrefix(pathname, "/admin")) return "admin";
+  return null;
+}
+
+/**
+ * Absolute URL when this host is the wrong portal (e.g. customer UI on leads.*).
+ * Shared paths like /confirm stay on the current host.
+ */
+export function crossPortalRedirectUrl(args: {
+  pathname: string;
+  hostHeader: string | null | undefined;
+  role?: "ADMIN" | "CHANNEL_PARTNER" | "CUSTOMER" | null;
+}): string | null {
+  const { pathname, hostHeader, role } = args;
+  if (isPathRoutingHost(hostHeader) || isSharedPortalPath(pathname)) return null;
+  const portal = resolvePortalFromHost(hostHeader);
+  if (!portal) return null;
+
+  const pathKind = portalKindFromPath(pathname);
+  if (pathKind && pathKind !== portal) {
+    const origin = originForPortal(pathKind, hostHeader);
+    return origin ? `${origin}${pathname}` : null;
+  }
+
+  if (role) {
+    const expected = portalKindForRole(role);
+    if (expected !== portal) {
+      const origin = originForPortal(expected, hostHeader);
+      return origin ? `${origin}${getPortalHomePath(expected)}` : null;
+    }
+  }
+  return null;
+}
+
 /** Internal App Router path for a host-scoped request. */
 export function rewritePathForPortal(pathname: string, portal: PortalKind): string {
   if (SHARED_PREFIXES.some((p) => hasPrefix(pathname, p))) return pathname;

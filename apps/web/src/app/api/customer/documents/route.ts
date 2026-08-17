@@ -33,9 +33,6 @@ export const POST = withApiRoute("customer.documents.post", async (req: Request)
   const parsed = documentUploadSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
 
-  const exists = await DocumentService.objectExists(parsed.data.fileUrl);
-  if (!exists) return apiError("Uploaded file not found. Please upload again.", 400);
-
   const existing = await prisma.document.findFirst({
     where: { eoiId: eoi.id, type: parsed.data.type },
   });
@@ -46,6 +43,7 @@ export const POST = withApiRoute("customer.documents.post", async (req: Request)
   const doc = await DocumentService.saveDocument({
     ...parsed.data,
     eoiId: eoi.id,
+    skipStorageCheck: true,
   });
 
   await writeAudit({
