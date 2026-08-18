@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { cpStatusUpdateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
-import { getPartnerBaseUrl, NotificationService } from "@goyal/email";
+import { getPartnerLoginUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 export const GET = withApiRoute("admin.channel-partners.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
@@ -127,7 +127,7 @@ export const PATCH = withApiRoute("admin.channel-partners.patch", async (req: Re
   });
 
   if (status === "APPROVED" && cp.user) {
-    const loginUrl = `${getPartnerBaseUrl()}/partner/login`;
+    const loginUrl = getPartnerLoginUrl();
     await NotificationService.notifyCPApproved({
       cpUserId: cp.user.id,
       cpEmail: cp.user.email,

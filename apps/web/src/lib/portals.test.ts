@@ -3,6 +3,7 @@ import {
   getPortalHomeHrefForHost,
   getPortalLoginHrefForHost,
   isPathRoutingHost,
+  pickRequestHost,
   resolvePortalFromHost,
   rewritePathForPortal,
   crossPortalRedirectUrl,
@@ -93,6 +94,28 @@ describe("resolvePortalFromHost", () => {
   });
 });
 
+describe("pickRequestHost", () => {
+  it("keeps admin.partnergoyalco.com when x-forwarded-host is the partner host", () => {
+    setPortalEnv();
+    expect(
+      pickRequestHost({
+        host: "admin.partnergoyalco.com",
+        forwardedHost: "leads.partnergoyalco.com",
+      }),
+    ).toBe("admin.partnergoyalco.com");
+  });
+
+  it("uses x-forwarded-host when Host is an internal IP", () => {
+    setPortalEnv();
+    expect(
+      pickRequestHost({
+        host: "127.0.0.1:3000",
+        forwardedHost: "admin.partnergoyalco.com",
+      }),
+    ).toBe("admin.partnergoyalco.com");
+  });
+});
+
 describe("rewritePathForPortal", () => {
   it("prefixes portal home for bare paths", () => {
     expect(rewritePathForPortal("/", "partner")).toBe("/partner");
@@ -154,7 +177,7 @@ describe("crossPortalRedirectUrl", () => {
     ).toBe("https://customer.partnergoyalco.com/eoi");
   });
 
-  it("leaves confirm links and same-portal paths alone", () => {
+  it("sends confirm and invite links from the partner host to the customer origin", () => {
     setPortalEnv();
     expect(
       crossPortalRedirectUrl({
@@ -162,7 +185,13 @@ describe("crossPortalRedirectUrl", () => {
         hostHeader: "leads.partnergoyalco.com",
         role: "CUSTOMER",
       }),
-    ).toBeNull();
+    ).toBe("https://customer.partnergoyalco.com/confirm/abc/accept");
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/invite/abc",
+        hostHeader: "admin.partnergoyalco.com",
+      }),
+    ).toBe("https://customer.partnergoyalco.com/invite/abc");
     expect(
       crossPortalRedirectUrl({
         pathname: "/customer/eoi",

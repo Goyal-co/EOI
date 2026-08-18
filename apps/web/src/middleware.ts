@@ -2,7 +2,9 @@ import { auth } from "@goyal/auth/edge";
 import { NextResponse } from "next/server";
 import { canAccessRoute, isPublicRoute, getPortalForRole } from "@goyal/auth/rbac";
 import {
+  getPortalHomePath,
   getPortalLoginHrefForHost,
+  pickRequestHost,
   portalHrefForHost,
   resolvePortalFromHost,
   rewritePathForPortal,
@@ -29,7 +31,11 @@ export default auth((req) => {
   const { pathname: rawPath, search } = req.nextUrl;
   const isLoggedIn = !!req.auth;
   const role = req.auth?.user?.role as UserRole | undefined;
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.hostname;
+  const host = pickRequestHost({
+    host: req.headers.get("host"),
+    forwardedHost: req.headers.get("x-forwarded-host"),
+    urlHost: req.nextUrl.hostname,
+  });
   const portal = resolvePortalFromHost(host);
   const pathname = portal ? rewritePathForPortal(rawPath, portal) : rawPath;
 
@@ -60,14 +66,16 @@ export default auth((req) => {
     if (isLoggedIn && role) {
       return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url));
     }
-    return NextResponse.redirect(toUrl(loginForPath("/partner", portal, host), req.url));
+    const home = portal ? getPortalHomePath(portal) : "/partner";
+    return NextResponse.redirect(toUrl(loginForPath(home, portal, host), req.url));
   }
 
-  if (isPublicRoute(pathname)) {
+  if (isPublicRoute(pathname) || isPublicRoute(rawPath)) {
     if (isLoggedIn && (
       pathname === "/login"
       || pathname === "/partner/login"
       || pathname === "/customer/login"
+      || rawPath === "/login"
     )) {
       return NextResponse.redirect(toUrl(getPortalForRole(role!, host), req.url));
     }

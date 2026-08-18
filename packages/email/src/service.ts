@@ -1,3 +1,5 @@
+import { rewriteEmailHtmlUrls } from "./urls";
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -39,6 +41,7 @@ export function shouldUseMockEmail(): boolean {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<EmailSendResult> {
+  const html = rewriteEmailHtmlUrls(options.html);
   const sender = getSender();
   const fromOverride = options.from?.trim();
   const resolvedSender = fromOverride
@@ -58,7 +61,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
     console.log("[Email Mock] From:", `${resolvedSender.name} <${resolvedSender.email}>`);
     console.log("[Email Mock] To:", options.to);
     console.log("[Email Mock] Subject:", options.subject);
-    const linkMatch = options.html.match(/href="(https?:\/\/[^"]+)"/g);
+    const linkMatch = html.match(/href="(https?:\/\/[^"]+)"/g);
     if (linkMatch?.length) {
       console.log("[Email Mock] Links:", linkMatch.map((l) => l.replace(/^href="|"$/g, "")).join("\n  "));
     }
@@ -82,7 +85,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
         },
         to: [{ email: options.to }],
         subject: options.subject,
-        htmlContent: options.html,
+        htmlContent: html,
       }),
     });
 

@@ -1,5 +1,6 @@
 import { prisma } from "@goyal/db";
 import { getEmailLogoUrl } from "./email-layout";
+import { canonicalizeEmailUrl, rewriteEmailHtmlUrls } from "./urls";
 import {
   DEFAULT_EMAIL_TEMPLATE_BODIES,
   DEFAULT_EMAIL_TEMPLATE_SUBJECTS,
@@ -16,10 +17,11 @@ const ACTION_LINKS: { key: string; label: string }[] = [
 ];
 
 export function applyTemplatePlaceholders(template: string, vars: Record<string, string>): string {
-  return Object.entries(vars).reduce(
-    (acc, [key, value]) => acc.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value ?? ""),
-    template,
-  );
+  return Object.entries(vars).reduce((acc, [key, value]) => {
+    const raw = value ?? "";
+    const safe = /^https?:\/\//i.test(raw) ? canonicalizeEmailUrl(raw) : raw;
+    return acc.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), safe);
+  }, template);
 }
 
 /** Append any action URLs from vars that are missing from the rendered HTML. */
@@ -28,7 +30,7 @@ export function ensureActionLinks(html: string, vars: Record<string, string>): s
   const missingLinks: string[] = [];
 
   for (const { key, label } of ACTION_LINKS) {
-    const url = vars[key]?.trim();
+    const url = canonicalizeEmailUrl(vars[key]?.trim() || "");
     if (!url) continue;
     if (result.includes(url)) continue;
 
@@ -103,7 +105,7 @@ export async function resolveEmailTemplate(
   if (!(await emailTemplateTableExists())) {
     return {
       subject: applyTemplatePlaceholders(fallback.subject, vars),
-      html: ensureActionLinks(fallback.html, vars),
+      html: rewriteEmailHtmlUrls(ensureActionLinks(fallback.html, vars)),
     };
   }
   const template = await prisma.emailTemplate.findUnique({ where: { type } });
@@ -115,7 +117,7 @@ export async function resolveEmailTemplate(
     }
     return {
       subject: applyTemplatePlaceholders(fallback.subject, vars),
-      html: ensureActionLinks(fallback.html, vars),
+      html: rewriteEmailHtmlUrls(ensureActionLinks(fallback.html, vars)),
     };
   }
 
@@ -125,6 +127,7 @@ export async function resolveEmailTemplate(
   // Custom admin templates may omit links — always inject missing action URLs.
   html = ensureActionLinks(html, vars);
   html = withCurrentLogo(html);
+  html = rewriteEmailHtmlUrls(html);
 
   return { subject, html };
 }

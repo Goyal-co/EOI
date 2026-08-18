@@ -13,7 +13,7 @@ const secureCookies =
 /** Edge-safe NextAuth config (no Prisma, bcrypt, or providers). Used by middleware only. */
 export const authConfig = {
   pages: {
-    signIn: "/partner/login",
+    signIn: "/login",
     error: "/auth/error",
   },
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },

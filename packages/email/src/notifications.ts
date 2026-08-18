@@ -2,7 +2,7 @@ import { prisma, NotificationType } from "@goyal/db";
 import { sendEmailWithLog, processEmailRetryQueue } from "./email-log";
 import { shouldSendEmail, shouldCreateInAppNotification, isAdminNotificationEnabled, getSupportEmail } from "./prefs";
 import { resolveEmailTemplate } from "./template-loader";
-import { getAppBaseUrl, getAdminBaseUrl, getCustomerLoginUrl, getCustomerPortalUrl, getCustomerEoiUrl } from "./urls";
+import { getAdminLeadsUrl, getCustomerLoginUrl, getCustomerPortalUrl, getCustomerEoiUrl, getPartnerLeadsUrl, getPartnerLoginUrl, canonicalizeEmailUrl } from "./urls";
 import {
   cpRegistrationAckEmailHtml,
   cpCredentialsEmailHtml,
@@ -114,15 +114,16 @@ export class NotificationService {
     cpName: string;
     loginUrl: string;
   }) {
+    const loginUrl = canonicalizeEmailUrl(params.loginUrl || getPartnerLoginUrl());
     const email = await this.resolveEmail(
       "CP_APPROVED",
-      { cpName: params.cpName, email: params.cpEmail, loginUrl: params.loginUrl },
+      { cpName: params.cpName, email: params.cpEmail, loginUrl },
       {
         subject: "Your CP Account is Approved — Goyal & Co. | Hariyana Group",
         html: cpCredentialsEmailHtml({
           cpName: params.cpName,
           email: params.cpEmail,
-          loginUrl: params.loginUrl,
+          loginUrl,
         }),
       },
     );
@@ -155,6 +156,8 @@ export class NotificationService {
     // Only the public Lead ID is customer-facing; never fall back to internal ids.
     const leadId = params.leadId?.trim() || "";
     const isLeadOnly = params.intentType === "LEAD_ONLY";
+    const acceptUrl = canonicalizeEmailUrl(params.acceptUrl);
+    const rejectUrl = canonicalizeEmailUrl(params.rejectUrl);
     const email = await this.resolveEmail(
       isLeadOnly ? "CUSTOMER_CONFIRMATION_LEAD_ONLY" : "CUSTOMER_CONFIRMATION",
       {
@@ -164,8 +167,8 @@ export class NotificationService {
         companyName: params.companyName || "",
         projectName: params.projectName,
         projectLocation: params.projectLocation,
-        acceptUrl: params.acceptUrl,
-        rejectUrl: params.rejectUrl,
+        acceptUrl,
+        rejectUrl,
         leadId,
       },
       {
@@ -176,6 +179,8 @@ export class NotificationService {
         html: customerConfirmationEmailHtml({
           ...params,
           customerEmail: params.customerEmail,
+          acceptUrl,
+          rejectUrl,
           leadId: leadId || undefined,
         }),
       },
@@ -290,14 +295,9 @@ export class NotificationService {
     salespersonName?: string;
   }) {
     const isBooked = params.milestone === "BOOKED";
-    const appUrl = getAppBaseUrl();
-    const cpPortalUrl = `${appUrl}/partner/leads${
-      params.leadId ? `?search=${encodeURIComponent(params.leadId)}` : ""
-    }`;
+    const cpPortalUrl = getPartnerLeadsUrl(params.leadId);
     const customerPortalUrl = getCustomerPortalUrl();
-    const adminLeadsUrl = `${getAdminBaseUrl()}/admin/leads${
-      params.leadId ? `?q=${encodeURIComponent(params.leadId)}` : ""
-    }`;
+    const adminLeadsUrl = getAdminLeadsUrl(params.leadId);
     const cpLabel = params.companyName
       ? `${params.cpName} (${params.companyName})`
       : params.cpName;
@@ -477,7 +477,8 @@ export class NotificationService {
     leadId?: string;
     password?: string;
   }) {
-    const customerLoginUrl = params.customerLoginUrl || getCustomerLoginUrl();
+    const customerLoginUrl = canonicalizeEmailUrl(params.customerLoginUrl || getCustomerLoginUrl());
+    const inviteUrl = canonicalizeEmailUrl(params.inviteUrl || customerLoginUrl);
     const email = await this.resolveEmail(
       "EOI_INVITATION",
       {
@@ -487,7 +488,7 @@ export class NotificationService {
         projectName: params.projectName,
         projectLocation: params.projectLocation,
         startingPrice: params.startingPrice,
-        inviteUrl: params.inviteUrl || "",
+        inviteUrl,
         customerLoginUrl,
         leadId: params.leadId || "",
         password: params.password || "",
@@ -496,6 +497,7 @@ export class NotificationService {
         subject: `Complete Your EOI — ${params.projectName}`,
         html: invitationEmailHtml({
           ...params,
+          inviteUrl,
           customerLoginUrl,
         }),
       },

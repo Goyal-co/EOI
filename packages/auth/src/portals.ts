@@ -24,6 +24,18 @@ function hostnameOf(origin: string | null): string | null {
   }
 }
 
+function isLocalHostName(host: string | null | undefined): boolean {
+  if (!host) return true;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".localhost");
+}
+
+function publicOrigin(raw?: string | null): string | null {
+  const origin = trimOrigin(raw);
+  if (!origin) return null;
+  if (process.env.NODE_ENV === "production" && isLocalHostName(hostnameOf(origin))) return null;
+  return origin;
+}
+
 function normalizeHost(hostHeader: string | null | undefined): string | null {
   if (!hostHeader) return null;
   const first = hostHeader.split(",")[0].trim().toLowerCase();
@@ -44,7 +56,8 @@ function configuredRootDomain(): string | null {
     ?.replace(/^\./, "")
     .toLowerCase()
     .trim();
-  return root || null;
+  if (!root || root === "localhost" || root.endsWith(".localhost")) return null;
+  return root;
 }
 
 function splitSubdomain(host: string): { sub: string; root: string } | null {
@@ -75,35 +88,37 @@ export function isPathRoutingHost(hostHeader: string | null | undefined): boolea
 
 function publicScheme(): string {
   const from =
-    trimOrigin(process.env.APP_URL)
-    || trimOrigin(process.env.PUBLIC_URL)
-    || trimOrigin(process.env.NEXTAUTH_URL)
-    || trimOrigin(process.env.NEXT_PUBLIC_APP_URL)
-    || trimOrigin(process.env.PARTNER_URL)
-    || trimOrigin(process.env.NEXT_PUBLIC_PARTNER_URL);
+    publicOrigin(process.env.APP_URL)
+    || publicOrigin(process.env.PUBLIC_URL)
+    || publicOrigin(process.env.NEXTAUTH_URL)
+    || publicOrigin(process.env.NEXT_PUBLIC_APP_URL)
+    || publicOrigin(process.env.PARTNER_URL)
+    || publicOrigin(process.env.NEXT_PUBLIC_PARTNER_URL)
+    || publicOrigin(process.env.CUSTOMER_URL)
+    || publicOrigin(process.env.ADMIN_URL);
   if (from) return new URL(from).protocol.replace(":", "");
-  return "https";
+  return process.env.NODE_ENV === "production" ? "https" : "http";
 }
 
 /** Partner is the primary EOI app; APP_URL remains the partner origin. */
 export function getPortalOrigins() {
   const app =
-    trimOrigin(process.env.APP_URL)
-    || trimOrigin(process.env.PUBLIC_URL)
-    || trimOrigin(process.env.NEXTAUTH_URL)
-    || trimOrigin(process.env.NEXT_PUBLIC_APP_URL);
+    publicOrigin(process.env.APP_URL)
+    || publicOrigin(process.env.PUBLIC_URL)
+    || publicOrigin(process.env.NEXTAUTH_URL)
+    || publicOrigin(process.env.NEXT_PUBLIC_APP_URL);
   const root = configuredRootDomain();
   const scheme = publicScheme();
   const derived = (kind: PortalKind) => (root ? `${scheme}://${PORTAL_DNS_LABEL[kind]}.${root}` : null);
   return {
-    partner: trimOrigin(process.env.PARTNER_URL) || trimOrigin(process.env.NEXT_PUBLIC_PARTNER_URL) || app,
+    partner: publicOrigin(process.env.PARTNER_URL) || publicOrigin(process.env.NEXT_PUBLIC_PARTNER_URL) || app,
     customer:
-      trimOrigin(process.env.CUSTOMER_URL)
-      || trimOrigin(process.env.NEXT_PUBLIC_CUSTOMER_URL)
+      publicOrigin(process.env.CUSTOMER_URL)
+      || publicOrigin(process.env.NEXT_PUBLIC_CUSTOMER_URL)
       || derived("customer"),
     admin:
-      trimOrigin(process.env.ADMIN_URL)
-      || trimOrigin(process.env.NEXT_PUBLIC_ADMIN_URL)
+      publicOrigin(process.env.ADMIN_URL)
+      || publicOrigin(process.env.NEXT_PUBLIC_ADMIN_URL)
       || derived("admin"),
   };
 }
@@ -147,6 +162,26 @@ export function resolvePortalFromHost(hostHeader: string | null | undefined): Po
   if (split) return portalFromSubLabel(split.sub, false);
 
   return null;
+}
+
+/**
+ * Prefer a Host that maps to a portal subdomain.
+ * Behind nginx, `Host` may be the public host while `x-forwarded-host` is
+ * wrongly copied from the partner URL (which sent admin traffic to leads).
+ */
+export function pickRequestHost(args: {
+  host?: string | null;
+  forwardedHost?: string | null;
+  urlHost?: string | null;
+}): string {
+  const candidates = [args.host, args.forwardedHost, args.urlHost]
+    .map((value) => normalizeHost(value))
+    .filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    if (resolvePortalFromHost(candidate)) return candidate;
+  }
+  return candidates[0] || args.host || args.forwardedHost || args.urlHost || "";
 }
 
 function siblingOrigin(kind: PortalKind, hostHeader?: string | null): string | null {
@@ -199,7 +234,7 @@ function portalKindFromPath(pathname: string): PortalKind | null {
 
 /**
  * Absolute URL when this host is the wrong portal (e.g. customer UI on leads.*).
- * Shared paths like /confirm stay on the current host.
+ * Confirm/invite links always belong on the customer origin.
  */
 export function crossPortalRedirectUrl(args: {
   pathname: string;
@@ -207,9 +242,16 @@ export function crossPortalRedirectUrl(args: {
   role?: "ADMIN" | "CHANNEL_PARTNER" | "CUSTOMER" | null;
 }): string | null {
   const { pathname, hostHeader, role } = args;
-  if (isPathRoutingHost(hostHeader) || isSharedPortalPath(pathname)) return null;
+  if (isPathRoutingHost(hostHeader)) return null;
   const portal = resolvePortalFromHost(hostHeader);
   if (!portal) return null;
+
+  if ((hasPrefix(pathname, "/confirm") || hasPrefix(pathname, "/invite")) && portal !== "customer") {
+    const origin = originForPortal("customer", hostHeader);
+    if (origin) return `${origin}${pathname}`;
+  }
+
+  if (isSharedPortalPath(pathname)) return null;
 
   const pathKind = portalKindFromPath(pathname);
   if (pathKind && pathKind !== portal) {

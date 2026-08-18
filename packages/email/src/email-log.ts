@@ -1,5 +1,6 @@
 import { prisma } from "@goyal/db";
 import { sendEmail, type EmailOptions, type EmailSendResult } from "./service";
+import { rewriteEmailHtmlUrls } from "./urls";
 
 const MAX_RETRIES = 3;
 
@@ -12,6 +13,7 @@ export interface SendEmailParams extends EmailOptions {
 export type SendEmailWithLogResult = EmailSendResult & { skipped?: boolean };
 
 export async function sendEmailWithLog(params: SendEmailParams): Promise<SendEmailWithLogResult> {
+  const html = rewriteEmailHtmlUrls(params.html);
   const log = await prisma.emailLog.create({
     data: {
       to: params.to,
@@ -19,12 +21,12 @@ export async function sendEmailWithLog(params: SendEmailParams): Promise<SendEma
       type: params.type,
       entityType: params.entityType,
       entityId: params.entityId,
-      html: params.html,
+      html,
       status: "PENDING",
     },
   });
 
-  const result = await sendEmail(params);
+  const result = await sendEmail({ ...params, html });
 
   if (result.success && !result.mocked) {
     await prisma.emailLog.update({
