@@ -29,7 +29,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
-  useRequireRole("ADMIN");
+  const { allowed } = useRequireRole("ADMIN");
+
+  if (!allowed) return <div className="min-h-screen bg-background" />;
 
   return (
     <>

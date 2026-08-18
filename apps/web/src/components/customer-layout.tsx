@@ -25,7 +25,9 @@ export function CustomerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
-  useRequireRole("CUSTOMER");
+  const { allowed } = useRequireRole("CUSTOMER");
+
+  if (!allowed) return <div className="min-h-screen bg-background" />;
 
   return (
     <>

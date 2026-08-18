@@ -73,9 +73,36 @@ export class DocumentService {
       await blobDelete(fileUrl);
       return;
     }
-    const key = this.extractKey(fileUrl);
-    if (!key) return;
-    await s3DeleteObject(key);
+    await this.deleteS3Keys(fileUrl);
+  }
+
+  /**
+   * Keys to try in S3. Newer rows are stored under S3_PREFIX (default `eoi/`);
+   * older DB URLs may omit that folder. Try the prefixed key first.
+   */
+  static storageKeys(fileUrl: string): string[] {
+    const extracted = this.extractKey(fileUrl).replace(/^\/+/, "");
+    if (!extracted) return [];
+    const prefixed = withS3Prefix(extracted);
+    return prefixed === extracted ? [extracted] : [prefixed, extracted];
+  }
+
+  private static async deleteS3Keys(fileUrl: string): Promise<void> {
+    const keys = this.storageKeys(fileUrl);
+    await Promise.all(keys.map((key) => s3DeleteObject(key)));
+  }
+
+  private static async getS3Object(fileUrl: string) {
+    const keys = this.storageKeys(fileUrl);
+    let lastError: unknown;
+    for (const key of keys) {
+      try {
+        return await s3GetObject(key);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("File not found");
   }
 
   static getScopedFolder(role: UserRole, userId: string, type: DocumentType): string {
@@ -211,7 +238,7 @@ export class DocumentService {
     if (fileUrl.includes("/api/files/")) return fileUrl;
     if (!this.isPrivateStorageUrl(fileUrl)) return fileUrl;
     if (!process.env.S3_ACCESS_KEY) return fileUrl;
-    const key = this.extractKey(fileUrl);
+    const key = this.storageKeys(fileUrl)[0] || this.extractKey(fileUrl);
     return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
   }
 
@@ -228,8 +255,10 @@ export class DocumentService {
       return true;
     }
     try {
-      const key = this.extractKey(fileUrl);
-      return s3HeadObject(key);
+      for (const key of this.storageKeys(fileUrl)) {
+        if (await s3HeadObject(key)) return true;
+      }
+      return false;
     } catch {
       return false;
     }
@@ -240,7 +269,7 @@ export class DocumentService {
       return blobGetDownloadUrl(fileUrl);
     }
     if (fileUrl.includes("/api/files/")) return fileUrl.split("?")[0];
-    const key = this.extractKey(fileUrl);
+    const key = this.storageKeys(fileUrl)[0] || this.extractKey(fileUrl);
     return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
   }
 
@@ -249,7 +278,7 @@ export class DocumentService {
       const url = await blobGetDownloadUrl(fileUrl);
       return fetch(url);
     }
-    const object = await s3GetObject(this.extractKey(fileUrl));
+    const object = await this.getS3Object(fileUrl);
     const body = object.Body;
     if (!body) throw new Error("Empty file");
     const headers = new Headers();
@@ -269,7 +298,7 @@ export class DocumentService {
       if (!res.ok) throw new Error("Uploaded image could not be read");
       return new Uint8Array(await res.arrayBuffer());
     }
-    const object = await s3GetObject(this.extractKey(fileUrl));
+    const object = await this.getS3Object(fileUrl);
     if (!object.Body) throw new Error("Empty file");
     return new Uint8Array(await object.Body.transformToByteArray());
   }
@@ -312,10 +341,7 @@ export class DocumentService {
     if (isBlobUrl(doc.fileUrl)) {
       await blobDelete(doc.fileUrl);
     } else {
-      const key = this.extractKey(doc.fileUrl);
-      if (key) {
-        await s3DeleteObject(key);
-      }
+      await this.deleteS3Keys(doc.fileUrl);
     }
     return prisma.document.delete({ where: { id } });
   }

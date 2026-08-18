@@ -35,6 +35,23 @@ describe("DocumentService.extractKey", () => {
     expect(DocumentService.extractKey("/api/files/eoi/admin/user1/banner.jpg")).toBe("eoi/admin/user1/banner.jpg");
   });
 
+  it("tries the eoi/ prefix first for older DB URLs that omitted it", () => {
+    const previous = process.env.S3_PREFIX;
+    delete process.env.S3_PREFIX;
+    try {
+      expect(DocumentService.storageKeys("/api/files/customer/user1/pan/file.pdf")).toEqual([
+        "eoi/customer/user1/pan/file.pdf",
+        "customer/user1/pan/file.pdf",
+      ]);
+      expect(DocumentService.storageKeys("/api/files/eoi/customer/user1/pan/file.pdf")).toEqual([
+        "eoi/customer/user1/pan/file.pdf",
+      ]);
+    } finally {
+      if (previous === undefined) delete process.env.S3_PREFIX;
+      else process.env.S3_PREFIX = previous;
+    }
+  });
+
   it("does not rewrite public static image paths into the bucket", () => {
     expect(DocumentService.isPrivateStorageUrl("/images/projects/banner.jpg")).toBe(false);
   });

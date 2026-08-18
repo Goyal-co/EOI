@@ -24,7 +24,9 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
-  useRequireRole("CHANNEL_PARTNER");
+  const { allowed } = useRequireRole("CHANNEL_PARTNER");
+
+  if (!allowed) return <div className="min-h-screen bg-background" />;
 
   return (
     <>

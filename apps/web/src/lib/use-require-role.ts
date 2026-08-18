@@ -10,14 +10,21 @@ const LOGIN_FOR_ROLE: Record<UserRole, string> = {
   CUSTOMER: "/customer/login",
 };
 
-/** Kick a signed-in user out of a portal that does not match their role. */
+/** Keep each dashboard on its own role. Unauthenticated users go to that portal's login. */
 export function useRequireRole(role: UserRole) {
   const { data: session, status } = useSession();
+  const actual = session?.user?.role;
+  const allowed = status === "authenticated" && actual === role;
 
   useEffect(() => {
-    if (status !== "authenticated") return;
-    const actual = session?.user?.role;
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      window.location.replace(LOGIN_FOR_ROLE[role]);
+      return;
+    }
     if (!actual || actual === role) return;
     void signOut({ callbackUrl: LOGIN_FOR_ROLE[actual] || "/login" });
-  }, [role, session?.user?.role, status]);
+  }, [actual, role, status]);
+
+  return { allowed, status };
 }

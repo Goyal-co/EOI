@@ -2,8 +2,9 @@
 
 import { usePathname } from "next/navigation";
 import { CustomerLayout } from "@/components/customer-layout";
+import { isShellAuthPath } from "@/lib/auth-paths";
 
-const NO_LAYOUT_PATHS = [
+const AUTH_PATHS = [
   "/customer/login",
   "/customer/welcome",
   "/customer/forgot-password",
@@ -11,9 +12,7 @@ const NO_LAYOUT_PATHS = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const skipLayout = NO_LAYOUT_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-
-  if (skipLayout) return <>{children}</>;
+  const pathname = usePathname() || "";
+  if (isShellAuthPath(pathname, AUTH_PATHS)) return <>{children}</>;
   return <CustomerLayout>{children}</CustomerLayout>;
 }

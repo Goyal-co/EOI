@@ -169,6 +169,23 @@ function hasPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
+function isDedicatedPortalOrigin(kind: PortalKind, origin: string): boolean {
+  const host = hostnameOf(origin);
+  if (!host) return false;
+  const label = PORTAL_DNS_LABEL[kind];
+  return host === label || host.startsWith(`${label}.`);
+}
+
+/** On dedicated portal hosts, `/customer/login` is publicly `/login`. */
+export function publicPathForPortal(kind: PortalKind, path: string, destOrigin: string | null): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (!destOrigin || !isDedicatedPortalOrigin(kind, destOrigin)) return normalized;
+  const prefix = kind === "admin" ? "/admin" : `/${kind}`;
+  if (normalized === prefix) return "/";
+  if (normalized.startsWith(`${prefix}/`)) return normalized.slice(prefix.length) || "/";
+  return normalized;
+}
+
 export function isSharedPortalPath(pathname: string): boolean {
   return SHARED_PREFIXES.some((p) => hasPrefix(pathname, p));
 }
@@ -197,14 +214,16 @@ export function crossPortalRedirectUrl(args: {
   const pathKind = portalKindFromPath(pathname);
   if (pathKind && pathKind !== portal) {
     const origin = originForPortal(pathKind, hostHeader);
-    return origin ? `${origin}${pathname}` : null;
+    if (!origin) return null;
+    return `${origin}${publicPathForPortal(pathKind, pathname, origin)}`;
   }
 
   if (role) {
     const expected = portalKindForRole(role);
     if (expected !== portal) {
       const origin = originForPortal(expected, hostHeader);
-      return origin ? `${origin}${getPortalHomePath(expected)}` : null;
+      if (!origin) return null;
+      return `${origin}${publicPathForPortal(expected, getPortalHomePath(expected), origin)}`;
     }
   }
   return null;
@@ -223,19 +242,19 @@ export function rewritePathForPortal(pathname: string, portal: PortalKind): stri
 
 export function portalHref(kind: PortalKind, path: string): string {
   const origin = getPortalOrigin(kind);
-  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const normalized = publicPathForPortal(kind, path, origin);
   return origin ? `${origin}${normalized}` : normalized;
 }
 
 /** Absolute only when the request is already on a different portal host. */
 export function portalHrefForHost(kind: PortalKind, path: string, hostHeader?: string | null): string {
   const current = resolvePortalFromHost(hostHeader);
-  const normalized = path.startsWith("/") ? path : `/${path}`;
   if (current && current !== kind) {
     const origin = originForPortal(kind, hostHeader);
+    const normalized = publicPathForPortal(kind, path, origin);
     return origin ? `${origin}${normalized}` : normalized;
   }
-  return normalized;
+  return path.startsWith("/") ? path : `/${path}`;
 }
 
 export function getPortalHomeHref(kind: PortalKind): string {

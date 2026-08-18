@@ -120,7 +120,7 @@ describe("getPortalHomeHrefForHost", () => {
   it("uses the other portal origin when crossing subdomains", () => {
     setPortalEnv();
     expect(getPortalHomeHrefForHost("customer", "leads.partnergoyalco.com")).toBe(
-      "https://customer.partnergoyalco.com/customer",
+      "https://customer.partnergoyalco.com/",
     );
     expect(getPortalLoginHrefForHost("admin", "leads.partnergoyalco.com")).toBe(
       "https://admin.partnergoyalco.com/login",
@@ -130,7 +130,7 @@ describe("getPortalHomeHrefForHost", () => {
   it("builds sibling portal URLs from the request host when env is empty", () => {
     for (const key of ORIGIN_KEYS) delete process.env[key];
     expect(getPortalHomeHrefForHost("customer", "leads.vm.example")).toBe(
-      "https://customer.vm.example/customer",
+      "https://customer.vm.example/",
     );
     expect(getPortalHomeHrefForHost("partner", "10.0.0.8:3000")).toBe("/partner");
   });
@@ -144,14 +144,14 @@ describe("crossPortalRedirectUrl", () => {
         pathname: "/customer/login",
         hostHeader: "leads.partnergoyalco.com",
       }),
-    ).toBe("https://customer.partnergoyalco.com/customer/login");
+    ).toBe("https://customer.partnergoyalco.com/login");
     expect(
       crossPortalRedirectUrl({
         pathname: "/customer/eoi",
         hostHeader: "leads.partnergoyalco.com",
         role: "CUSTOMER",
       }),
-    ).toBe("https://customer.partnergoyalco.com/customer/eoi");
+    ).toBe("https://customer.partnergoyalco.com/eoi");
   });
 
   it("leaves confirm links and same-portal paths alone", () => {
@@ -170,5 +170,16 @@ describe("crossPortalRedirectUrl", () => {
         role: "CUSTOMER",
       }),
     ).toBeNull();
+  });
+
+  it("sends a logged-in customer off the partner host to the customer origin", () => {
+    setPortalEnv();
+    expect(
+      crossPortalRedirectUrl({
+        pathname: "/partner",
+        hostHeader: "leads.partnergoyalco.com",
+        role: "CUSTOMER",
+      }),
+    ).toBe("https://customer.partnergoyalco.com/");
   });
 });

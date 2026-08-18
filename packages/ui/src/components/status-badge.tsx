@@ -19,6 +19,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "gold"
   VERIFIED: { label: "Verified", variant: "success" },
   BLOCKED: { label: "Blocked", variant: "error" },
   ACCEPTED: { label: "Accepted", variant: "success" },
+  CONFIRMED: { label: "Confirmed", variant: "success" },
   NOT_SCHEDULED: { label: "Not Scheduled", variant: "outline" },
   SCHEDULED: { label: "Scheduled", variant: "warning" },
   COMPLETED: { label: "Completed", variant: "success" },
