@@ -13,6 +13,8 @@ export interface CpEmailCheckResult {
   message?: string;
   /** Existing CP user id when a previous attempt created the account but docs failed */
   resumeUserId?: string;
+  /** Existing customer user id that will be converted to a Channel Partner */
+  convertUserId?: string;
   leadOnly?: boolean;
 }
 
