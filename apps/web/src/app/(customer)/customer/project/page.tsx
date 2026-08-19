@@ -11,7 +11,14 @@ import { useCustomerEoiId } from "@/components/customer/project-switcher";
 import { ProjectAssetsPanel, type ProjectAssetTab } from "@/components/project-assets-panel";
 import { MapPin, CheckCircle2, Sparkles } from "lucide-react";
 
-const ASSET_TABS: ProjectAssetTab[] = ["brochure", "floor-plans", "cost-sheet", "gallery"];
+const ASSET_TABS: ProjectAssetTab[] = [
+  "walkthrough",
+  "brochure",
+  "floor-plans",
+  "cost-sheet",
+  "gallery",
+  "creatives",
+];
 
 function CustomerProjectContent() {
   const router = useRouter();
@@ -112,10 +119,12 @@ function CustomerProjectContent() {
           <TabsTrigger value="amenities">Amenities</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="location">Location Map</TabsTrigger>
+          <TabsTrigger value="walkthrough">Walkthrough</TabsTrigger>
           <TabsTrigger value="brochure">Brochure</TabsTrigger>
           <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
           <TabsTrigger value="cost-sheet">Cost Sheet</TabsTrigger>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
+          <TabsTrigger value="creatives">Creatives</TabsTrigger>
           <TabsTrigger value="faqs">FAQs</TabsTrigger>
         </TabsList>
 

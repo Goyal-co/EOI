@@ -1,8 +1,9 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
+import { streamInlineFile, wantsInlinePreview } from "@/lib/files/stream-download";
 
-export const GET = withApiRoute("partner.assets.assetId.download.get", async (_req: Request, { params }: { params: Promise<{ assetId: string }> }) => {
+export const GET = withApiRoute("partner.assets.assetId.download.get", async (req: Request, { params }: { params: Promise<{ assetId: string }> }) => {
   const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
   if (error) return error;
 
@@ -22,6 +23,14 @@ export const GET = withApiRoute("partner.assets.assetId.download.get", async (_r
     where: { cpId: session!.user.cpId!, projectId: asset.projectId },
   });
   if (!access) return apiError("Forbidden", 403);
+
+  if (wantsInlinePreview(req)) {
+    return streamInlineFile(
+      asset.fileUrl,
+      asset.fileName,
+      DocumentService.mimeTypeFromFileName(asset.fileName),
+    );
+  }
 
   const downloadUrl = await DocumentService.getPresignedDownloadUrl(asset.fileUrl);
 

@@ -1,8 +1,9 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
+import { streamInlineFile, wantsInlinePreview } from "@/lib/files/stream-download";
 
-export const GET = withApiRoute("customer.documents.id.download.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+export const GET = withApiRoute("customer.documents.id.download.get", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["CUSTOMER"]);
   if (error) return error;
 
@@ -15,6 +16,10 @@ export const GET = withApiRoute("customer.documents.id.download.get", async (_re
   if (!document) return apiError("Document not found", 404);
   if (document.eoi?.customer?.userId !== session!.user.id) {
     return apiError("Forbidden", 403);
+  }
+
+  if (wantsInlinePreview(req)) {
+    return streamInlineFile(document.fileUrl, document.fileName, document.mimeType);
   }
 
   const downloadUrl = await DocumentService.getPresignedDownloadUrl(document.fileUrl);

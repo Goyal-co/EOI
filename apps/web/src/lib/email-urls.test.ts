@@ -118,6 +118,37 @@ describe("customer email URLs", () => {
   });
 });
 
+describe("password reset email URLs", () => {
+  it("uses the correct portal host per role with production env", () => {
+    process.env.NODE_ENV = "production";
+    process.env.APP_URL = "https://leads.partnergoyalco.com";
+    process.env.PARTNER_URL = "https://leads.partnergoyalco.com";
+    process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
+    process.env.ADMIN_URL = "https://admin.partnergoyalco.com";
+    process.env.ROOT_DOMAIN = "partnergoyalco.com";
+
+    expect(getPartnerResetPasswordUrl("abc123")).toBe(
+      "https://leads.partnergoyalco.com/reset-password/abc123",
+    );
+    expect(getCustomerResetPasswordUrl("xyz789")).toBe(
+      "https://customer.partnergoyalco.com/reset-password/xyz789",
+    );
+  });
+
+  it("rewrites localhost reset links to production hosts", () => {
+    process.env.NODE_ENV = "production";
+    process.env.APP_URL = "https://leads.partnergoyalco.com";
+    process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
+
+    expect(canonicalizeEmailUrl("http://localhost:3000/partner/reset-password/tok")).toBe(
+      "https://leads.partnergoyalco.com/reset-password/tok",
+    );
+    expect(canonicalizeEmailUrl("http://localhost:3000/customer/reset-password/tok")).toBe(
+      "https://customer.partnergoyalco.com/reset-password/tok",
+    );
+  });
+});
+
 describe("canonicalizeEmailUrl", () => {
   it("rewrites localhost CP login and leads confirm links", () => {
     process.env.APP_URL = "https://leads.partnergoyalco.com";

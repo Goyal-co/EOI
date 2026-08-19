@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Card, EmptyState, cn } from "@goyal/ui";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import {
   openPresignedAsset,
-  fetchPresignedDownload,
+  downloadPresignedAsset,
+  inlinePreviewUrl,
   resolvePreviewKind,
   type AssetPreviewKind,
 } from "@/lib/files/open-asset";
@@ -38,6 +39,14 @@ interface ProjectAssetsPanelProps {
 function getAssetsForTab(assets: ProjectAssetItem[], tab: ProjectAssetTab) {
   const type = ASSET_TYPE_MAP[tab];
   return assets.filter((a) => a.type === type);
+}
+
+function assetPreviewKind(asset: ProjectAssetItem): AssetPreviewKind {
+  return resolvePreviewKind({
+    fileName: asset.fileName,
+    fileUrl: asset.fileUrl,
+    assetType: asset.type,
+  });
 }
 
 export function ProjectAssetsPanel({ assets, tab, downloadApiPrefix }: ProjectAssetsPanelProps) {
@@ -105,7 +114,7 @@ function FileAssetRow({
           <ExternalLink className="h-4 w-4" />
           View
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+        <Button variant="ghost" size="sm" onClick={() => downloadPresignedAsset(apiPath)}>
           <Download className="h-4 w-4" />
         </Button>
       </div>
@@ -121,36 +130,9 @@ function GalleryAssetCard({
   downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [kind, setKind] = useState<AssetPreviewKind>(() =>
-    resolvePreviewKind({ fileName: asset.fileName, fileUrl: asset.fileUrl, assetType: asset.type })
-  );
+  const previewUrl = inlinePreviewUrl(apiPath);
+  const kind = assetPreviewKind(asset);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setFailed(false);
-    setPreviewUrl(null);
-    fetchPresignedDownload(apiPath)
-      .then((data) => {
-        if (cancelled) return;
-        setKind(
-          resolvePreviewKind({
-            mimeType: data.mimeType,
-            fileName: data.fileName || asset.fileName,
-            fileUrl: data.downloadUrl,
-            assetType: asset.type,
-          })
-        );
-        setPreviewUrl(data.downloadUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiPath, asset.fileName, asset.type]);
 
   if (failed) {
     return (
@@ -183,7 +165,7 @@ function GalleryAssetCard({
             View
           </Button>
         </div>
-        {kind === "pdf" && previewUrl ? (
+        {kind === "pdf" ? (
           <iframe
             title={asset.fileName}
             src={`${previewUrl}#toolbar=0&navpanes=0`}
@@ -200,16 +182,12 @@ function GalleryAssetCard({
       onClick={() => openPresignedAsset(apiPath)}
       className="block rounded-lg overflow-hidden border border-border hover:shadow-md transition-shadow text-left w-full"
     >
-      {previewUrl ? (
-        <img
-          src={previewUrl}
-          alt={asset.fileName}
-          className="h-48 w-full object-cover bg-muted"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="h-48 w-full bg-muted animate-pulse" />
-      )}
+      <img
+        src={previewUrl}
+        alt={asset.fileName}
+        className="h-48 w-full object-cover bg-muted"
+        onError={() => setFailed(true)}
+      />
       <p className="p-2 text-xs text-muted-foreground truncate">{asset.fileName}</p>
     </button>
   );
@@ -223,30 +201,14 @@ function WalkthroughAssetCard({
   downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
-  const [src, setSrc] = useState<string | null>(null);
+  const previewUrl = inlinePreviewUrl(apiPath);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setFailed(false);
-    setSrc(null);
-    fetchPresignedDownload(apiPath)
-      .then((data) => {
-        if (!cancelled) setSrc(data.downloadUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiPath]);
 
   return (
     <div className="rounded-lg overflow-hidden border border-border">
-      {src && !failed ? (
+      {!failed ? (
         <video
-          src={src}
+          src={previewUrl}
           controls
           className="w-full max-h-96 bg-black"
           onError={() => setFailed(true)}
