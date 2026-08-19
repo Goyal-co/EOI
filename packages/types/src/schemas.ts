@@ -182,11 +182,23 @@ export const PROJECT_BANNER_HEIGHT = 600;
 export const PROJECT_LOCATION_WIDTH = 1920;
 export const PROJECT_LOCATION_HEIGHT = 1080;
 
+/** Same-origin /api/files/… paths or absolute blob/S3 URLs after upload. */
+export const storedFileUrlSchema = z
+  .string()
+  .min(1, "fileUrl is required")
+  .refine(
+    (value) =>
+      value.startsWith("/api/files/")
+      || value.startsWith("https://")
+      || value.startsWith("http://"),
+    { message: "Invalid file URL" },
+  );
+
 export const projectAssetSchema = z
   .object({
     type: z.enum(["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "GALLERY", "BANNER", "CREATIVE", "WALKTHROUGH", "LOCATION"]),
     fileName: z.string().min(1),
-    fileUrl: z.string().url(),
+    fileUrl: storedFileUrlSchema,
     fileSize: z.number().optional(),
     width: z.number().int().positive().optional(),
     height: z.number().int().positive().optional(),
@@ -268,7 +280,7 @@ export const documentUploadSchema = z.object({
     "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION",
   ]),
   fileName: z.string().min(1),
-  fileUrl: z.string().min(1),
+  fileUrl: storedFileUrlSchema,
   fileSize: z.number().optional(),
   mimeType: z.string().optional(),
   eoiId: z.string().optional(),

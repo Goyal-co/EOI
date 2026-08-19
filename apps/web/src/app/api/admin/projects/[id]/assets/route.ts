@@ -50,6 +50,11 @@ export const POST = withApiRoute("admin.project-assets.create", async (req: Requ
   const parsed = projectAssetSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
 
+  const stored = await DocumentService.objectExists(parsed.data.fileUrl);
+  if (!stored) {
+    return apiError("Uploaded file not found in storage. Please upload again.", 400);
+  }
+
   if (parsed.data.type === "BANNER" || parsed.data.type === "LOCATION") {
     try {
       const actual = await readActualImageDimensions(parsed.data.fileUrl);
