@@ -1,10 +1,10 @@
 "use strict";
 
 /**
- * First-boot only:
- *   1. prisma db push if public."User" is missing
+ * Container boot:
+ *   1. prisma db push (sync schema drift) unless SKIP_DB_PUSH=1
  *   2. create superadmin if that email is missing
- * Later container restarts skip both. Password is never overwritten.
+ * Admin password is never overwritten on restart.
  */
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
@@ -32,9 +32,9 @@ async function schemaReady(prisma) {
   return user && templates;
 }
 
-function pushSchema() {
+function pushSchema(label) {
   const script = path.join(__dirname, "packages/db/scripts/prisma-env.cjs");
-  console.info("[db] first boot — applying Prisma schema");
+  console.info(`[db] ${label}`);
   const result = spawnSync(process.execPath, [script, "db", "push", "--skip-generate"], {
     stdio: "inherit",
     env: process.env,
@@ -47,7 +47,7 @@ function pushSchema() {
     console.error("[db] prisma db push failed");
     process.exit(result.status ?? 1);
   }
-  console.info("[db] schema created");
+  console.info("[db] schema synced");
 }
 
 async function ensureEmailTemplateTable(prisma) {
@@ -74,16 +74,19 @@ async function ensureSchema() {
     console.info("[db] SKIP_DB_PUSH=1 — skipping");
     return;
   }
+
   const prisma = new PrismaClient();
+  let label = "applying Prisma schema";
   try {
-    if (await schemaReady(prisma)) {
-      console.info("[db] schema already exists — skipping db push");
-      return;
-    }
+    label = (await schemaReady(prisma))
+      ? "syncing schema with prisma db push"
+      : "first boot — applying Prisma schema";
   } finally {
     await prisma.$disconnect();
   }
-  pushSchema();
+
+  pushSchema(label);
+
   const verify = new PrismaClient();
   try {
     await ensureEmailTemplateTable(verify);

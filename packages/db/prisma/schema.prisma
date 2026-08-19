@@ -232,6 +232,7 @@ model Project {
   startingPrice  Decimal          @db.Decimal(15, 2)
   possessionDate DateTime?
   description    String?          @db.Text
+  tags           String[]         @default([])
   amenities      String[]
   faqs           Json?
   eoiStatus      ProjectEOIStatus @default(OPEN)

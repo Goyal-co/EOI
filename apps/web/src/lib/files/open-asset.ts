@@ -48,6 +48,15 @@ export function resolvePreviewKind(opts: {
   return "other";
 }
 
+/** Same-origin stream URL that can be embedded in an iframe/img (avoids storage X-Frame-Options). */
+export function inlinePreviewUrl(apiPath: string): string {
+  const qIndex = apiPath.indexOf("?");
+  const path = qIndex === -1 ? apiPath : apiPath.slice(0, qIndex);
+  const params = new URLSearchParams(qIndex === -1 ? "" : apiPath.slice(qIndex + 1));
+  params.set("inline", "1");
+  return `${path}?${params.toString()}`;
+}
+
 export async function fetchPresignedDownload(apiPath: string): Promise<{
   downloadUrl: string;
   fileName: string;
@@ -63,11 +72,14 @@ export async function fetchPresignedDownload(apiPath: string): Promise<{
 }
 
 export async function openPresignedAsset(apiPath: string): Promise<void> {
+  window.open(inlinePreviewUrl(apiPath), "_blank", "noopener,noreferrer");
+}
+
+export async function downloadPresignedAsset(apiPath: string): Promise<void> {
   const { downloadUrl } = await fetchPresignedDownload(apiPath);
   window.open(downloadUrl, "_blank", "noopener,noreferrer");
 }
 
 export async function getPresignedUrlForPreview(apiPath: string): Promise<string> {
-  const { downloadUrl } = await fetchPresignedDownload(apiPath);
-  return downloadUrl;
+  return inlinePreviewUrl(apiPath);
 }

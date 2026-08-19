@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import {
   DataTable,
@@ -12,7 +12,9 @@ import {
   Input,
   Button,
   LoadingSkeleton,
+  useToast,
 } from "@goyal/ui";
+import { Trash2 } from "lucide-react";
 import { useAdminProjects, useAdminCPs } from "@/lib/hooks";
 
 interface Project { id: string; name: string }
@@ -91,6 +93,15 @@ const EVENT_LABELS: Record<string, string> = {
   CP_ATTACHED: "New CP attached",
 };
 
+const HISTORY_FILTER_LABELS: Record<string, string> = {
+  PUNCHED: "Punched",
+  MAPPED: "Mapped",
+  CP_ATTACHED: "CP attached",
+  SITE_VISIT: "Site visit",
+  BOOKED: "Booked",
+  CONFIRMED: "Confirmed",
+};
+
 const EVENT_COLORS: Record<string, string> = {
   PUNCHED: "bg-sky-500",
   MAPPED: "bg-indigo-500",
@@ -123,6 +134,8 @@ function formatWhen(iso: string) {
 }
 
 function AdminLeadsContent() {
+  const qc = useQueryClient();
+  const { addToast } = useToast();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState({
     projectId: "",
@@ -130,6 +143,8 @@ function AdminLeadsContent() {
     q: searchParams.get("q") || searchParams.get("search") || "",
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<IdentityRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<string>("ALL");
 
   useEffect(() => {
@@ -178,8 +193,40 @@ function AdminLeadsContent() {
     return detail.timeline.filter((e) => e.type === historyFilter);
   }, [detail, historyFilter]);
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/lead-identities/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to delete lead");
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin", "lead-identities"] }),
+        qc.invalidateQueries({ queryKey: ["admin", "lead-identity", deleteTarget.id] }),
+      ]);
+      if (selectedId === deleteTarget.id) {
+        setSelectedId(null);
+        setHistoryFilter("ALL");
+      }
+      addToast({
+        type: "success",
+        title: "Lead deleted",
+        message: `${deleteTarget.leadId} and its related history were removed.`,
+      });
+      setDeleteTarget(null);
+    } catch (e) {
+      addToast({ type: "error", title: "Delete failed", message: (e as Error).message });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filterBar = (
-    <div className="flex flex-wrap gap-4">
+    <div className="flex flex-wrap items-end gap-4 w-full min-w-0">
       <Input
         label="Search"
         placeholder="Lead ID, phone, email, name"
@@ -258,13 +305,22 @@ function AdminLeadsContent() {
             key: "actions",
             header: "",
             render: (row) => (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setSelectedId((row as IdentityRow).id)}
-              >
-                View history
-              </Button>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedId((row as IdentityRow).id)}
+                >
+                  View history
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeleteTarget(row as IdentityRow)}
+                >
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
+              </div>
             ),
           },
         ]}
@@ -284,12 +340,12 @@ function AdminLeadsContent() {
           }
         }}
         title={detail ? `Lead history · ${detail.leadId}` : "Lead history"}
-        size="lg"
+        size="xl"
       >
         {detailLoading || !detail ? (
           <LoadingSkeleton rows={8} />
         ) : (
-          <div className="max-h-[75vh] space-y-6 overflow-y-auto pr-1">
+          <div className="space-y-6 pr-1">
             <div className="rounded-xl border border-border bg-muted/30 p-4">
               <div className="grid gap-3 text-sm sm:grid-cols-2">
                 <div>
@@ -387,15 +443,14 @@ function AdminLeadsContent() {
               </div>
             </section>
 
-            <section>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">
+            <section className="min-w-0">
+              <h3 className="text-sm font-semibold">
                   Full history
                   <span className="ml-2 font-normal text-muted-foreground">
                     ({detail.timeline.length} events)
                   </span>
-                </h3>
-                <div className="flex flex-wrap gap-1">
+              </h3>
+              <div className="mt-2 flex w-full min-w-0 flex-wrap gap-1.5 rounded-lg border border-border bg-muted/50 p-2">
                   {[
                     "ALL",
                     "PUNCHED",
@@ -409,16 +464,15 @@ function AdminLeadsContent() {
                       key={key}
                       type="button"
                       onClick={() => setHistoryFilter(key)}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${
                         historyFilter === key
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          ? "border-navy bg-navy text-white"
+                          : "border-border bg-white text-navy hover:bg-blue-50"
                       }`}
                     >
-                      {key === "ALL" ? "All" : EVENT_LABELS[key] || key}
+                      {key === "ALL" ? "All" : HISTORY_FILTER_LABELS[key] || EVENT_LABELS[key] || key}
                     </button>
                   ))}
-                </div>
               </div>
 
               {filteredTimeline.length === 0 ? (
@@ -478,6 +532,34 @@ function AdminLeadsContent() {
             </section>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete Lead"
+        description={
+          deleteTarget
+            ? `Delete ${deleteTarget.leadId}? This removes the lead, any linked EOIs, and its full history.`
+            : undefined
+        }
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" loading={deleting} onClick={handleDelete}>
+              Delete Lead
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

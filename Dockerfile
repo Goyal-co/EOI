@@ -55,7 +55,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --chown=nextjs:nodejs scripts/docker-start.cjs ./docker-start.cjs
 COPY --chown=nextjs:nodejs scripts/docker-bootstrap.cjs ./docker-bootstrap.cjs
 COPY certs/ap-south-1-bundle.pem /ap-south-1-bundle.pem
-# Prisma CLI + schema so the container can create tables on first boot (empty RDS).
+# Prisma CLI + schema so the container can sync RDS on every boot.
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma ./packages/db/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/scripts/prisma-env.cjs ./packages/db/scripts/prisma-env.cjs
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
@@ -67,7 +67,7 @@ USER nextjs
 EXPOSE 3000
 STOPSIGNAL SIGTERM
 # Liveness only. Full /health still checks DB, S3, Redis.
-# db push on first boot can take a while against RDS.
+# db push against RDS can take a while on cold start.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:3000/health?live=1" || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]

@@ -5,14 +5,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DataTable, StatusBadge, Button, Drawer, Card, Modal, useToast, Textarea, PageHeader,
 } from "@goyal/ui";
-import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText } from "lucide-react";
+import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText, Trash2 } from "lucide-react";
 import { useAdminCPs, useAdminProjects } from "@/lib/hooks";
 import {
+  downloadPresignedAsset,
   openPresignedAsset,
-  fetchPresignedDownload,
+  inlinePreviewUrl,
   resolvePreviewKind,
-  type AssetPreviewKind,
 } from "@/lib/files/open-asset";
+import { publicPortalPath } from "@/lib/portal-paths";
 
 interface ChannelPartner {
   id: string;
@@ -83,61 +84,15 @@ function DocumentPreviewCard({
   label: string;
 }) {
   const apiPath = `/api/admin/documents/${doc.id}/download`;
-  const initialKind = resolvePreviewKind({
+  const previewUrl = inlinePreviewUrl(apiPath);
+  const kind = resolvePreviewKind({
     mimeType: doc.mimeType,
     fileName: doc.fileName,
     fileUrl: doc.fileUrl,
   });
-
-  const [kind, setKind] = useState<AssetPreviewKind>(initialKind);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState(doc.fileName);
-  const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setFailed(false);
-    setPreviewUrl(null);
-    setKind(initialKind);
-
-    fetchPresignedDownload(apiPath)
-      .then((data) => {
-        if (cancelled) return;
-        const resolved = resolvePreviewKind({
-          mimeType: data.mimeType || doc.mimeType,
-          fileName: data.fileName || doc.fileName,
-          fileUrl: data.downloadUrl || doc.fileUrl,
-        });
-        setKind(resolved);
-        setDisplayName(data.fileName || doc.fileName);
-        setPreviewUrl(data.downloadUrl);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Private storage URLs usually need a signed link — don't fall back to raw fileUrl.
-        setFailed(true);
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [apiPath, doc.fileName, doc.fileUrl, doc.mimeType, initialKind]);
-
   const handleImageError = () => {
-    // Mis-labeled uploads (PDF stored with image mime / wrong extension).
-    const byName = resolvePreviewKind({
-      mimeType: null,
-      fileName: displayName,
-      fileUrl: doc.fileUrl,
-    });
-    if (byName === "pdf") {
-      setKind("pdf");
-      return;
-    }
     setFailed(true);
   };
 
@@ -154,22 +109,20 @@ function DocumentPreviewCard({
               {kindBadge}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground truncate">{displayName}</p>
+          <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
         </div>
         <div className="flex gap-1 shrink-0">
           <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
             <ExternalLink className="h-3.5 w-3.5" />
             View
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+          <Button variant="ghost" size="sm" onClick={() => downloadPresignedAsset(apiPath)}>
             <Download className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="h-44 w-full animate-pulse bg-muted" />
-      ) : failed || !previewUrl ? (
+      {failed ? (
         <div className="flex items-center gap-3 px-3 py-4 text-sm text-muted-foreground">
           <FileText className="h-8 w-8 shrink-0 opacity-60" />
           <div>
@@ -234,6 +187,8 @@ export default function AdminChannelPartnersPage() {
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [cpToBlock, setCpToBlock] = useState<ChannelPartner | null>(null);
   const [blockReason, setBlockReason] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [cpToDelete, setCpToDelete] = useState<ChannelPartner | null>(null);
 
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [cpToAssign, setCpToAssign] = useState<CPProfile | null>(null);
@@ -433,13 +388,48 @@ export default function AdminChannelPartnersPage() {
     openBlockModal(cp);
   };
 
+  const openDeleteModal = (cp: ChannelPartner) => {
+    setCpToDelete(cp);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!cpToDelete) return;
+    setActionLoading(cpToDelete.id);
+    try {
+      const res = await fetch(`/api/admin/channel-partners/${cpToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to delete channel partner");
+      }
+      await qc.invalidateQueries({ queryKey: ["admin", "cps"] });
+      if (profile?.id === cpToDelete.id) {
+        setDrawerOpen(false);
+        setProfile(null);
+      }
+      addToast({
+        type: "success",
+        title: "Channel partner deleted",
+        message: `${cpToDelete.name} and related records were removed.`,
+      });
+      setDeleteModalOpen(false);
+      setCpToDelete(null);
+    } catch (e) {
+      addToast({ type: "error", title: "Delete failed", message: (e as Error).message });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Channel Partners"
         description="Review, approve, and manage channel partner accounts"
         breadcrumb={[
-          { label: "Dashboard", href: "/admin" },
+          { label: "Dashboard", href: publicPortalPath("/admin") },
           { label: "Channel Partners" },
           ...(profile ? [{ label: profile.user.name }] : []),
         ]}
@@ -508,6 +498,14 @@ export default function AdminChannelPartnersPage() {
                   <Ban className="h-4 w-4 text-red-500" />
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={actionLoading === cp.id}
+                onClick={() => openDeleteModal(cp)}
+              >
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </Button>
             </div>
           );
         }}
@@ -646,6 +644,37 @@ export default function AdminChannelPartnersPage() {
               disabled={selectedProjectIds.length === 0}
             >
               Save Projects
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setCpToDelete(null);
+        }}
+        title="Delete Channel Partner"
+        description={
+          cpToDelete
+            ? `Delete ${cpToDelete.name}? This removes the partner, linked leads, and linked EOIs.`
+            : undefined
+        }
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              loading={actionLoading === cpToDelete?.id}
+              onClick={handleDelete}
+            >
+              Delete Partner
             </Button>
           </div>
         </div>

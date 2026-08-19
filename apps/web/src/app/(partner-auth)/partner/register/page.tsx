@@ -6,8 +6,11 @@ import { useRouter } from "next/navigation";
 import {
   Input, MultiStepForm, useToast, AuthLayout, FileUpload, type UploadedFile,
 } from "@goyal/ui";
+import { Building2, FileText, Shield, Users } from "lucide-react";
 import type { CPRegisterStep1, CPRegisterStep2 } from "@goyal/types";
 import { isRegistrationStepValid, getRegistrationStepHints } from "@/lib/registration/validation";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 const STEPS = [
   { id: "personal", title: "Personal", description: "Your personal account details" },
@@ -112,11 +115,23 @@ export default function PartnerRegisterPage() {
 
   return (
     <AuthLayout
+      backgroundImage={LOGIN_BG}
       subtitle="Join our network of property advisor"
       description=""
+      features={[
+        { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
+        { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
+        { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
+      ]}
+      stats={[
+        { label: "Years", value: "55+" },
+        { label: "Projects", value: "250+" },
+        { label: "Loyal Customers", value: "30+" },
+      ]}
+      formCardTitle="Partner Registration"
+      formCardSubtitle="Complete your application to get started"
+      formCardIcon={Shield}
     >
-      <h1 className="text-page-title">Partner Registration</h1>
-      <p className="text-caption mt-1 mb-6">Complete your application to get started</p>
 
       <MultiStepForm
         steps={STEPS}

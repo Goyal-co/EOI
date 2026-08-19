@@ -264,19 +264,77 @@ export class DocumentService {
     }
   }
 
-  static async getPresignedDownloadUrl(fileUrl: string) {
+  static async getPresignedDownloadUrl(
+    fileUrl: string,
+    opts?: { disposition?: "inline" | "attachment" },
+  ) {
     if (isBlobUrl(fileUrl)) {
       return blobGetDownloadUrl(fileUrl);
     }
-    if (fileUrl.includes("/api/files/")) return fileUrl.split("?")[0];
+    const disposition = opts?.disposition || "attachment";
+    if (fileUrl.includes("/api/files/")) {
+      const base = fileUrl.split("?")[0];
+      return disposition === "attachment" ? `${base}?download=1` : `${base}?inline=1`;
+    }
     const key = this.storageKeys(fileUrl)[0] || this.extractKey(fileUrl);
-    return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
+    const base = `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
+    return disposition === "attachment" ? `${base}?download=1` : `${base}?inline=1`;
   }
 
-  static async streamStoredFile(fileUrl: string) {
+  static applyResponseHeaders(
+    headers: Headers,
+    opts?: {
+      fileName?: string | null;
+      mimeType?: string | null;
+      disposition?: "inline" | "attachment";
+    },
+  ) {
+    const disposition = opts?.disposition || "inline";
+    if (disposition === "inline") {
+      headers.delete("X-Frame-Options");
+      headers.delete("Content-Security-Policy");
+      headers.set("X-Frame-Options", "SAMEORIGIN");
+      headers.set("Content-Security-Policy", "frame-ancestors 'self'");
+    } else {
+      headers.delete("X-Frame-Options");
+      headers.delete("Content-Security-Policy");
+    }
+    const fileName = (opts?.fileName || "").replace(/"/g, "").split("/").pop()?.split("?")[0] || "";
+    const hintedMime = opts?.mimeType && opts.mimeType !== "application/octet-stream"
+      ? opts.mimeType
+      : null;
+    const mime =
+      hintedMime
+      || this.mimeTypeFromFileName(fileName)
+      || headers.get("Content-Type")
+      || "application/octet-stream";
+    headers.set("Content-Type", mime);
+    headers.set(
+      "Content-Disposition",
+      fileName ? `${disposition}; filename="${fileName}"` : disposition,
+    );
+    headers.set("Cache-Control", "private, max-age=60");
+  }
+
+  static async streamStoredFile(
+    fileUrl: string,
+    opts?: {
+      fileName?: string | null;
+      mimeType?: string | null;
+      disposition?: "inline" | "attachment";
+    },
+  ) {
+    const inferredName = opts?.fileName || fileUrl.split("/").pop()?.split("?")[0] || null;
     if (isBlobUrl(fileUrl)) {
       const url = await blobGetDownloadUrl(fileUrl);
-      return fetch(url);
+      const upstream = await fetch(url);
+      const headers = new Headers(upstream.headers);
+      this.applyResponseHeaders(headers, {
+        fileName: inferredName,
+        mimeType: opts?.mimeType,
+        disposition: opts?.disposition,
+      });
+      return new Response(upstream.body, { status: upstream.status, headers });
     }
     const object = await this.getS3Object(fileUrl);
     const body = object.Body;
@@ -284,7 +342,11 @@ export class DocumentService {
     const headers = new Headers();
     if (object.ContentType) headers.set("Content-Type", object.ContentType);
     if (object.ContentLength != null) headers.set("Content-Length", String(object.ContentLength));
-    headers.set("Cache-Control", "private, max-age=60");
+    this.applyResponseHeaders(headers, {
+      fileName: inferredName,
+      mimeType: opts?.mimeType || object.ContentType,
+      disposition: opts?.disposition,
+    });
     const stream = typeof body.transformToWebStream === "function"
       ? body.transformToWebStream()
       : (body as ReadableStream);

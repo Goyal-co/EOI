@@ -3,6 +3,7 @@ import { cpStatusUpdateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { getPartnerLoginUrl, NotificationService } from "@goyal/email";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+import { DocumentService } from "@/lib/services/document";
 export const GET = withApiRoute("admin.channel-partners.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error } = await withAuth(["ADMIN"]);
   if (error) return error;
@@ -20,11 +21,17 @@ export const GET = withApiRoute("admin.channel-partners.get", async (_req: Reque
   });
   if (!cp) return apiError("Channel Partner not found", 404);
 
+  const documents = await prisma.document.findMany({
+    where: { cpId: id },
+    orderBy: { uploadedAt: "desc" },
+  });
+
   const approved = cp.eois.filter((e) => e.status === "APPROVED").length;
   const total = cp.eois.length;
 
   return apiResponse({
     ...cp,
+    documents,
     performance: {
       totalLeads: cp.leads.length,
       totalEOIs: total,
@@ -148,4 +155,49 @@ export const PATCH = withApiRoute("admin.channel-partners.patch", async (req: Re
   }
 
   return apiResponse(updated);
+});
+
+export const DELETE = withApiRoute("admin.channel-partners.delete", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const { error, session } = await withAuth(["ADMIN"]);
+  if (error) return error;
+  const { id } = await params;
+
+  const cp = await prisma.channelPartner.findUnique({
+    where: { id },
+    include: {
+      user: true,
+      documents: { select: { fileUrl: true } },
+      eois: { include: { documents: { select: { fileUrl: true } } } },
+    },
+  });
+  if (!cp) return apiError("Channel Partner not found", 404);
+
+  const fileUrls = [
+    ...cp.documents.map((doc) => doc.fileUrl),
+    ...cp.eois.flatMap((eoi) => eoi.documents.map((doc) => doc.fileUrl)),
+  ].filter(Boolean);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.approvalAction.deleteMany({ where: { eoi: { cpId: id } } });
+    await tx.document.deleteMany({ where: { OR: [{ cpId: id }, { eoi: { cpId: id } }] } });
+    await tx.eOI.deleteMany({ where: { cpId: id } });
+    await tx.lead.deleteMany({ where: { cpId: id } });
+    await tx.cPProjectAccess.deleteMany({ where: { cpId: id } });
+    await tx.channelPartner.delete({ where: { id } });
+    await tx.user.delete({ where: { id: cp.userId } });
+    await tx.leadIdentity.deleteMany({ where: { leads: { none: {} } } });
+  });
+
+  await Promise.allSettled(fileUrls.map((fileUrl) => DocumentService.deleteStoredFile(fileUrl)));
+
+  await writeAudit({
+    actorId: session!.user.id,
+    action: "CP_DELETED",
+    entityType: "ChannelPartner",
+    entityId: id,
+    metadata: { email: cp.user.email, name: cp.user.name },
+    ipAddress: getIpFromRequest(req),
+  });
+
+  return apiResponse({ success: true });
 });

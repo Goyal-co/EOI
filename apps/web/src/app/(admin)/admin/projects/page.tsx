@@ -28,6 +28,7 @@ interface Project {
   id: string;
   name: string;
   location: string;
+  tags?: string[];
   status: string;
   eoiStatus: string;
   startingPrice: number;
@@ -55,6 +56,8 @@ interface ProjectForm {
   description: string;
   eoiStatus: string;
   status: string;
+  tags: string[];
+  tagInput: string;
   amenities: string[];
   amenityInput: string;
   faqs: Array<{ question: string; answer: string }>;
@@ -72,6 +75,12 @@ const ASSET_TYPES: { type: DocumentType; label: string }[] = [
   { type: "BANNER", label: "Banner (1920×600 px)" },
 ];
 
+const PROJECT_TAG_SUGGESTIONS = [
+  "New Launch",
+  "Under Construction",
+  "Ready to Move In",
+] as const;
+
 const emptyForm: ProjectForm = {
   name: "",
   location: "",
@@ -81,6 +90,8 @@ const emptyForm: ProjectForm = {
   description: "",
   eoiStatus: "OPEN",
   status: "ACTIVE",
+  tags: [],
+  tagInput: "",
   amenities: [],
   amenityInput: "",
   faqs: [],
@@ -99,8 +110,11 @@ function loadDraft(key: string): ProjectForm | null {
 
 function saveDraft(key: string, form: ProjectForm) {
   if (typeof window === "undefined") return;
-  const { amenityInput, eoiRule, ...persist } = form;
-  localStorage.setItem(key, JSON.stringify({ ...persist, amenityInput: "", eoiRule: { ...eoiRule, docInput: "" } }));
+  const { amenityInput, tagInput, eoiRule, ...persist } = form;
+  localStorage.setItem(
+    key,
+    JSON.stringify({ ...persist, amenityInput: "", tagInput: "", eoiRule: { ...eoiRule, docInput: "" } }),
+  );
 }
 
 function clearDraft(key: string) {
@@ -187,6 +201,8 @@ export default function AdminProjectsPage() {
         description: full.description || "",
         eoiStatus: full.eoiStatus,
         status: full.status,
+        tags: full.tags || [],
+        tagInput: "",
         amenities: full.amenities || [],
         amenityInput: "",
         faqs: (full.faqs as Array<{ question: string; answer: string }> | null) || [],
@@ -259,6 +275,7 @@ export default function AdminProjectsPage() {
         description: form.description || undefined,
         eoiStatus: form.eoiStatus,
         status: form.status,
+        tags: form.tags,
         amenities: form.amenities,
         faqs: form.faqs.filter((f) => f.question.trim() && f.answer.trim()),
         eoiRule: {
@@ -298,7 +315,10 @@ export default function AdminProjectsPage() {
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/projects/${selected.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete project");
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to delete project");
+      }
       await qc.invalidateQueries({ queryKey: ["admin", "projects"] });
       addToast({ type: "success", title: "Project deleted" });
       setDeleteOpen(false);
@@ -486,6 +506,75 @@ export default function AdminProjectsPage() {
       <FormField label="Description" htmlFor="project-description">
         <Textarea id="project-description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
       </FormField>
+
+      <div className="space-y-2">
+        <span className="text-sm font-medium text-foreground">Project Tags</span>
+        <div className="flex flex-wrap gap-2">
+          {PROJECT_TAG_SUGGESTIONS.map((tag) => {
+            const selected = form.tags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setForm({
+                  ...form,
+                  tags: selected ? form.tags.filter((x) => x !== tag) : [...form.tags, tag],
+                })}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  selected
+                    ? "border-navy bg-navy text-white"
+                    : "border-border bg-white text-navy hover:bg-blue-50"
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={form.tagInput}
+            onChange={(e) => setForm({ ...form, tagInput: e.target.value })}
+            placeholder="Add custom tag"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && form.tagInput.trim()) {
+                e.preventDefault();
+                const next = form.tagInput.trim();
+                if (!form.tags.includes(next)) {
+                  setForm({ ...form, tags: [...form.tags, next], tagInput: "" });
+                } else {
+                  setForm({ ...form, tagInput: "" });
+                }
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const next = form.tagInput.trim();
+              if (!next) return;
+              setForm({
+                ...form,
+                tags: form.tags.includes(next) ? form.tags : [...form.tags, next],
+                tagInput: "",
+              });
+            }}
+          >
+            Add
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {form.tags.map((tag) => (
+            <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs">
+              {tag}
+              <button type="button" onClick={() => setForm({ ...form, tags: form.tags.filter((x) => x !== tag) })}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
 
       <div className="space-y-2">
         <span className="text-sm font-medium text-foreground">Amenities</span>
@@ -678,6 +767,23 @@ export default function AdminProjectsPage() {
         columns={[
           { key: "name", header: "Project" },
           { key: "location", header: "Location" },
+          {
+            key: "tags",
+            header: "Tags",
+            render: (row) => {
+              const tags = ((row as Project).tags || []).slice(0, 3);
+              if (!tags.length) return "—";
+              return (
+                <div className="flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              );
+            },
+          },
           { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status as string} /> },
           { key: "eoiStatus", header: "EOI", render: (row) => <StatusBadge status={row.eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} /> },
           { key: "eoiCount", header: "EOIs" },

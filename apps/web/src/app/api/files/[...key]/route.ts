@@ -48,7 +48,7 @@ function canReadKey(
   );
 }
 
-export const GET = withApiRoute("files.get", async (_req: Request, { params }: { params: Promise<{ key: string[] }> }) => {
+export const GET = withApiRoute("files.get", async (req: Request, { params }: { params: Promise<{ key: string[] }> }) => {
   const { key: segments } = await params;
   const key = (segments || []).map((part) => decodeURIComponent(part)).join("/");
   if (!isSafeObjectKey(key)) return apiError("Not found", 404);
@@ -59,7 +59,13 @@ export const GET = withApiRoute("files.get", async (_req: Request, { params }: {
   }
 
   try {
-    return await DocumentService.streamStoredFile(key);
+    const url = new URL(req.url);
+    const disposition =
+      url.searchParams.get("download") === "1" ? "attachment" : "inline";
+    return await DocumentService.streamStoredFile(key, {
+      fileName: key.split("/").pop() || null,
+      disposition,
+    });
   } catch (cause) {
     return apiError("File not found", 404, undefined, { cause });
   }

@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button, Input, Card, AuthLayout, useToast } from "@goyal/ui";
+import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
+import { Lock, Shield } from "lucide-react";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 export default function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>();
@@ -37,17 +40,26 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <AuthLayout>
-      <Card className="p-8 max-w-md mx-auto">
-        <h2 className="text-page-title text-center mb-6">Set New Password</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input label="New Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <Input label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-          <Button variant="gold" className="w-full" loading={loading} type="submit">
-            Update Password
-          </Button>
-        </form>
-      </Card>
+    <AuthLayout
+      backgroundImage={LOGIN_BG}
+      subtitle="Join our network of property advisor"
+      description=""
+      formCardTitle="Set New Password"
+      formCardSubtitle="Choose a strong password for your partner account"
+      formCardIcon={Shield}
+    >
+      <div className="flex justify-center mb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+          <Lock className="h-8 w-8 text-blue-600" />
+        </div>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input label="New Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <Input label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+        <Button variant="gold" className="w-full" loading={loading} type="submit">
+          Update Password
+        </Button>
+      </form>
     </AuthLayout>
   );
 }

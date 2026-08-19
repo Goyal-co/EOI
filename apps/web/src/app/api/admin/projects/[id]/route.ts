@@ -3,6 +3,7 @@ import { adminProjectPatchSchema, projectEoiRuleSchema } from "@goyal/types";
 import { NotificationService, isAdminNotificationEnabled } from "@goyal/email";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
+import { DocumentService } from "@/lib/services/document";
 
 function normalizeLocationLink(value: string | undefined): string | null | undefined {
   if (value === undefined) return undefined;
@@ -44,6 +45,10 @@ export const PATCH = withApiRoute("admin.projects.id.patch", async (req: Request
     data: {
       ...parsed.data,
       locationLink: normalizeLocationLink(parsed.data.locationLink),
+      tags:
+        parsed.data.tags === undefined
+          ? undefined
+          : parsed.data.tags,
       possessionDate:
         parsed.data.possessionDate === undefined
           ? undefined
@@ -101,6 +106,31 @@ export const DELETE = withApiRoute("admin.projects.id.delete", async (_req: Requ
   if (error) return error;
   const { id } = await params;
 
-  await prisma.project.delete({ where: { id } });
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: {
+      assets: { select: { fileUrl: true } },
+      eois: { include: { documents: { select: { fileUrl: true } } } },
+    },
+  });
+  if (!project) return apiError("Project not found", 404);
+
+  const fileUrls = [
+    ...project.assets.map((asset) => asset.fileUrl),
+    ...project.eois.flatMap((eoi) => eoi.documents.map((doc) => doc.fileUrl)),
+  ].filter(Boolean);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.approvalAction.deleteMany({ where: { eoi: { projectId: id } } });
+    await tx.document.deleteMany({ where: { eoi: { projectId: id } } });
+    await tx.eOI.deleteMany({ where: { projectId: id } });
+    await tx.lead.deleteMany({ where: { projectId: id } });
+    await tx.cPProjectAccess.deleteMany({ where: { projectId: id } });
+    await tx.projectAsset.deleteMany({ where: { projectId: id } });
+    await tx.eOIRule.deleteMany({ where: { projectId: id } });
+    await tx.project.delete({ where: { id } });
+  });
+
+  await Promise.allSettled(fileUrls.map((fileUrl) => DocumentService.deleteStoredFile(fileUrl)));
   return apiResponse({ success: true });
 });

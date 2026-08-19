@@ -27,6 +27,7 @@ export const GET = withApiRoute("admin.projects.get", async () => {
         name: p.name,
         location: p.location,
         locationLink: p.locationLink,
+        tags: p.tags,
         status: p.status,
         eoiStatus: p.eoiStatus,
         startingPrice: Number(p.startingPrice),
@@ -54,6 +55,7 @@ export const POST = withApiRoute("admin.projects.post", async (req: Request) => 
     data: {
       ...parsed.data,
       locationLink: normalizeLocationLink(parsed.data.locationLink),
+      tags: parsed.data.tags || [],
       amenities: parsed.data.amenities || [],
       faqs: parsed.data.faqs || [],
       possessionDate: parsed.data.possessionDate ? new Date(parsed.data.possessionDate) : null,

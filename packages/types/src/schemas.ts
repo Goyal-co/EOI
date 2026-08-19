@@ -46,6 +46,7 @@ export const projectSchema = z.object({
   startingPrice: z.number().positive("Price per sqft must be positive"),
   possessionDate: z.string().optional(),
   description: z.string().optional(),
+  tags: z.array(z.string().min(1)).optional(),
   amenities: z.array(z.string()).optional(),
   faqs: z.array(projectFaqSchema).optional(),
   eoiStatus: z.enum(["OPEN", "CLOSED"]).default("OPEN"),

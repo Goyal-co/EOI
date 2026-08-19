@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Input, Card, AuthLayout, useToast } from "@goyal/ui";
-import { ArrowLeft, Mail } from "lucide-react";
+import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
+import { ArrowLeft, Lock, Mail, Shield } from "lucide-react";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -34,40 +36,41 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthLayout>
+    <AuthLayout
+      backgroundImage={LOGIN_BG}
+      subtitle="Join our network of property advisor"
+      description=""
+      formCardTitle="Reset Password"
+      formCardSubtitle="Enter your partner account email"
+      formCardIcon={Shield}
+    >
       <Link href="/partner/login" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
         <ArrowLeft className="h-4 w-4" />
         Back to login
       </Link>
 
-      <Card className="p-8">
-        <div className="flex justify-center mb-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
-            <Mail className="h-8 w-8 text-blue-600" />
-          </div>
+      <div className="flex justify-center mb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+          <Mail className="h-8 w-8 text-blue-600" />
         </div>
-        <h2 className="text-page-title text-center">Reset Password</h2>
-        <p className="text-caption mt-3 mb-6 text-center">
-          Enter your partner account email and we will send a reset link.
+      </div>
+
+      {sent ? (
+        <p className="text-sm text-muted-foreground text-center">
+          If an account exists for <strong>{email}</strong>, you will receive a reset link shortly.
         </p>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Button variant="gold" className="w-full" loading={loading} type="submit">
+            Send Reset Link
+          </Button>
+        </form>
+      )}
 
-        {sent ? (
-          <p className="text-sm text-muted-foreground text-center">
-            If an account exists for <strong>{email}</strong>, you will receive a reset link shortly.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <Button variant="gold" className="w-full" loading={loading} type="submit">
-              Send Reset Link
-            </Button>
-          </form>
-        )}
-
-        <div className="mt-6 text-center">
-          <Button variant="ghost" onClick={() => router.push("/partner/login")}>Return to Login</Button>
-        </div>
-      </Card>
+      <div className="mt-6 text-center">
+        <Button variant="ghost" onClick={() => router.push("/partner/login")}>Return to Login</Button>
+      </div>
     </AuthLayout>
   );
 }

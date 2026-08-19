@@ -1,6 +1,8 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { daysRemainingUntil, phoneLockWindowMs, priorCpCooldownMs } from "@/lib/leads/phone";
+import { DocumentService } from "@/lib/services/document";
+import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 
 /** Full identity drawer: associations + timeline + lock state. */
 export const GET = withApiRoute("admin.lead-identities.get", async (
@@ -172,4 +174,74 @@ export const GET = withApiRoute("admin.lead-identities.get", async (
       };
     }),
   });
+});
+
+export const DELETE = withApiRoute("admin.lead-identities.delete", async (
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) => {
+  const { error, session } = await withAuth(["ADMIN"]);
+  if (error) return error;
+
+  const { id } = await params;
+  const identity = await prisma.leadIdentity.findFirst({
+    where: {
+      OR: [{ id }, { leadId: id }],
+    },
+    include: {
+      leads: {
+        select: {
+          id: true,
+          eoi: {
+            select: {
+              id: true,
+              documents: { select: { fileUrl: true } },
+            },
+          },
+        },
+      },
+      events: { select: { id: true } },
+    },
+  });
+
+  if (!identity) return apiError("Lead identity not found", 404);
+
+  const leadIds = identity.leads.map((lead) => lead.id);
+  const eoiIds = identity.leads
+    .map((lead) => lead.eoi?.id)
+    .filter((value): value is string => Boolean(value));
+  const fileUrls = identity.leads.flatMap((lead) =>
+    (lead.eoi?.documents || []).map((doc) => doc.fileUrl).filter(Boolean),
+  );
+
+  await prisma.$transaction(async (tx) => {
+    if (eoiIds.length) {
+      await tx.approvalAction.deleteMany({ where: { eoiId: { in: eoiIds } } });
+      await tx.document.deleteMany({ where: { eoiId: { in: eoiIds } } });
+      await tx.eOI.deleteMany({ where: { id: { in: eoiIds } } });
+    }
+    if (leadIds.length) {
+      await tx.lead.deleteMany({ where: { id: { in: leadIds } } });
+    }
+    await tx.leadEvent.deleteMany({ where: { identityId: identity.id } });
+    await tx.leadIdentity.delete({ where: { id: identity.id } });
+  });
+
+  await Promise.allSettled(fileUrls.map((fileUrl) => DocumentService.deleteStoredFile(fileUrl)));
+
+  await writeAudit({
+    actorId: session!.user.id,
+    action: "LEAD_IDENTITY_DELETED",
+    entityType: "LeadIdentity",
+    entityId: identity.id,
+    metadata: {
+      leadId: identity.leadId,
+      primaryPhone: identity.primaryPhone,
+      primaryEmail: identity.primaryEmail,
+      leadCount: leadIds.length,
+    },
+    ipAddress: getIpFromRequest(req),
+  });
+
+  return apiResponse({ success: true });
 });
