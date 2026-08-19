@@ -40,6 +40,11 @@ RUN npm run db:generate \
     && npm run build --workspace=@goyal/web \
     && test -f apps/web/.next/standalone/apps/web/server.js
 
+# --- Prisma CLI bundle (full dependency tree for db push at boot) ---
+FROM base AS prisma-boot
+WORKDIR /prisma-cli
+RUN npm install prisma@6.19.3 bcryptjs@2.4.3 --ignore-scripts --no-audit --no-fund
+
 # --- runtime: traced server only ---
 FROM base AS runner
 ENV NODE_ENV=production \
@@ -56,11 +61,9 @@ COPY --chown=nextjs:nodejs scripts/docker-start.cjs ./docker-start.cjs
 COPY --chown=nextjs:nodejs scripts/docker-bootstrap.cjs ./docker-bootstrap.cjs
 COPY certs/ap-south-1-bundle.pem /ap-south-1-bundle.pem
 # Prisma CLI + schema so the container can sync RDS on every boot.
+COPY --from=prisma-boot --chown=nextjs:nodejs /prisma-cli/node_modules/ ./node_modules/
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma ./packages/db/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/scripts/prisma-env.cjs ./packages/db/scripts/prisma-env.cjs
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
 RUN chmod 644 /ap-south-1-bundle.pem \
     && chmod -R a+rX /app/node_modules/prisma /app/node_modules/@prisma /app/node_modules/bcryptjs /app/packages/db
 USER nextjs
