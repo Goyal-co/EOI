@@ -12,6 +12,7 @@ export interface ProjectCardProps {
   imageUrl?: string;
   startingPrice?: number;
   eoiStatus: string;
+  tags?: string[];
   totalLeads?: number;
   totalEois?: number;
   leadOnlyCount?: number;
@@ -32,6 +33,7 @@ export function ProjectCard({
   imageUrl,
   startingPrice,
   eoiStatus,
+  tags = [],
   totalLeads,
   totalEois,
   leadOnlyCount,
@@ -42,6 +44,8 @@ export function ProjectCard({
   onPunchLead,
   className,
 }: ProjectCardProps) {
+  const visibleTags = tags.filter((tag) => tag.trim().length > 0);
+
   return (
     <Card
       className={cn(
@@ -59,21 +63,35 @@ export function ProjectCard({
             {name.charAt(0)}
           </div>
         )}
-        <div className="absolute top-3 right-3">
-          <StatusBadge status={eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} />
-        </div>
       </div>
       <div className="p-4">
-        <h3 className="font-semibold text-foreground">{name}</h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-semibold text-foreground min-w-0">{name}</h3>
+          <div className="shrink-0">
+            <StatusBadge status={eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} />
+          </div>
+        </div>
         <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
           <MapPin className="h-3.5 w-3.5" />
           {location}
         </div>
-        {startingPrice && (
+        {startingPrice ? (
           <p className="text-sm font-medium text-gold mt-2">
             {formatCurrency(startingPrice)} / sqft
           </p>
-        )}
+        ) : null}
+        {visibleTags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {visibleTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-md border border-gold/30 bg-gold-light/60 px-2 py-0.5 text-[11px] font-medium text-navy"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {(totalLeads !== undefined || totalEois !== undefined) && (
           <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
             {totalLeads !== undefined && (

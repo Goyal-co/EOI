@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Button, Card, AuthLayout } from "@goyal/ui";
-import { Clock, Ban } from "lucide-react";
+import { Button, AuthLayout } from "@goyal/ui";
+import { Building2, Clock, Ban, FileText, Shield, Users } from "lucide-react";
+
+const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
 export default function PartnerPendingApprovalContent() {
   const searchParams = useSearchParams();
@@ -22,8 +24,29 @@ export default function PartnerPendingApprovalContent() {
   }, []);
 
   return (
-    <AuthLayout>
-      <Card className="text-center p-8">
+    <AuthLayout
+      backgroundImage={LOGIN_BG}
+      subtitle="Join our network of property advisor"
+      description=""
+      features={[
+        { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
+        { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
+        { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
+      ]}
+      stats={[
+        { label: "Years", value: "55+" },
+        { label: "Projects", value: "250+" },
+        { label: "Loyal Customers", value: "30+" },
+      ]}
+      formCardTitle={isBlocked ? "Account Blocked" : "Pending Approval"}
+      formCardSubtitle={
+        isBlocked
+          ? "Your partner account cannot sign in right now"
+          : "Your registration is under review"
+      }
+      formCardIcon={Shield}
+    >
+      <div className="text-center">
         <div className="flex justify-center mb-6">
           <div className={`flex h-16 w-16 items-center justify-center rounded-full ${isBlocked ? "bg-red-100" : "bg-amber-100"}`}>
             {isBlocked ? (
@@ -33,10 +56,6 @@ export default function PartnerPendingApprovalContent() {
             )}
           </div>
         </div>
-
-        <h1 className="text-page-title mb-2">
-          {isBlocked ? "Account Blocked" : "Account Pending Approval"}
-        </h1>
 
         {email && (
           <p className="text-sm font-medium text-foreground mb-4">{email}</p>
@@ -73,7 +92,7 @@ export default function PartnerPendingApprovalContent() {
         <Link href="/partner/login">
           <Button variant="outline">Back to Login</Button>
         </Link>
-      </Card>
+      </div>
     </AuthLayout>
   );
 }

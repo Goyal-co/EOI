@@ -13,6 +13,7 @@ interface Project {
   location: string;
   startingPrice: number;
   eoiStatus: string;
+  tags?: string[];
   bannerUrl?: string;
   myLeads: number;
 }
@@ -57,6 +58,7 @@ export default function PartnerProjectsPage() {
               imageUrl={project.bannerUrl}
               startingPrice={project.startingPrice}
               eoiStatus={project.eoiStatus}
+              tags={project.tags}
               totalLeads={project.myLeads}
               onViewDetails={() => router.push(`/partner/projects/${project.id}`)}
               onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}

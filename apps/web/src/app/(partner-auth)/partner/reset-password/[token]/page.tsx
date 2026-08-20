@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
-import { Lock, Shield } from "lucide-react";
+import { Building2, FileText, Lock, Shield, Users } from "lucide-react";
 
 const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
@@ -44,6 +44,16 @@ export default function ResetPasswordPage() {
       backgroundImage={LOGIN_BG}
       subtitle="Join our network of property advisor"
       description=""
+      features={[
+        { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
+        { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
+        { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
+      ]}
+      stats={[
+        { label: "Years", value: "55+" },
+        { label: "Projects", value: "250+" },
+        { label: "Loyal Customers", value: "30+" },
+      ]}
       formCardTitle="Set New Password"
       formCardSubtitle="Choose a strong password for your partner account"
       formCardIcon={Shield}

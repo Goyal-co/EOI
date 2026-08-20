@@ -32,6 +32,7 @@ export const GET = withApiRoute("partner.projects.get", async () => {
         startingPrice: Number(a.project.startingPrice),
         eoiStatus: a.project.eoiStatus,
         status: a.project.status,
+        tags: a.project.tags ?? [],
         bannerUrl: await resolveProjectBannerUrl(a.project.bannerUrl),
         locationImageUrl: await resolveProjectBannerUrl(a.project.locationImageUrl),
         description: a.project.description,

@@ -102,7 +102,24 @@ function loadDraft(key: string): ProjectForm | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as ProjectForm) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ProjectForm>;
+    return {
+      ...emptyForm,
+      ...parsed,
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+      tagInput: "",
+      amenities: Array.isArray(parsed.amenities) ? parsed.amenities : [],
+      amenityInput: "",
+      faqs: Array.isArray(parsed.faqs) ? parsed.faqs : [],
+      eoiRule: {
+        minBudget: parsed.eoiRule?.minBudget ?? "",
+        requiredDocuments: Array.isArray(parsed.eoiRule?.requiredDocuments)
+          ? parsed.eoiRule.requiredDocuments
+          : [],
+        docInput: "",
+      },
+    };
   } catch {
     return null;
   }
@@ -266,15 +283,33 @@ export default function AdminProjectsPage() {
   const handleSave = async (isEdit: boolean) => {
     setSaving(true);
     try {
+      const price = Number(form.startingPrice);
+      if (!form.name.trim() || form.name.trim().length < 2) {
+        throw new Error("Project name is required");
+      }
+      if (!form.location.trim() || form.location.trim().length < 2) {
+        throw new Error("Location is required");
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new Error("Price per sqft must be a positive number");
+      }
+      if (form.locationLink.trim()) {
+        try {
+          new URL(form.locationLink.trim());
+        } catch {
+          throw new Error("Location link must be a valid URL");
+        }
+      }
+
       const payload = {
-        name: form.name,
-        location: form.location,
-        locationLink: form.locationLink || undefined,
-        startingPrice: Number(form.startingPrice),
+        name: form.name.trim(),
+        location: form.location.trim(),
+        locationLink: form.locationLink.trim() || undefined,
+        startingPrice: price,
         possessionDate: form.possessionDate || undefined,
-        description: form.description || undefined,
-        eoiStatus: form.eoiStatus,
-        status: form.status,
+        description: form.description.trim() || undefined,
+        eoiStatus: form.eoiStatus as "OPEN" | "CLOSED",
+        status: form.status as "ACTIVE" | "INACTIVE" | "UPCOMING",
         tags: form.tags,
         amenities: form.amenities,
         faqs: form.faqs.filter((f) => f.question.trim() && f.answer.trim()),

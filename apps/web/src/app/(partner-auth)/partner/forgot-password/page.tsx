@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, useToast, AuthLayout } from "@goyal/ui";
-import { ArrowLeft, Lock, Mail, Shield } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Mail, Shield, Users } from "lucide-react";
 
 const LOGIN_BG = "/images/auth/customer-login-bg.png";
 
@@ -40,6 +40,16 @@ export default function ForgotPasswordPage() {
       backgroundImage={LOGIN_BG}
       subtitle="Join our network of property advisor"
       description=""
+      features={[
+        { icon: Building2, title: "Premium Projects", description: "Access all new/ongoing projects." },
+        { icon: FileText, title: "Sales Resources", description: "Brochures, floor plans & cost sheets." },
+        { icon: Users, title: "EOI Management", description: "Submit and track customer EOIs." },
+      ]}
+      stats={[
+        { label: "Years", value: "55+" },
+        { label: "Projects", value: "250+" },
+        { label: "Loyal Customers", value: "30+" },
+      ]}
       formCardTitle="Reset Password"
       formCardSubtitle="Enter your partner account email"
       formCardIcon={Shield}

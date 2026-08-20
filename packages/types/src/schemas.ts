@@ -39,11 +39,14 @@ export const projectSchema = z.object({
   name: z.string().min(2, "Project name is required"),
   location: z.string().min(2, "Location is required"),
   locationLink: z
-    .string()
-    .url("Location link must be a valid URL")
-    .optional()
-    .or(z.literal("")),
-  startingPrice: z.number().positive("Price per sqft must be positive"),
+    .union([
+      z.literal(""),
+      z.string().url("Location link must be a valid URL"),
+    ])
+    .optional(),
+  startingPrice: z.coerce
+    .number({ invalid_type_error: "Price per sqft must be a number" })
+    .positive("Price per sqft must be positive"),
   possessionDate: z.string().optional(),
   description: z.string().optional(),
   tags: z.array(z.string().min(1)).optional(),
@@ -257,7 +260,7 @@ export const emailTemplatePatchSchema = z.object({
 });
 
 export const projectEoiRuleSchema = z.object({
-  minBudget: z.number().positive().optional(),
+  minBudget: z.coerce.number().positive().optional(),
   requiredDocuments: z.array(z.string()).optional(),
 });
 

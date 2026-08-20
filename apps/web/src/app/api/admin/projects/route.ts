@@ -53,13 +53,18 @@ export const POST = withApiRoute("admin.projects.post", async (req: Request) => 
 
   const project = await prisma.project.create({
     data: {
-      ...parsed.data,
+      name: parsed.data.name,
+      location: parsed.data.location,
       locationLink: normalizeLocationLink(parsed.data.locationLink),
+      startingPrice: parsed.data.startingPrice,
+      possessionDate: parsed.data.possessionDate ? new Date(parsed.data.possessionDate) : null,
+      description: parsed.data.description || null,
       tags: parsed.data.tags || [],
       amenities: parsed.data.amenities || [],
       faqs: parsed.data.faqs || [],
-      possessionDate: parsed.data.possessionDate ? new Date(parsed.data.possessionDate) : null,
-      bannerUrl: body.bannerUrl,
+      eoiStatus: parsed.data.eoiStatus,
+      status: parsed.data.status,
+      bannerUrl: typeof body.bannerUrl === "string" ? body.bannerUrl : null,
     },
   });
 

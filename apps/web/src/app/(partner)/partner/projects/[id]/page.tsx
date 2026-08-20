@@ -28,6 +28,7 @@ interface Project {
   startingPrice: number;
   eoiStatus: string;
   status: string;
+  tags?: string[];
   bannerUrl?: string;
   description?: string;
   amenities?: string[];
@@ -88,17 +89,33 @@ export default function ProjectDetailPage() {
           { label: project.name },
         ]}
         actions={
-          project.eoiStatus === "OPEN" ? (
-            <Button variant="gold" onClick={() => setEoiOpen(true)}>
-              Submit EOI
-            </Button>
-          ) : (
-            <Button variant="gold" onClick={() => setPunchOpen(true)}>
-              Punch Lead
-            </Button>
-          )
+          <div className="flex items-center gap-3">
+            <StatusBadge status={project.eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} />
+            {project.eoiStatus === "OPEN" ? (
+              <Button variant="gold" onClick={() => setEoiOpen(true)}>
+                Submit EOI
+              </Button>
+            ) : (
+              <Button variant="gold" onClick={() => setPunchOpen(true)}>
+                Punch Lead
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {(project.tags?.length ?? 0) > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {project.tags!.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center rounded-md border border-gold/30 bg-gold-light/60 px-2 py-0.5 text-[11px] font-medium text-navy"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="relative rounded-xl overflow-hidden aspect-[16/5] max-h-72 bg-gradient-to-br from-blue-100 to-blue-200">
         {project.bannerUrl ? (
@@ -110,9 +127,6 @@ export default function ProjectDetailPage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-0 left-0 p-6 text-white">
-          <div className="flex items-center gap-3 mb-2">
-            <StatusBadge status={project.eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} />
-          </div>
           <div className="flex items-center gap-4 text-sm text-white/80">
             <span className="flex items-center gap-1">
               <MapPin className="h-4 w-4" />
