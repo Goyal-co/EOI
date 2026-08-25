@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   getPortalHomeHrefForHost,
   getPortalLoginHrefForHost,
+  getLoginHrefForRequestHost,
   isPathRoutingHost,
   pickRequestHost,
   resolvePortalFromHost,
   rewritePathForPortal,
   crossPortalRedirectUrl,
+  redirectUrlForPortal,
 } from "@goyal/auth/portals";
 
 const ORIGIN_KEYS = [
@@ -134,10 +136,13 @@ describe("rewritePathForPortal", () => {
 });
 
 describe("getPortalHomeHrefForHost", () => {
-  it("stays relative on preview and same portal", () => {
+  it("stays relative on preview and uses public paths on same portal", () => {
     setPortalEnv();
     expect(getPortalHomeHrefForHost("partner", "eoi.vercel.app")).toBe("/partner");
-    expect(getPortalHomeHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/partner");
+    expect(getPortalHomeHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/");
+    expect(getPortalLoginHrefForHost("customer", "customer.partnergoyalco.com")).toBe("/login");
+    expect(getPortalLoginHrefForHost("admin", "admin.partnergoyalco.com")).toBe("/login");
+    expect(getPortalLoginHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/login");
   });
 
   it("uses the other portal origin when crossing subdomains", () => {
@@ -152,10 +157,57 @@ describe("getPortalHomeHrefForHost", () => {
 
   it("builds sibling portal URLs from the request host when env is empty", () => {
     for (const key of ORIGIN_KEYS) delete process.env[key];
+    const scheme = process.env.NODE_ENV === "production" ? "https" : "http";
     expect(getPortalHomeHrefForHost("customer", "leads.vm.example")).toBe(
-      "https://customer.vm.example/",
+      `${scheme}://customer.vm.example/`,
     );
     expect(getPortalHomeHrefForHost("partner", "10.0.0.8:3000")).toBe("/partner");
+  });
+});
+
+describe("getLoginHrefForRequestHost", () => {
+  it("maps each subdomain to its own absolute login URL", () => {
+    setPortalEnv();
+    expect(getLoginHrefForRequestHost("customer.partnergoyalco.com")).toBe(
+      "https://customer.partnergoyalco.com/login",
+    );
+    expect(getLoginHrefForRequestHost("admin.partnergoyalco.com")).toBe(
+      "https://admin.partnergoyalco.com/login",
+    );
+    expect(getLoginHrefForRequestHost("leads.partnergoyalco.com")).toBe(
+      "https://leads.partnergoyalco.com/login",
+    );
+  });
+
+  it("does not follow a poisoned x-forwarded-host when Host is correct", () => {
+    setPortalEnv();
+    const host = pickRequestHost({
+      host: "customer.partnergoyalco.com",
+      forwardedHost: "leads.partnergoyalco.com",
+    });
+    expect(getLoginHrefForRequestHost(host)).toBe("https://customer.partnergoyalco.com/login");
+  });
+});
+
+describe("redirectUrlForPortal", () => {
+  it("anchors relative redirects on the portal origin, not requestUrl", () => {
+    setPortalEnv();
+    expect(
+      redirectUrlForPortal({
+        target: "/login",
+        requestUrl: "https://leads.partnergoyalco.com/",
+        portal: "customer",
+        hostHeader: "customer.partnergoyalco.com",
+      }).href,
+    ).toBe("https://customer.partnergoyalco.com/login");
+    expect(
+      redirectUrlForPortal({
+        target: "/login",
+        requestUrl: "https://leads.partnergoyalco.com/",
+        portal: "admin",
+        hostHeader: "admin.partnergoyalco.com",
+      }).href,
+    ).toBe("https://admin.partnergoyalco.com/login");
   });
 });
 

@@ -9,6 +9,7 @@ import {
   resolvePortalFromHost,
   rewritePathForPortal,
   crossPortalRedirectUrl,
+  redirectUrlForPortal,
   type PortalKind,
 } from "@goyal/auth/portals";
 import type { UserRole } from "@goyal/types";
@@ -23,8 +24,8 @@ function loginForPath(pathname: string, portal: PortalKind | null, host: string)
   return getPortalLoginHrefForHost("partner", host);
 }
 
-function toUrl(target: string, reqUrl: string) {
-  return new URL(target, reqUrl);
+function toUrl(target: string, reqUrl: string, portal: PortalKind | null, host: string) {
+  return redirectUrlForPortal({ target, requestUrl: reqUrl, portal, hostHeader: host });
 }
 
 export default auth((req) => {
@@ -47,7 +48,7 @@ export default auth((req) => {
     role: isLoggedIn ? role : null,
   });
   if (crossPortal) {
-    const dest = toUrl(crossPortal, req.url);
+    const dest = toUrl(crossPortal, req.url, portal, host);
     if (search) dest.search = search;
     return NextResponse.redirect(dest);
   }
@@ -64,10 +65,10 @@ export default auth((req) => {
 
   if (rawPath === "/" || pathname === "/") {
     if (isLoggedIn && role) {
-      return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url));
+      return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url, portal, host));
     }
     const home = portal ? getPortalHomePath(portal) : "/partner";
-    return NextResponse.redirect(toUrl(loginForPath(home, portal, host), req.url));
+    return NextResponse.redirect(toUrl(loginForPath(home, portal, host), req.url, portal, host));
   }
 
   if (isPublicRoute(pathname) || isPublicRoute(rawPath)) {
@@ -77,7 +78,7 @@ export default auth((req) => {
       || pathname === "/customer/login"
       || rawPath === "/login"
     )) {
-      return NextResponse.redirect(toUrl(getPortalForRole(role!, host), req.url));
+      return NextResponse.redirect(toUrl(getPortalForRole(role!, host), req.url, portal, host));
     }
     return finish(NextResponse.next());
   }
@@ -86,13 +87,13 @@ export default auth((req) => {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const dest = toUrl(loginForPath(pathname, portal, host), req.url);
+    const dest = toUrl(loginForPath(pathname, portal, host), req.url, portal, host);
     if (search) dest.search = search;
     return NextResponse.redirect(dest);
   }
 
   if (role && !canAccessRoute(role, pathname)) {
-    return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url));
+    return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url, portal, host));
   }
 
   const cpStatus = req.auth?.user?.cpStatus;
@@ -109,6 +110,8 @@ export default auth((req) => {
     const url = toUrl(
       portalHrefForHost("partner", "/partner/pending-approval", host),
       req.url,
+      portal,
+      host,
     );
     if (cpStatus === "BLOCKED") url.searchParams.set("status", "blocked");
     if (req.auth?.user?.email) url.searchParams.set("email", req.auth.user.email);

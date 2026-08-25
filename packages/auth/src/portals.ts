@@ -288,15 +288,50 @@ export function portalHref(kind: PortalKind, path: string): string {
   return origin ? `${origin}${normalized}` : normalized;
 }
 
-/** Absolute only when the request is already on a different portal host. */
+/**
+ * Absolute when crossing portals (or when an origin is known and the caller
+ * needs a stable host). On the matching dedicated portal host, use the public
+ * path (`/login` not `/customer/login`).
+ */
 export function portalHrefForHost(kind: PortalKind, path: string, hostHeader?: string | null): string {
   const current = resolvePortalFromHost(hostHeader);
+  const origin = originForPortal(kind, hostHeader);
+  const normalized = publicPathForPortal(kind, path, origin);
+
   if (current && current !== kind) {
-    const origin = originForPortal(kind, hostHeader);
-    const normalized = publicPathForPortal(kind, path, origin);
     return origin ? `${origin}${normalized}` : normalized;
   }
+  if (current === kind) {
+    return normalized;
+  }
   return path.startsWith("/") ? path : `/${path}`;
+}
+
+/** Login URL for whatever portal this Host maps to (defaults to partner). */
+export function getLoginHrefForRequestHost(hostHeader?: string | null): string {
+  const portal = resolvePortalFromHost(hostHeader) ?? "partner";
+  const origin = originForPortal(portal, hostHeader);
+  const path = publicPathForPortal(portal, getPortalLoginPath(portal), origin);
+  return origin ? `${origin}${path}` : getPortalLoginHrefForHost(portal, hostHeader);
+}
+
+/**
+ * Build a redirect URL that stays on the resolved portal origin.
+ * Never use a poisoned `x-forwarded-host` / NEXTAUTH_URL base (often leads.*).
+ */
+export function redirectUrlForPortal(args: {
+  target: string;
+  requestUrl: string;
+  portal: PortalKind | null;
+  hostHeader?: string | null;
+}): URL {
+  const { target, requestUrl, portal, hostHeader } = args;
+  if (/^https?:\/\//i.test(target)) return new URL(target);
+  if (portal) {
+    const origin = originForPortal(portal, hostHeader);
+    if (origin) return new URL(target.startsWith("/") ? target : `/${target}`, origin);
+  }
+  return new URL(target, requestUrl);
 }
 
 export function getPortalHomeHref(kind: PortalKind): string {
