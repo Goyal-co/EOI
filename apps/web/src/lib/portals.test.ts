@@ -136,19 +136,20 @@ describe("rewritePathForPortal", () => {
 });
 
 describe("getPortalHomeHrefForHost", () => {
-  it("stays relative on preview and uses public paths on same portal", () => {
+  it("stays relative on preview and keeps full app paths on same portal", () => {
     setPortalEnv();
     expect(getPortalHomeHrefForHost("partner", "eoi.vercel.app")).toBe("/partner");
-    expect(getPortalHomeHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/");
-    expect(getPortalLoginHrefForHost("customer", "customer.partnergoyalco.com")).toBe("/login");
+    expect(getPortalHomeHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/partner");
+    expect(getPortalLoginHrefForHost("customer", "customer.partnergoyalco.com")).toBe("/customer/login");
     expect(getPortalLoginHrefForHost("admin", "admin.partnergoyalco.com")).toBe("/login");
-    expect(getPortalLoginHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/login");
+    expect(getPortalLoginHrefForHost("partner", "leads.partnergoyalco.com")).toBe("/partner/login");
+    expect(getPortalHomeHrefForHost("admin", "admin.partnergoyalco.com")).toBe("/");
   });
 
   it("uses the other portal origin when crossing subdomains", () => {
     setPortalEnv();
     expect(getPortalHomeHrefForHost("customer", "leads.partnergoyalco.com")).toBe(
-      "https://customer.partnergoyalco.com/",
+      "https://customer.partnergoyalco.com/customer",
     );
     expect(getPortalLoginHrefForHost("admin", "leads.partnergoyalco.com")).toBe(
       "https://admin.partnergoyalco.com/login",
@@ -159,23 +160,23 @@ describe("getPortalHomeHrefForHost", () => {
     for (const key of ORIGIN_KEYS) delete process.env[key];
     const scheme = process.env.NODE_ENV === "production" ? "https" : "http";
     expect(getPortalHomeHrefForHost("customer", "leads.vm.example")).toBe(
-      `${scheme}://customer.vm.example/`,
+      `${scheme}://customer.vm.example/customer`,
     );
     expect(getPortalHomeHrefForHost("partner", "10.0.0.8:3000")).toBe("/partner");
   });
 });
 
 describe("getLoginHrefForRequestHost", () => {
-  it("maps each subdomain to its own absolute login URL", () => {
+  it("maps each subdomain to its own absolute login URL with real app paths", () => {
     setPortalEnv();
     expect(getLoginHrefForRequestHost("customer.partnergoyalco.com")).toBe(
-      "https://customer.partnergoyalco.com/login",
+      "https://customer.partnergoyalco.com/customer/login",
     );
     expect(getLoginHrefForRequestHost("admin.partnergoyalco.com")).toBe(
       "https://admin.partnergoyalco.com/login",
     );
     expect(getLoginHrefForRequestHost("leads.partnergoyalco.com")).toBe(
-      "https://leads.partnergoyalco.com/login",
+      "https://leads.partnergoyalco.com/partner/login",
     );
   });
 
@@ -185,7 +186,7 @@ describe("getLoginHrefForRequestHost", () => {
       host: "customer.partnergoyalco.com",
       forwardedHost: "leads.partnergoyalco.com",
     });
-    expect(getLoginHrefForRequestHost(host)).toBe("https://customer.partnergoyalco.com/login");
+    expect(getLoginHrefForRequestHost(host)).toBe("https://customer.partnergoyalco.com/customer/login");
   });
 });
 
@@ -194,12 +195,12 @@ describe("redirectUrlForPortal", () => {
     setPortalEnv();
     expect(
       redirectUrlForPortal({
-        target: "/login",
+        target: "/customer/login",
         requestUrl: "https://leads.partnergoyalco.com/",
         portal: "customer",
         hostHeader: "customer.partnergoyalco.com",
       }).href,
-    ).toBe("https://customer.partnergoyalco.com/login");
+    ).toBe("https://customer.partnergoyalco.com/customer/login");
     expect(
       redirectUrlForPortal({
         target: "/login",
@@ -219,14 +220,14 @@ describe("crossPortalRedirectUrl", () => {
         pathname: "/customer/login",
         hostHeader: "leads.partnergoyalco.com",
       }),
-    ).toBe("https://customer.partnergoyalco.com/login");
+    ).toBe("https://customer.partnergoyalco.com/customer/login");
     expect(
       crossPortalRedirectUrl({
         pathname: "/customer/eoi",
         hostHeader: "leads.partnergoyalco.com",
         role: "CUSTOMER",
       }),
-    ).toBe("https://customer.partnergoyalco.com/eoi");
+    ).toBe("https://customer.partnergoyalco.com/customer/eoi");
   });
 
   it("sends confirm and invite links from the partner host to the customer origin", () => {
@@ -261,6 +262,6 @@ describe("crossPortalRedirectUrl", () => {
         hostHeader: "leads.partnergoyalco.com",
         role: "CUSTOMER",
       }),
-    ).toBe("https://customer.partnergoyalco.com/");
+    ).toBe("https://customer.partnergoyalco.com/customer");
   });
 });

@@ -211,13 +211,19 @@ function isDedicatedPortalOrigin(kind: PortalKind, origin: string): boolean {
   return host === label || host.startsWith(`${label}.`);
 }
 
-/** On dedicated portal hosts, `/customer/login` is publicly `/login`. */
+/**
+ * Keep full app paths on every host.
+ * `/login` is the admin login page only; customer/partner must stay
+ * `/customer/login` and `/partner/login` (stripping caused 404s when rewrites missed).
+ * Admin home may still be shortened to `/` on the admin host.
+ */
 export function publicPathForPortal(kind: PortalKind, path: string, destOrigin: string | null): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  if (!destOrigin || !isDedicatedPortalOrigin(kind, destOrigin)) return normalized;
-  const prefix = kind === "admin" ? "/admin" : `/${kind}`;
-  if (normalized === prefix) return "/";
-  if (normalized.startsWith(`${prefix}/`)) return normalized.slice(prefix.length) || "/";
+  if (kind !== "admin" || !destOrigin || !isDedicatedPortalOrigin(kind, destOrigin)) {
+    return normalized;
+  }
+  if (normalized === "/admin") return "/";
+  if (normalized.startsWith("/admin/")) return normalized.slice("/admin".length) || "/";
   return normalized;
 }
 
@@ -289,9 +295,8 @@ export function portalHref(kind: PortalKind, path: string): string {
 }
 
 /**
- * Absolute when crossing portals (or when an origin is known and the caller
- * needs a stable host). On the matching dedicated portal host, use the public
- * path (`/login` not `/customer/login`).
+ * Absolute when crossing portals. Same-portal links keep full app paths
+ * (`/customer/login`, `/partner/login`) except admin home → `/`.
  */
 export function portalHrefForHost(kind: PortalKind, path: string, hostHeader?: string | null): string {
   const current = resolvePortalFromHost(hostHeader);

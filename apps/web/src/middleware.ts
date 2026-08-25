@@ -2,7 +2,6 @@ import { auth } from "@goyal/auth/edge";
 import { NextResponse } from "next/server";
 import { canAccessRoute, isPublicRoute, getPortalForRole } from "@goyal/auth/rbac";
 import {
-  getPortalHomePath,
   getPortalLoginHrefForHost,
   pickRequestHost,
   portalHrefForHost,
@@ -40,6 +39,14 @@ export default auth((req) => {
   const portal = resolvePortalFromHost(host);
   const pathname = portal ? rewritePathForPortal(rawPath, portal) : rawPath;
 
+  // `/login` is the admin page route. On customer/partner hosts, send users to
+  // the real portal login URL (do not rewrite onto app/login).
+  if (!isLoggedIn && portal && portal !== "admin" && (rawPath === "/login" || rawPath === "/login/")) {
+    const dest = toUrl(getPortalLoginHrefForHost(portal, host), req.url, portal, host);
+    if (search) dest.search = search;
+    return NextResponse.redirect(dest);
+  }
+
   const crossPortal = crossPortalRedirectUrl({
     pathname: rawPath.startsWith("/customer") || rawPath.startsWith("/partner") || rawPath.startsWith("/admin")
       ? rawPath
@@ -67,8 +74,11 @@ export default auth((req) => {
     if (isLoggedIn && role) {
       return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url, portal, host));
     }
-    const home = portal ? getPortalHomePath(portal) : "/partner";
-    return NextResponse.redirect(toUrl(loginForPath(home, portal, host), req.url, portal, host));
+    // Always use the host's portal login (customer → /customer/login, etc.)
+    const loginHref = portal
+      ? getPortalLoginHrefForHost(portal, host)
+      : loginForPath("/partner", null, host);
+    return NextResponse.redirect(toUrl(loginHref, req.url, portal, host));
   }
 
   if (isPublicRoute(pathname) || isPublicRoute(rawPath)) {

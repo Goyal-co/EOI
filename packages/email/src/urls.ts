@@ -101,18 +101,13 @@ function siblingOrigin(label: "leads" | "customer" | "admin"): string | null {
   return null;
 }
 
-function isDedicatedOrigin(origin: string, labels: string[]): boolean {
-  const host = hostnameOf(origin);
-  if (!host) return false;
-  return labels.some((label) => host === label || host.startsWith(`${label}.`));
-}
-
-function publicPathOnHost(base: string, appPath: string, prefix: string, labels: string[]): string {
+/**
+ * Always keep full app paths in email links.
+ * Dedicated hosts used to strip `/customer` and `/partner`, which sent users to
+ * `/login` / `/reset-password/...` — those routes are admin-only or missing.
+ */
+function publicPathOnHost(base: string, appPath: string): string {
   const path = appPath.startsWith("/") ? appPath : `/${appPath}`;
-  if (isDedicatedOrigin(base, labels) && (path === prefix || path.startsWith(`${prefix}/`))) {
-    const stripped = path.slice(prefix.length) || "/";
-    return `${stripSlash(base)}${stripped}`;
-  }
   return `${stripSlash(base)}${path}`;
 }
 
@@ -154,15 +149,15 @@ export function getAdminBaseUrl(): string {
 }
 
 export function getCustomerPublicUrl(appPath: string): string {
-  return publicPathOnHost(getCustomerBaseUrl(), appPath, "/customer", ["customer"]);
+  return publicPathOnHost(getCustomerBaseUrl(), appPath);
 }
 
 export function getPartnerPublicUrl(appPath: string): string {
-  return publicPathOnHost(getPartnerBaseUrl(), appPath, "/partner", ["leads", "partner"]);
+  return publicPathOnHost(getPartnerBaseUrl(), appPath);
 }
 
 export function getAdminPublicUrl(appPath: string): string {
-  return publicPathOnHost(getAdminBaseUrl(), appPath, "/admin", ["admin"]);
+  return publicPathOnHost(getAdminBaseUrl(), appPath);
 }
 
 export function getCustomerLoginUrl(): string {
@@ -204,6 +199,7 @@ export function getPartnerResetPasswordUrl(token: string): string {
 }
 
 export function getAdminLoginUrl(): string {
+  // Real route is app/login (not /admin/login).
   return `${getAdminBaseUrl()}/login`;
 }
 
@@ -231,6 +227,7 @@ export function canonicalizeEmailUrl(raw: string): string {
 
   const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
   const pathname = parsed.pathname;
+  const host = parsed.hostname.toLowerCase();
 
   if (pathname === "/confirm" || pathname.startsWith("/confirm/") || pathname === "/invite" || pathname.startsWith("/invite/")) {
     return `${getCustomerBaseUrl()}${path}`;
@@ -244,10 +241,40 @@ export function canonicalizeEmailUrl(raw: string): string {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return `${getAdminPublicUrl(pathname)}${parsed.search}${parsed.hash}`;
   }
+
+  // Repair old stripped dedicated-host links that 404 without middleware rewrite.
+  if (host.startsWith("customer.") || host === "customer") {
+    if (pathname === "/login" || pathname.startsWith("/login/")) {
+      return `${getCustomerPublicUrl(`/customer${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/reset-password" || pathname.startsWith("/reset-password/")) {
+      return `${getCustomerPublicUrl(`/customer${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/forgot-password" || pathname.startsWith("/forgot-password/")) {
+      return `${getCustomerPublicUrl(`/customer${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/eoi" || pathname.startsWith("/eoi/") || pathname === "/welcome" || pathname.startsWith("/welcome/")) {
+      return `${getCustomerPublicUrl(`/customer${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+  }
+  if (host.startsWith("leads.") || host.startsWith("partner.") || host === "leads" || host === "partner") {
+    if (pathname === "/login" || pathname.startsWith("/login/")) {
+      return `${getPartnerPublicUrl(`/partner${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/reset-password" || pathname.startsWith("/reset-password/")) {
+      return `${getPartnerPublicUrl(`/partner${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/forgot-password" || pathname.startsWith("/forgot-password/")) {
+      return `${getPartnerPublicUrl(`/partner${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+    if (pathname === "/leads" || pathname.startsWith("/leads/")) {
+      return `${getPartnerPublicUrl(`/partner${pathname}`)}${parsed.search}${parsed.hash}`;
+    }
+  }
+
   if (pathname === "/eoi" || pathname.startsWith("/eoi/") || pathname === "/welcome" || pathname.startsWith("/welcome/")) {
-    const host = parsed.hostname.toLowerCase();
     if (host.startsWith("leads.") || host.startsWith("partner.") || host.startsWith("admin.") || isLocalHostName(host)) {
-      return `${getCustomerBaseUrl()}${path}`;
+      return `${getCustomerBaseUrl()}/customer${pathname}${parsed.search}${parsed.hash}`;
     }
   }
   if (isLocalHostName(parsed.hostname)) {

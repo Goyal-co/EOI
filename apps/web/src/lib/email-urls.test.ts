@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   canonicalizeEmailUrl,
   getAdminLeadsUrl,
+  getAdminLoginUrl,
   getCustomerConfirmUrl,
   getCustomerEoiUrl,
   getCustomerLoginUrl,
@@ -49,15 +50,15 @@ beforeEach(snapshotEnv);
 afterEach(restoreEnv);
 
 describe("customer email URLs", () => {
-  it("uses CUSTOMER_URL with public paths on the customer host", () => {
+  it("uses CUSTOMER_URL with full /customer app paths", () => {
     process.env.APP_URL = "https://leads.partnergoyalco.com";
     process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
 
-    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/login");
-    expect(getCustomerPortalUrl()).toBe("https://customer.partnergoyalco.com/");
-    expect(getCustomerEoiUrl()).toBe("https://customer.partnergoyalco.com/eoi");
+    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/customer/login");
+    expect(getCustomerPortalUrl()).toBe("https://customer.partnergoyalco.com/customer");
+    expect(getCustomerEoiUrl()).toBe("https://customer.partnergoyalco.com/customer/eoi");
     expect(getCustomerResetPasswordUrl("abc")).toBe(
-      "https://customer.partnergoyalco.com/reset-password/abc",
+      "https://customer.partnergoyalco.com/customer/reset-password/abc",
     );
     expect(getCustomerConfirmUrl("tok", "accept")).toBe(
       "https://customer.partnergoyalco.com/confirm/tok/accept",
@@ -68,25 +69,26 @@ describe("customer email URLs", () => {
     process.env.APP_URL = "https://leads.partnergoyalco.com";
     process.env.ROOT_DOMAIN = "partnergoyalco.com";
 
-    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/login");
+    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/customer/login");
     expect(getCustomerConfirmUrl("tok", "reject")).toBe(
       "https://customer.partnergoyalco.com/confirm/tok/reject",
     );
   });
 
-  it("infers the customer host from APP_URL alone", () => {
+  it("infers hosts from APP_URL alone with full app paths", () => {
     process.env.APP_URL = "https://leads.partnergoyalco.com";
 
-    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/login");
+    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/customer/login");
     expect(getCustomerConfirmUrl("tok", "accept")).toBe(
       "https://customer.partnergoyalco.com/confirm/tok/accept",
     );
-    expect(getPartnerLoginUrl()).toBe("https://leads.partnergoyalco.com/login");
+    expect(getPartnerLoginUrl()).toBe("https://leads.partnergoyalco.com/partner/login");
     expect(getPartnerLeadsUrl("LD-1")).toBe(
-      "https://leads.partnergoyalco.com/leads?search=LD-1",
+      "https://leads.partnergoyalco.com/partner/leads?search=LD-1",
     );
+    expect(getAdminLoginUrl()).toBe("https://admin.partnergoyalco.com/login");
     expect(getAdminLeadsUrl("LD-1")).toBe(
-      "https://admin.partnergoyalco.com/leads?q=LD-1",
+      "https://admin.partnergoyalco.com/admin/leads?q=LD-1",
     );
   });
 
@@ -109,17 +111,17 @@ describe("customer email URLs", () => {
     process.env.APP_URL = "http://localhost:3000";
     process.env.NEXTAUTH_URL = "http://localhost:3000";
 
-    expect(getPartnerLoginUrl()).toBe("https://leads.partnergoyalco.com/login");
+    expect(getPartnerLoginUrl()).toBe("https://leads.partnergoyalco.com/partner/login");
     expect(getCustomerConfirmUrl("tok", "accept")).toBe(
       "https://customer.partnergoyalco.com/confirm/tok/accept",
     );
-    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/login");
-    expect(getCustomerEoiUrl()).toBe("https://customer.partnergoyalco.com/eoi");
+    expect(getCustomerLoginUrl()).toBe("https://customer.partnergoyalco.com/customer/login");
+    expect(getCustomerEoiUrl()).toBe("https://customer.partnergoyalco.com/customer/eoi");
   });
 });
 
 describe("password reset email URLs", () => {
-  it("uses the correct portal host per role with production env", () => {
+  it("uses the correct portal host and full path per role", () => {
     process.env.NODE_ENV = "production";
     process.env.APP_URL = "https://leads.partnergoyalco.com";
     process.env.PARTNER_URL = "https://leads.partnergoyalco.com";
@@ -128,23 +130,23 @@ describe("password reset email URLs", () => {
     process.env.ROOT_DOMAIN = "partnergoyalco.com";
 
     expect(getPartnerResetPasswordUrl("abc123")).toBe(
-      "https://leads.partnergoyalco.com/reset-password/abc123",
+      "https://leads.partnergoyalco.com/partner/reset-password/abc123",
     );
     expect(getCustomerResetPasswordUrl("xyz789")).toBe(
-      "https://customer.partnergoyalco.com/reset-password/xyz789",
+      "https://customer.partnergoyalco.com/customer/reset-password/xyz789",
     );
   });
 
-  it("rewrites localhost reset links to production hosts", () => {
+  it("rewrites localhost reset links to production hosts with full paths", () => {
     process.env.NODE_ENV = "production";
     process.env.APP_URL = "https://leads.partnergoyalco.com";
     process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
 
     expect(canonicalizeEmailUrl("http://localhost:3000/partner/reset-password/tok")).toBe(
-      "https://leads.partnergoyalco.com/reset-password/tok",
+      "https://leads.partnergoyalco.com/partner/reset-password/tok",
     );
     expect(canonicalizeEmailUrl("http://localhost:3000/customer/reset-password/tok")).toBe(
-      "https://customer.partnergoyalco.com/reset-password/tok",
+      "https://customer.partnergoyalco.com/customer/reset-password/tok",
     );
   });
 });
@@ -155,7 +157,7 @@ describe("canonicalizeEmailUrl", () => {
     process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
 
     expect(canonicalizeEmailUrl("http://localhost:3000/partner/login")).toBe(
-      "https://leads.partnergoyalco.com/login",
+      "https://leads.partnergoyalco.com/partner/login",
     );
     expect(canonicalizeEmailUrl("http://localhost:3000/confirm/tok/accept")).toBe(
       "https://customer.partnergoyalco.com/confirm/tok/accept",
@@ -164,25 +166,28 @@ describe("canonicalizeEmailUrl", () => {
       "https://customer.partnergoyalco.com/confirm/tok/accept",
     );
     expect(canonicalizeEmailUrl("https://leads.partnergoyalco.com/customer/login")).toBe(
-      "https://customer.partnergoyalco.com/login",
+      "https://customer.partnergoyalco.com/customer/login",
     );
-    expect(canonicalizeEmailUrl("https://leads.partnergoyalco.com/reset-password/tok")).toBe(
-      "https://leads.partnergoyalco.com/reset-password/tok",
+    expect(canonicalizeEmailUrl("https://leads.partnergoyalco.com/partner/reset-password/tok")).toBe(
+      "https://leads.partnergoyalco.com/partner/reset-password/tok",
     );
   });
 
-  it("rewrites hardcoded localhost URLs inside stored HTML templates", () => {
+  it("repairs old stripped customer/partner login and reset links", () => {
     process.env.APP_URL = "https://leads.partnergoyalco.com";
     process.env.CUSTOMER_URL = "https://customer.partnergoyalco.com";
 
-    const html = `
-      <a href="http://localhost:3000/partner/login">Login</a>
-      <a href="https://leads.partnergoyalco.com/confirm/abc/accept">Accept</a>
-    `;
-    const rewritten = rewriteEmailHtmlUrls(html);
-    expect(rewritten).toContain("https://leads.partnergoyalco.com/login");
-    expect(rewritten).not.toContain("localhost");
-    expect(rewritten).toContain("https://customer.partnergoyalco.com/confirm/abc/accept");
-    expect(rewritten).not.toContain("https://leads.partnergoyalco.com/confirm");
+    expect(canonicalizeEmailUrl("https://customer.partnergoyalco.com/login")).toBe(
+      "https://customer.partnergoyalco.com/customer/login",
+    );
+    expect(canonicalizeEmailUrl("https://customer.partnergoyalco.com/reset-password/tok")).toBe(
+      "https://customer.partnergoyalco.com/customer/reset-password/tok",
+    );
+    expect(canonicalizeEmailUrl("https://leads.partnergoyalco.com/login")).toBe(
+      "https://leads.partnergoyalco.com/partner/login",
+    );
+    expect(canonicalizeEmailUrl("https://leads.partnergoyalco.com/reset-password/tok")).toBe(
+      "https://leads.partnergoyalco.com/partner/reset-password/tok",
+    );
   });
 });
