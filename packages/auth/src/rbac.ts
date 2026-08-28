@@ -4,13 +4,14 @@ import { getPortalHomeHrefForHost, portalKindForRole } from "./portals";
 export const PORTAL_ROUTES: Record<UserRole, string> = {
   ADMIN: "/admin",
   CHANNEL_PARTNER: "/partner",
+  CP_TEAM_MEMBER: "/partner",
   CUSTOMER: "/customer",
 };
 
-export const ROLE_ROUTE_PREFIXES: Record<string, UserRole> = {
-  "/admin": "ADMIN",
-  "/partner": "CHANNEL_PARTNER",
-  "/customer": "CUSTOMER",
+export const ROLE_ROUTE_PREFIXES: Record<string, UserRole[]> = {
+  "/admin": ["ADMIN"],
+  "/partner": ["CHANNEL_PARTNER", "CP_TEAM_MEMBER"],
+  "/customer": ["CUSTOMER"],
 };
 
 /** Home for a role. Absolute only when the request host is a different portal subdomain. */
@@ -19,12 +20,17 @@ export function getPortalForRole(role: UserRole, hostHeader?: string | null): st
 }
 
 export function canAccessRoute(role: UserRole, pathname: string): boolean {
-  const requiredRole = Object.entries(ROLE_ROUTE_PREFIXES).find(([prefix]) =>
-    pathname.startsWith(prefix)
+  const allowedRoles = Object.entries(ROLE_ROUTE_PREFIXES).find(([prefix]) =>
+    pathname.startsWith(prefix),
   )?.[1];
 
-  if (!requiredRole) return true;
-  return role === requiredRole;
+  if (!allowedRoles) return true;
+  return allowedRoles.includes(role);
+}
+
+/** Owner-only partner pages (team roster, company settings). */
+export function isPartnerOwnerRoute(pathname: string): boolean {
+  return pathname.startsWith("/partner/team") || pathname.startsWith("/partner/settings");
 }
 
 export function isPublicRoute(pathname: string): boolean {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Modal, Button, Input, Select, Textarea, MultiStepForm, useToast,
 } from "@goyal/ui";
@@ -92,6 +93,9 @@ export function PunchLeadModal({
   const [useCustomFos, setUseCustomFos] = useState(false);
   const { addToast } = useToast();
   const qc = useQueryClient();
+  const { data: session } = useSession();
+  const sessionTeamMemberId = (session?.user as { teamMemberId?: string } | undefined)?.teamMemberId;
+  const isTeamMemberLogin = session?.user?.role === "CP_TEAM_MEMBER";
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +104,7 @@ export function PunchLeadModal({
   }, [open, projectId, projectName]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isTeamMemberLogin) return;
     fetch("/api/partner/team")
       .then((r) => r.json())
       .then((data) => {
@@ -113,7 +117,17 @@ export function PunchLeadModal({
         }
       })
       .catch(() => {});
-  }, [open]);
+  }, [open, isTeamMemberLogin]);
+
+  useEffect(() => {
+    if (!open || !sessionTeamMemberId) return;
+    setForm((current) => ({
+      ...current,
+      teamMemberId: sessionTeamMemberId,
+      fosName: session?.user?.name || current.fosName,
+    }));
+    setUseCustomFos(false);
+  }, [open, session?.user?.name, sessionTeamMemberId]);
 
   useEffect(() => {
     if (!open || !initialLead) return;
@@ -395,33 +409,43 @@ export function PunchLeadModal({
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="customer@email.com"
             />
-            <Select
-              label="Team member"
-              value={useCustomFos ? "__other__" : (form.teamMemberId || "")}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "__other__") {
-                  setUseCustomFos(true);
-                  setForm({ ...form, teamMemberId: "", fosName: "" });
-                } else {
-                  setUseCustomFos(false);
-                  const member = teamMembers.find((m) => m.id === v);
-                  setForm({ ...form, teamMemberId: v, fosName: member?.name || "" });
-                }
-              }}
-              options={[
-                { value: "", label: "Select team member (optional)" },
-                ...teamMembers.map((m) => ({ value: m.id, label: m.name })),
-                { value: "__other__", label: "Other (enter name)" },
-              ]}
-            />
-            {useCustomFos && (
+            {isTeamMemberLogin ? (
               <Input
-                label="Team member name"
-                value={form.fosName || ""}
-                onChange={(e) => setForm({ ...form, fosName: e.target.value, teamMemberId: "" })}
-                placeholder="Enter name"
+                label="Team member"
+                value={session?.user?.name || ""}
+                disabled
               />
+            ) : (
+              <>
+                <Select
+                  label="Team member"
+                  value={useCustomFos ? "__other__" : (form.teamMemberId || "")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__other__") {
+                      setUseCustomFos(true);
+                      setForm({ ...form, teamMemberId: "", fosName: "" });
+                    } else {
+                      setUseCustomFos(false);
+                      const member = teamMembers.find((m) => m.id === v);
+                      setForm({ ...form, teamMemberId: v, fosName: member?.name || "" });
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "Select team member (optional)" },
+                    ...teamMembers.map((m) => ({ value: m.id, label: m.name })),
+                    { value: "__other__", label: "Other (enter name)" },
+                  ]}
+                />
+                {useCustomFos && (
+                  <Input
+                    label="Team member name"
+                    value={form.fosName || ""}
+                    onChange={(e) => setForm({ ...form, fosName: e.target.value, teamMemberId: "" })}
+                    placeholder="Enter name"
+                  />
+                )}
+              </>
             )}
             <Select
               label="Unit Preference"

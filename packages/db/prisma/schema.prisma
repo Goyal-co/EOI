@@ -11,6 +11,7 @@ datasource db {
 enum UserRole {
   ADMIN
   CHANNEL_PARTNER
+  CP_TEAM_MEMBER
   CUSTOMER
 }
 
@@ -197,6 +198,7 @@ model User {
   approvalActions ApprovalAction[]
   passwordResetTokens PasswordResetToken[]
   announcementsCreated EoiAnnouncement[]
+  teamMemberProfile CPTeamMember?
 
   @@index([role])
   @@index([email])
@@ -240,6 +242,8 @@ model CPTeamMember {
   id        String             @id @default(cuid())
   cpId      String
   cp        ChannelPartner     @relation(fields: [cpId], references: [id], onDelete: Cascade)
+  userId    String?            @unique
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   name      String
   email     String?
   mobile    String?

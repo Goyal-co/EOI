@@ -6,6 +6,7 @@ import {
   PageHeader, Select, StatusBadge, useToast, LoadingSkeleton,
 } from "@goyal/ui";
 import { Plus, Users } from "lucide-react";
+import { useRequirePartnerAccess } from "@/lib/use-require-partner";
 
 interface TeamMemberRow {
   id: string;
@@ -28,6 +29,7 @@ const emptyForm = { name: "", email: "", mobile: "", role: "FOS" };
 
 export default function PartnerTeamPage() {
   const { addToast } = useToast();
+  useRequirePartnerAccess({ ownerOnly: true });
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<TeamMemberRow[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -80,7 +82,11 @@ export default function PartnerTeamPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
-      addToast({ type: "success", title: editing ? "Member updated" : "Member added" });
+      addToast({
+        type: "success",
+        title: editing ? "Member updated" : "Member added",
+        message: data.invited ? "A set-password email was sent to the team member." : undefined,
+      });
       setModalOpen(false);
       load();
     } catch (e) {

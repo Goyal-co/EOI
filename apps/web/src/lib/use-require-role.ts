@@ -7,6 +7,7 @@ import type { UserRole } from "@goyal/types";
 const LOGIN_FOR_ROLE: Record<UserRole, string> = {
   ADMIN: "/login",
   CHANNEL_PARTNER: "/partner/login",
+  CP_TEAM_MEMBER: "/partner/login",
   CUSTOMER: "/customer/login",
 };
 

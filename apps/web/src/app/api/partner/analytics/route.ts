@@ -1,10 +1,11 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { computeGrowth, getPeriodWindows, dateRangeFilter } from "@/lib/analytics/growth";
 import { getSystemSettings } from "@/lib/services/system-settings";
+import { leadScopeWhere, eoiScopeWhere } from "@/lib/partner-scope";
 
 export const GET = withApiRoute("partner.analytics.get", async () => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -18,8 +19,8 @@ export const GET = withApiRoute("partner.analytics.get", async () => {
   const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindows();
   const currentRange = dateRangeFilter(currentStart, currentEnd);
   const previousRange = dateRangeFilter(previousStart, previousEnd);
-  const cpFilter = { cpId };
-  const eoiFilter = { cpId };
+  const cpFilter = { cpId, ...leadScopeWhere(session!) };
+  const eoiFilter = { cpId, ...eoiScopeWhere(session!) };
 
   const [
     leads,

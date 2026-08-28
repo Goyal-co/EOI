@@ -8,15 +8,15 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
-import { useState } from "react";
-import { useRequireRole } from "@/lib/use-require-role";
+import { useMemo, useState } from "react";
+import { useRequirePartnerAccess } from "@/lib/use-require-partner";
 
-const sidebarItems = [
-  { label: "Dashboard", href: "/partner", icon: LayoutDashboard },
-  { label: "Projects", href: "/partner/projects", icon: Building2 },
-  { label: "My Leads", href: "/partner/leads", icon: UserCheck },
-  { label: "My EOIs", href: "/partner/eois", icon: FileText },
-  { label: "My Team", href: "/partner/team", icon: Users },
+const allSidebarItems = [
+  { label: "Dashboard", href: "/partner", icon: LayoutDashboard, ownerOnly: false },
+  { label: "Projects", href: "/partner/projects", icon: Building2, ownerOnly: false },
+  { label: "My Leads", href: "/partner/leads", icon: UserCheck, ownerOnly: false },
+  { label: "My EOIs", href: "/partner/eois", icon: FileText, ownerOnly: false },
+  { label: "My Team", href: "/partner/team", icon: Users, ownerOnly: true },
 ];
 
 export function PartnerLayout({ children }: { children: React.ReactNode }) {
@@ -25,7 +25,17 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
-  const { allowed } = useRequireRole("CHANNEL_PARTNER");
+  const { allowed, isOwner } = useRequirePartnerAccess();
+
+  const sidebarItems = useMemo(
+    () => allSidebarItems
+      .filter((item) => isOwner || !item.ownerOnly)
+      .map(({ ownerOnly: _ownerOnly, ...item }) => item),
+    [isOwner],
+  );
+
+  const profileRole = isOwner ? "Channel Partner" : "Team Member";
+  const profileName = session?.user?.name || (isOwner ? "Partner" : "Team Member");
 
   if (!allowed) return <div className="min-h-screen bg-background" />;
 
@@ -37,10 +47,12 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
           title: "",
           subtitle: "Partner Portal",
           profile: {
-            name: session?.user?.name || "Partner",
-            role: "Channel Partner",
+            name: profileName,
+            role: profileRole,
           },
-          onSettingsClick: () => router.push("/partner/settings"),
+          onSettingsClick: isOwner
+            ? () => router.push("/partner/settings")
+            : () => router.push("/partner/profile"),
           onLogout: () => setLogoutOpen(true),
         }}
         navbar={{
@@ -51,8 +63,8 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
           onSearchSelect: search.onSelect,
           notificationCount: notifData?.unreadCount || 0,
           onNotificationsClick: () => router.push("/partner/notifications"),
-          profileName: session?.user?.name || "Partner",
-          profileRole: "Channel Partner",
+          profileName,
+          profileRole,
           onProfileClick: () => router.push("/partner/profile"),
           onHelpClick: () => {
             window.location.href = "mailto:support@goyalprojects.com";

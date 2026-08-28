@@ -11,6 +11,7 @@ import {
 import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
+import { useRequirePartnerAccess } from "@/lib/use-require-partner";
 
 interface PartnerAnalytics {
   totalLeads: { value: number; growth: number };
@@ -53,6 +54,7 @@ const KPI_CONFIG = [
 
 export default function PartnerDashboardPage() {
   const router = useRouter();
+  const { isOwner } = useRequirePartnerAccess();
   const { data: analytics, isLoading: analyticsLoading } = usePartnerAnalytics();
   const { data: projects, isLoading: projectsLoading } = usePartnerProjects();
   const [projectFilter, setProjectFilter] = useState("");
@@ -140,16 +142,18 @@ export default function PartnerDashboardPage() {
           onChange={(e) => setToDate(e.target.value)}
           className="w-40"
         />
-        <Select
-          label=""
-          value={teamFilter}
-          onChange={(e) => setTeamFilter(e.target.value)}
-          options={[
-            { value: "", label: "All Teams (FOS)" },
-            ...teamOptions.map((name) => ({ value: name, label: name })),
-          ]}
-          className="w-48"
-        />
+        {isOwner && (
+          <Select
+            label=""
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+            options={[
+              { value: "", label: "All Teams (FOS)" },
+              ...teamOptions.map((name) => ({ value: name, label: name })),
+            ]}
+            className="w-48"
+          />
+        )}
       </FilterBar>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

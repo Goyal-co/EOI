@@ -1,5 +1,6 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
+import { leadScopeWhere } from "@/lib/partner-scope";
 
 async function fetchBookingStatus(leadId: string) {
   const hubUrl = process.env.BOOKING_INVENTORY_URL ?? process.env.INTEGRATION_HUB_URL;
@@ -16,12 +17,14 @@ async function fetchBookingStatus(leadId: string) {
 }
 
 export const GET = withApiRoute("partner.leads.id.booking-status.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER", "ADMIN"]);
+  const { error, session } = await withAuth(["CHANNEL_PARTNER", "CP_TEAM_MEMBER", "ADMIN"]);
   if (error) return error;
 
   const { id } = await params;
   const lead = await prisma.lead.findFirst({
-    where: session!.user.role === "ADMIN" ? { id } : { id, cpId: session!.user.cpId! },
+    where: session!.user.role === "ADMIN"
+      ? { id }
+      : { id, cpId: session!.user.cpId!, ...leadScopeWhere(session!) },
     select: {
       id: true,
       leadId: true,

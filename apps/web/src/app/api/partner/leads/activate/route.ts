@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import {
   evaluateIdentityLock,
   getIdentityPunchContext,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/leads/identity-context";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+import { leadScopeWhere } from "@/lib/partner-scope";
 
 const activateSchema = z.object({
   leadId: z.string().min(1),
@@ -18,7 +19,7 @@ const activateSchema = z.object({
  * punch-context so the UI can open the punch/map modal prefilled.
  */
 export const POST = withApiRoute("partner.leads.activate", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -29,7 +30,7 @@ export const POST = withApiRoute("partner.leads.activate", async (req: Request) 
 
   const cpId = session!.user.cpId!;
   const lead = await prisma.lead.findFirst({
-    where: { id: parsed.data.leadId, cpId },
+    where: { id: parsed.data.leadId, cpId, ...leadScopeWhere(session!) },
     select: {
       id: true,
       leadId: true,

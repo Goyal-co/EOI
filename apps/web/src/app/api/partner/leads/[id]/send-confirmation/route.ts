@@ -1,10 +1,11 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { getCustomerConfirmUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
+import { leadScopeWhere } from "@/lib/partner-scope";
 
 export const POST = withApiRoute("partner.leads.send-confirmation", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -12,7 +13,7 @@ export const POST = withApiRoute("partner.leads.send-confirmation", async (_req:
   const { id } = await params;
 
   const lead = await prisma.lead.findFirst({
-    where: { id, cpId: session!.user.cpId! },
+    where: { id, cpId: session!.user.cpId!, ...leadScopeWhere(session!) },
     include: {
       project: true,
       cp: { include: { user: true } },

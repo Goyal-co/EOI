@@ -1,13 +1,23 @@
 import { prisma } from "@goyal/db";
 import { cpTeamMemberCreateSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import {
+  withPartnerAuth,
+  apiResponse,
+  apiError,
+  requireApprovedCP,
+  requirePartnerOwner,
+  withApiRoute,
+} from "@/lib/api";
 import { computeTeamMemberPerformance } from "@/lib/services/team-members";
+import { syncTeamMemberLogin, TeamMemberAuthError } from "@/lib/services/team-member-auth";
 
 export const GET = withApiRoute("partner.team.list", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const cpId = session!.user.cpId!;
   const url = new URL(req.url);
@@ -33,10 +43,12 @@ export const GET = withApiRoute("partner.team.list", async (req: Request) => {
 });
 
 export const POST = withApiRoute("partner.team.create", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const body = await req.json().catch(() => null);
   const parsed = cpTeamMemberCreateSchema.safeParse(body);
@@ -53,5 +65,24 @@ export const POST = withApiRoute("partner.team.create", async (req: Request) => 
     },
   });
 
-  return apiResponse(member, 201);
+  let invited = false;
+  if (member.email) {
+    try {
+      const login = await syncTeamMemberLogin({
+        cpId,
+        teamMemberId: member.id,
+        name: member.name,
+        email: member.email,
+      });
+      invited = login.invited;
+    } catch (e) {
+      if (e instanceof TeamMemberAuthError) {
+        await prisma.cPTeamMember.delete({ where: { id: member.id } });
+        return apiError(e.message, 400);
+      }
+      throw e;
+    }
+  }
+
+  return apiResponse({ ...member, invited }, 201);
 });

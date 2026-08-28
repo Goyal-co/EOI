@@ -19,6 +19,7 @@ declare module "next-auth" {
       cpId?: string;
       cpStatus?: string;
       customerId?: string;
+      teamMemberId?: string;
     };
   }
 
@@ -28,6 +29,7 @@ declare module "next-auth" {
     cpId?: string;
     cpStatus?: string;
     customerId?: string;
+    teamMemberId?: string;
   }
 }
 
@@ -63,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           include: {
             cpProfile: true,
             customerProfile: true,
+            teamMemberProfile: { include: { cp: true } },
           },
         });
 
@@ -85,7 +88,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           partner: "CHANNEL_PARTNER",
           customer: "CUSTOMER",
         };
-        if (portal && expectedRole[portal] && user.role !== expectedRole[portal]) {
+        if (portal === "partner") {
+          if (user.role !== "CHANNEL_PARTNER" && user.role !== "CP_TEAM_MEMBER") {
+            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} role=${user.role} msg=login failed: wrong portal for role`);
+            return null;
+          }
+        } else if (portal && expectedRole[portal] && user.role !== expectedRole[portal]) {
           console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} role=${user.role} msg=login failed: wrong portal for role`);
           return null;
         }
@@ -106,6 +114,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
+        if (user.role === "CP_TEAM_MEMBER") {
+          const teamMember = user.teamMemberProfile;
+          if (!teamMember || teamMember.status !== "ACTIVE") {
+            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: team member inactive`);
+            return null;
+          }
+          if (teamMember.cp.status === "BLOCKED" || teamMember.cp.status !== "APPROVED") {
+            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} cpStatus=${teamMember.cp.status} msg=login failed: parent channel partner not approved`);
+            return null;
+          }
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -113,9 +133,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           image: user.image,
           role: user.role as UserRole,
           status: user.status,
-          cpId: user.cpProfile?.id,
-          cpStatus: user.cpProfile?.status,
+          cpId: user.cpProfile?.id ?? user.teamMemberProfile?.cpId,
+          cpStatus: user.cpProfile?.status ?? user.teamMemberProfile?.cp.status,
           customerId: user.customerProfile?.id,
+          teamMemberId: user.teamMemberProfile?.id,
         };
       },
     }),
@@ -243,15 +264,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user?.email && process.env.NEXT_RUNTIME !== "edge") {
         const dbUser = await prisma.user.findUnique({
           where: { email: user.email },
-          include: { cpProfile: true, customerProfile: true },
+          include: {
+            cpProfile: true,
+            customerProfile: true,
+            teamMemberProfile: { include: { cp: true } },
+          },
         });
         if (dbUser) {
           token.id = dbUser.id;
           token.role = dbUser.role as UserRole;
           token.status = dbUser.status;
-          token.cpId = dbUser.cpProfile?.id;
-          token.cpStatus = dbUser.cpProfile?.status;
+          token.cpId = dbUser.cpProfile?.id ?? dbUser.teamMemberProfile?.cpId;
+          token.cpStatus = dbUser.cpProfile?.status ?? dbUser.teamMemberProfile?.cp.status;
           token.customerId = dbUser.customerProfile?.id;
+          token.teamMemberId = dbUser.teamMemberProfile?.id;
           token.email = dbUser.email;
           token.name = dbUser.name ?? user.name;
           token.picture = dbUser.image ?? user.image;
@@ -263,6 +289,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.cpId = user.cpId;
         token.cpStatus = user.cpStatus;
         token.customerId = user.customerId;
+        token.teamMemberId = user.teamMemberId;
       }
 
       if (
@@ -280,6 +307,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
 
+      if (
+        process.env.NEXT_RUNTIME !== "edge"
+        && token.id
+        && token.role === "CP_TEAM_MEMBER"
+      ) {
+        const teamMember = await prisma.cPTeamMember.findFirst({
+          where: { userId: token.id as string, status: "ACTIVE" },
+          include: { cp: { select: { id: true, status: true } } },
+        });
+        if (teamMember) {
+          token.cpId = teamMember.cpId;
+          token.cpStatus = teamMember.cp.status;
+          token.teamMemberId = teamMember.id;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -290,6 +333,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.cpId = token.cpId as string | undefined;
         session.user.cpStatus = token.cpStatus as string | undefined;
         session.user.customerId = token.customerId as string | undefined;
+        session.user.teamMemberId = token.teamMemberId as string | undefined;
       }
       return session;
     },

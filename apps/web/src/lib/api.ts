@@ -9,6 +9,8 @@ import {
   runWithRequestLog,
 } from "@/lib/server-log";
 
+export const PARTNER_PORTAL_ROLES: UserRole[] = ["CHANNEL_PARTNER", "CP_TEAM_MEMBER"];
+
 export async function getSession() {
   return auth();
 }
@@ -69,8 +71,14 @@ export async function withAuth(roles?: UserRole[]) {
   return { error: null, session };
 }
 
-export async function requireApprovedCP(session: { user: { role: string; cpId?: string } }) {
-  if (session.user.role !== "CHANNEL_PARTNER" || !session.user.cpId) {
+export async function withPartnerAuth() {
+  return withAuth(PARTNER_PORTAL_ROLES);
+}
+
+export async function requireApprovedCP(session: {
+  user: { role: string; cpId?: string; teamMemberId?: string };
+}) {
+  if (!PARTNER_PORTAL_ROLES.includes(session.user.role as UserRole) || !session.user.cpId) {
     return apiError("Forbidden", 403);
   }
   const cp = await prisma.channelPartner.findUnique({
@@ -79,6 +87,27 @@ export async function requireApprovedCP(session: { user: { role: string; cpId?: 
   });
   if (!cp || cp.status !== "APPROVED") {
     return apiError("Channel Partner account not approved", 403);
+  }
+  if (session.user.role === "CP_TEAM_MEMBER") {
+    const member = await prisma.cPTeamMember.findFirst({
+      where: {
+        id: session.user.teamMemberId,
+        cpId: session.user.cpId,
+        status: "ACTIVE",
+        userId: { not: null },
+      },
+      select: { id: true },
+    });
+    if (!member) {
+      return apiError("Team member access is not active", 403);
+    }
+  }
+  return null;
+}
+
+export async function requirePartnerOwner(session: { user: { role: string } }) {
+  if (session.user.role !== "CHANNEL_PARTNER") {
+    return apiError("Only the channel partner owner can perform this action", 403);
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import { auth } from "@goyal/auth/edge";
 import { NextResponse } from "next/server";
-import { canAccessRoute, isPublicRoute, getPortalForRole } from "@goyal/auth/rbac";
+import { canAccessRoute, isPublicRoute, getPortalForRole, isPartnerOwnerRoute } from "@goyal/auth/rbac";
 import {
   getPortalLoginHrefForHost,
   pickRequestHost,
@@ -106,9 +106,13 @@ export default auth((req) => {
     return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url, portal, host));
   }
 
+  if (role === "CP_TEAM_MEMBER" && isPartnerOwnerRoute(pathname)) {
+    return NextResponse.redirect(toUrl(getPortalForRole(role, host), req.url, portal, host));
+  }
+
   const cpStatus = req.auth?.user?.cpStatus;
   if (
-    role === "CHANNEL_PARTNER"
+    (role === "CHANNEL_PARTNER" || role === "CP_TEAM_MEMBER")
     && cpStatus
     && cpStatus !== "APPROVED"
     && pathname.startsWith("/partner")

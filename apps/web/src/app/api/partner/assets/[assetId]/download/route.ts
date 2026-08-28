@@ -1,10 +1,10 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { DocumentService } from "@/lib/services/document";
 import { streamInlineFile, wantsInlinePreview } from "@/lib/files/stream-download";
 
 export const GET = withApiRoute("partner.assets.assetId.download.get", async (req: Request, { params }: { params: Promise<{ assetId: string }> }) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
 
   const cpError = await requireApprovedCP(session!);

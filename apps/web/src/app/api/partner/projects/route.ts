@@ -1,9 +1,10 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
+import { leadScopeWhere } from "@/lib/partner-scope";
 
 export const GET = withApiRoute("partner.projects.get", async () => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -16,7 +17,7 @@ export const GET = withApiRoute("partner.projects.get", async () => {
       project: {
         include: {
           assets: true,
-          _count: { select: { leads: { where: { cpId } } } },
+          _count: { select: { leads: { where: { cpId, ...leadScopeWhere(session!) } } } },
         },
       },
     },

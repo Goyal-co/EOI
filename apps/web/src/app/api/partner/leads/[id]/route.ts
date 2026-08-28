@@ -1,6 +1,7 @@
 import { prisma } from "@goyal/db";
 import { leadPatchSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { leadScopeWhere, leadBelongsToSession } from "@/lib/partner-scope";
 
 function resolveSiteVisit(data: {
   siteVisitStatus?: "NOT_SCHEDULED" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
@@ -48,7 +49,7 @@ function resolveSiteVisit(data: {
 }
 
 export const PATCH = withApiRoute("partner.leads.patch", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -59,9 +60,10 @@ export const PATCH = withApiRoute("partner.leads.patch", async (req: Request, { 
   if (!parsed.success) return apiError(parsed.error.errors[0].message);
 
   const lead = await prisma.lead.findFirst({
-    where: { id, cpId: session!.user.cpId! },
+    where: { id, cpId: session!.user.cpId!, ...leadScopeWhere(session!) },
   });
   if (!lead) return apiError("Lead not found", 404);
+  if (!leadBelongsToSession(session!, lead)) return apiError("Lead not found", 404);
 
   if (
     lead.siteVisitStatus === "COMPLETED"

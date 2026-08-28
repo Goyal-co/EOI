@@ -1,6 +1,6 @@
 import { prisma } from "@goyal/db";
 import { leadCreateSchema } from "@goyal/types";
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { logServerError } from "@/lib/server-log";
 import { NextResponse } from "next/server";
 import { generateInviteToken } from "@goyal/auth";
@@ -16,6 +16,7 @@ import {
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
 import { normalizeMobile } from "@/lib/leads/phone";
 import { resolveTeamMemberForLead } from "@/lib/services/team-members";
+import { getPartnerScope, leadScopeWhere } from "@/lib/partner-scope";
 
 /** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
 export const maxDuration = 60;
@@ -90,7 +91,7 @@ function serializePartnerLead(lead: {
 }
 
 export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -118,11 +119,13 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
   }
 
   const cpId = session!.user.cpId!;
+  const memberScope = leadScopeWhere(session!);
 
   const [leads, projectAccess, cpIdentityLeads] = await Promise.all([
     prisma.lead.findMany({
       where: {
         cpId,
+        ...memberScope,
         ...(projectId ? { projectId } : {}),
         ...(status ? { journeyStatus: status as never } : {}),
         ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
@@ -310,7 +313,7 @@ export const POST = withApiRoute("partner.leads.create", async (req: Request) =>
 });
 
 async function postPartnerLead(req: Request) {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -374,17 +377,19 @@ async function postPartnerLead(req: Request) {
     if (!(parsed.data.configuration || "").trim()) {
       return apiError("Unit preference is required");
     }
-    if (!(parsed.data.teamMemberId || parsed.data.fosName || "").trim()) {
+    const scope = getPartnerScope(session!);
+    if (!scope.teamMemberId && !(parsed.data.teamMemberId || parsed.data.fosName || "").trim()) {
       return apiError("Team member is required");
     }
   }
 
   let teamAssignment: { teamMemberId: string | null; fosName: string | null };
   try {
+    const scope = getPartnerScope(session!);
     teamAssignment = await resolveTeamMemberForLead(
       cpId,
-      parsed.data.teamMemberId,
-      parsed.data.fosName,
+      scope.teamMemberId ?? parsed.data.teamMemberId,
+      scope.teamMemberId ? null : parsed.data.fosName,
     );
   } catch {
     return apiError("Invalid team member", 400);

@@ -1,8 +1,9 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { eoiScopeWhere } from "@/lib/partner-scope";
 
 export const GET = withApiRoute("partner.eois.get", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
@@ -18,7 +19,7 @@ export const GET = withApiRoute("partner.eois.get", async (req: Request) => {
   }
 
   const eois = await prisma.eOI.findMany({
-    where: { cpId: session!.user.cpId!, ...statusFilter },
+    where: { cpId: session!.user.cpId!, ...eoiScopeWhere(session!), ...statusFilter },
     include: {
       lead: { select: { customerName: true, customerEmail: true } },
       project: { select: { name: true } },

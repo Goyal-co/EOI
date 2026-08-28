@@ -1,7 +1,13 @@
 import { prisma } from "@goyal/db";
 import { partnerSettingsSchema } from "@goyal/types";
 import { getSystemSettings } from "@/lib/services/system-settings";
-import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
+import {
+  withPartnerAuth,
+  apiResponse,
+  apiError,
+  requirePartnerOwner,
+  withApiRoute,
+} from "@/lib/api";
 
 const DEFAULTS = {
   emailNotifications: true,
@@ -14,8 +20,10 @@ const DEFAULTS = {
 };
 
 export const GET = withApiRoute("partner.settings.get", async () => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const user = await prisma.user.findUnique({
     where: { id: session!.user.id },
@@ -36,8 +44,10 @@ export const GET = withApiRoute("partner.settings.get", async () => {
 });
 
 export const PUT = withApiRoute("partner.settings.put", async (req: Request) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const body = await req.json();
   const parsed = partnerSettingsSchema.safeParse(body);

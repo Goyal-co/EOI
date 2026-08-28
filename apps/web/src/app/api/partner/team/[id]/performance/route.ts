@@ -1,12 +1,21 @@
-import { withAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import {
+  withPartnerAuth,
+  apiResponse,
+  apiError,
+  requireApprovedCP,
+  requirePartnerOwner,
+  withApiRoute,
+} from "@/lib/api";
 import { computeTeamMemberPerformance } from "@/lib/services/team-members";
 import { prisma } from "@goyal/db";
 
 export const GET = withApiRoute("partner.team.performance", async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const { id } = await params;
   const cpId = session!.user.cpId!;

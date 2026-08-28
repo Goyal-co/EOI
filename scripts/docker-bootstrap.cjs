@@ -56,8 +56,8 @@ function listMigrationDirs() {
 /** Production DBs bootstrapped with db push have tables but no _prisma_migrations rows (Prisma P3005). */
 function baselineLegacySchema({ skipAnnouncements }) {
   const skip = skipAnnouncements
-    ? new Set(["20260828120000_announcements_teams"])
-    : new Set();
+    ? new Set(["20260828120000_announcements_teams", "20260828180000_team_member_login"])
+    : new Set(["20260828180000_team_member_login"]);
 
   console.info("[db] existing schema without migration history — baselining prior migrations");
   for (const name of listMigrationDirs()) {

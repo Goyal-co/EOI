@@ -19,7 +19,7 @@ export const POST = withApiRoute("auth.forgot-password", async (req: Request) =>
     select: { id: true, email: true, role: true },
   });
 
-  if (user && (user.role === "CHANNEL_PARTNER" || user.role === "CUSTOMER")) {
+  if (user && (user.role === "CHANNEL_PARTNER" || user.role === "CP_TEAM_MEMBER" || user.role === "CUSTOMER")) {
     const token = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });

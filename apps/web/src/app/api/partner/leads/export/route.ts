@@ -1,6 +1,7 @@
 import { prisma } from "@goyal/db";
-import { withAuth, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { withPartnerAuth, apiError, requireApprovedCP, requirePartnerOwner, withApiRoute } from "@/lib/api";
 import { getSystemSettings } from "@/lib/services/system-settings";
+import { leadScopeWhere } from "@/lib/partner-scope";
 
 function escapeCsv(value: unknown): string {
   const str = String(value ?? "");
@@ -11,10 +12,13 @@ function escapeCsv(value: unknown): string {
 }
 
 export const GET = withApiRoute("partner.leads.export.get", async () => {
-  const { error, session } = await withAuth(["CHANNEL_PARTNER"]);
+  const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+
+  const ownerError = await requirePartnerOwner(session!);
+  if (ownerError) return ownerError;
 
   const settings = await getSystemSettings();
   if (!settings.permissions.cpCanExportLeads) {
@@ -23,7 +27,7 @@ export const GET = withApiRoute("partner.leads.export.get", async () => {
 
   const cpId = session!.user.cpId!;
   const leads = await prisma.lead.findMany({
-    where: { cpId },
+    where: { cpId, ...leadScopeWhere(session!) },
     include: {
       project: { select: { name: true } },
       eoi: { select: { status: true, referenceNumber: true } },

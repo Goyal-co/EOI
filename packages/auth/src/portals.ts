@@ -245,7 +245,7 @@ function portalKindFromPath(pathname: string): PortalKind | null {
 export function crossPortalRedirectUrl(args: {
   pathname: string;
   hostHeader: string | null | undefined;
-  role?: "ADMIN" | "CHANNEL_PARTNER" | "CUSTOMER" | null;
+  role?: "ADMIN" | "CHANNEL_PARTNER" | "CP_TEAM_MEMBER" | "CUSTOMER" | null;
 }): string | null {
   const { pathname, hostHeader, role } = args;
   if (isPathRoutingHost(hostHeader)) return null;
@@ -359,7 +359,7 @@ export function getPortalLoginHrefForHost(kind: PortalKind, hostHeader?: string 
   return portalHrefForHost(kind, getPortalLoginPath(kind), hostHeader);
 }
 
-export function portalKindForRole(role: "ADMIN" | "CHANNEL_PARTNER" | "CUSTOMER"): PortalKind {
+export function portalKindForRole(role: "ADMIN" | "CHANNEL_PARTNER" | "CP_TEAM_MEMBER" | "CUSTOMER"): PortalKind {
   if (role === "ADMIN") return "admin";
   if (role === "CUSTOMER") return "customer";
   return "partner";

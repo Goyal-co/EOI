@@ -33,6 +33,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
   CUSTOMER: ["CHEQUE", "PAN", "AADHAAR"],
   CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD"],
+  CP_TEAM_MEMBER: [],
   ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION"],
 };
 
