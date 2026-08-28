@@ -3,6 +3,7 @@
 import { Card, Button, formatDate, PageHeader, cn } from "@goyal/ui";
 import { Bell, CheckCheck } from "lucide-react";
 import { useNotifications, useMarkNotificationsRead } from "@/lib/hooks";
+import { AnnouncementNotificationBody } from "@/components/announcement-notification-body";
 
 interface Notification {
   id: string;
@@ -10,6 +11,7 @@ interface Notification {
   title: string;
   body: string;
   read: boolean;
+  entityId?: string;
   createdAt: string;
 }
 
@@ -72,7 +74,11 @@ export default function PartnerNotificationsPage() {
                     </h3>
                     {!notif.read && <span className="h-2 w-2 rounded-full bg-blue-600" />}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{notif.body}</p>
+                  {notif.type === "ANNOUNCEMENT" && notif.entityId ? (
+                    <AnnouncementNotificationBody entityId={notif.entityId} body={notif.body} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{notif.body}</p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-2">{formatDate(notif.createdAt)}</p>
                 </div>
               </div>

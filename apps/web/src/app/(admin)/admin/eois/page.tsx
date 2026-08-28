@@ -22,6 +22,7 @@ interface EOIRecord {
   customerEmail: string;
   project: string;
   cpName: string;
+  teamMemberName?: string | null;
   chequeUploaded: boolean;
   chequeNumber?: string;
   submittedAt?: string;
@@ -77,6 +78,7 @@ export default function AdminEOIsPage() {
           { key: "customerName", header: "Customer" },
           { key: "project", header: "Project" },
           { key: "cpName", header: "Channel Partner" },
+          { key: "teamMemberName", header: "Team member", render: (row: EOIRecord) => row.teamMemberName || "—" },
           { key: "journeyStatus", header: "Status", render: (r) => <StatusBadge status={r.journeyStatus || r.status} /> },
           { key: "chequeUploaded", header: "Cheque", render: (r) => (
             <div>

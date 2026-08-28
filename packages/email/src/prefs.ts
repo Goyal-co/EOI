@@ -16,6 +16,7 @@ const CATEGORY_PREF_MAP: Record<string, string> = {
   CUSTOMER_CONFIRMATION_LEAD_ONLY: "leadAlerts",
   EOI_INVITATION: "eoiUpdates",
   CP_REGISTRATION_ACK: "cpRegistration",
+  ANNOUNCEMENT: "announcements",
 };
 
 const TRANSACTIONAL_EMAIL_TYPES = new Set([
@@ -35,6 +36,7 @@ const TRANSACTIONAL_EMAIL_TYPES = new Set([
   "SITE_VISIT_COMPLETED_CUSTOMER",
   "LEAD_BOOKED_CP",
   "LEAD_BOOKED_CUSTOMER",
+  "TEAM_MEMBER_MILESTONE",
 ]);
 
 export function isTransactionalEmailType(notificationType: string): boolean {
@@ -90,7 +92,9 @@ export async function shouldCreateInAppNotification(
   return isCategoryEnabled(prefs, system, category);
 }
 
-export async function isAdminNotificationEnabled(key: "approvalReminders" | "projectUpdates"): Promise<boolean> {
+export async function isAdminNotificationEnabled(
+  key: "approvalReminders" | "projectUpdates" | "announcements",
+): Promise<boolean> {
   const system = await getSystemNotificationPrefs();
   return system[key] !== false;
 }

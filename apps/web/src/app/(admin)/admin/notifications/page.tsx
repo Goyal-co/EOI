@@ -6,6 +6,7 @@ import {
 } from "@goyal/ui";
 import { Bell, CheckCheck, Mail, MailOpen } from "lucide-react";
 import { useNotifications, useMarkNotificationsRead } from "@/lib/hooks";
+import { AnnouncementNotificationBody } from "@/components/announcement-notification-body";
 
 interface Notification {
   id: string;
@@ -112,7 +113,11 @@ export default function AdminNotificationsPage() {
                     <h3 className="font-medium text-foreground text-sm">{notif.title}</h3>
                     {!notif.read && <Badge variant="default">New</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{notif.body}</p>
+                  {notif.type === "ANNOUNCEMENT" && notif.entityId ? (
+                    <AnnouncementNotificationBody entityId={notif.entityId} body={notif.body} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-1">{notif.body}</p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-2">
                     {new Date(notif.createdAt).toLocaleDateString("en-IN", {
                       day: "numeric", month: "short", year: "numeric",

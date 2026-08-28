@@ -2,7 +2,7 @@
 
 import { AppShell, LogoutConfirmModal } from "@goyal/ui";
 import {
-  LayoutDashboard, Building2, UserCheck, FileText,
+  LayoutDashboard, Building2, UserCheck, FileText, Users,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ const sidebarItems = [
   { label: "Projects", href: "/partner/projects", icon: Building2 },
   { label: "My Leads", href: "/partner/leads", icon: UserCheck },
   { label: "My EOIs", href: "/partner/eois", icon: FileText },
+  { label: "My Team", href: "/partner/team", icon: Users },
 ];
 
 export function PartnerLayout({ children }: { children: React.ReactNode }) {

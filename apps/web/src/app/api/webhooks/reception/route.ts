@@ -415,6 +415,8 @@ async function notifyMilestone(
     cpUserId: lead.cp.user.id,
     projectName: lead.project.name,
     salespersonName: extras?.salesperson || undefined,
+    teamMemberEmail: lead.teamMember?.email || undefined,
+    teamMemberName: lead.teamMember?.name || lead.fosName || undefined,
   });
 }
 
@@ -427,6 +429,7 @@ async function getLeadForNotification(id: string) {
       customer: {
         include: { user: { select: { id: true, name: true, email: true } } },
       },
+      teamMember: { select: { id: true, name: true, email: true } },
     },
   });
   return lead;

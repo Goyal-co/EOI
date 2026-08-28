@@ -1,4 +1,5 @@
 # VM / production container. URLs and secrets come from .env.production.
+# On boot the container runs `prisma migrate deploy` then starts Next.js (see scripts/docker-bootstrap.cjs).
 #   docker compose up --build -d
 services:
   web:
@@ -14,6 +15,9 @@ services:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: 0.0.0.0
+      # SKIP_DB_MIGRATE: "1"       # skip prisma migrate deploy
+      # SKIP_TEAM_BACKFILL: "1"    # skip fosName → CPTeamMember backfill
+      # DB_PUSH_ON_BOOT: "1"       # optional db push after migrate (shared DBs: avoid)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health?live=1"]
       interval: 30s

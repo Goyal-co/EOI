@@ -106,6 +106,33 @@ enum NotificationType {
   CP_APPROVED
   CUSTOMER_CONFIRMATION
   CUSTOMER_REJECTED_CP
+  ANNOUNCEMENT
+}
+
+enum AnnouncementAudience {
+  ALL
+  ADMINS
+  CHANNEL_PARTNERS
+  CUSTOMERS
+  PROJECT_CPS
+  PROJECT_CUSTOMERS
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AnnouncementChannel {
+  IN_APP
+  EMAIL
+}
+
+enum CPTeamMemberStatus {
+  ACTIVE
+  INACTIVE
 }
 
 enum CustomerJourneyStatus {
@@ -169,6 +196,7 @@ model User {
   auditLogs     AuditLog[]
   approvalActions ApprovalAction[]
   passwordResetTokens PasswordResetToken[]
+  announcementsCreated EoiAnnouncement[]
 
   @@index([role])
   @@index([email])
@@ -202,9 +230,26 @@ model ChannelPartner {
   projectAccess CPProjectAccess[]
   documents     Document[]
   leadEvents    LeadEvent[]
+  teamMembers   CPTeamMember[]
 
   @@index([status])
   @@index([reraNumber])
+}
+
+model CPTeamMember {
+  id        String             @id @default(cuid())
+  cpId      String
+  cp        ChannelPartner     @relation(fields: [cpId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  mobile    String?
+  role      String?
+  status    CPTeamMemberStatus @default(ACTIVE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  leads     Lead[]
+
+  @@index([cpId, status])
 }
 
 model Customer {
@@ -248,6 +293,7 @@ model Project {
   cpAccess       CPProjectAccess[]
   eoiRules       EOIRule[]
   leadEvents     LeadEvent[]
+  announcements  EoiAnnouncement[]
 
   @@index([status])
   @@index([eoiStatus])
@@ -299,6 +345,8 @@ model Lead {
   city            String?
   notes           String?         @db.Text
   fosName         String?
+  teamMemberId    String?
+  teamMember      CPTeamMember?   @relation(fields: [teamMemberId], references: [id], onDelete: SetNull)
   siteVisitStatus SiteVisitStatus @default(NOT_SCHEDULED)
   siteVisitDate   DateTime?
   leadStatus      LeadStatus      @default(LEAD_REGISTERED)
@@ -327,6 +375,7 @@ model Lead {
   @@index([customerEmail, projectId, cpId])
   @@index([customerEmail, createdAt])
   @@index([customerMobile, createdAt])
+  @@index([teamMemberId])
 }
 
 /** Canonical customer footprint — one public Lead ID across CPs and projects. */
@@ -524,4 +573,59 @@ model SystemSettings {
   eoiRules      Json?
   permissions   Json?
   updatedAt     DateTime @updatedAt
+}
+
+model EoiAnnouncement {
+  id          String               @id @default(cuid())
+  title       String
+  body        String               @db.Text
+  audience    AnnouncementAudience
+  channels    AnnouncementChannel[] @default([IN_APP])
+  projectId   String?
+  project     Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  status      AnnouncementStatus   @default(DRAFT)
+  priority    String               @default("MEDIUM")
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  createdById String
+  createdBy   User                 @relation(fields: [createdById], references: [id])
+  attachments EoiAnnouncementAttachment[]
+  deliveries  EoiAnnouncementDelivery[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@map("EoiAnnouncement")
+  @@index([status, scheduledAt])
+  @@index([audience])
+  @@index([projectId])
+}
+
+model EoiAnnouncementAttachment {
+  id             String          @id @default(cuid())
+  announcementId String
+  announcement   EoiAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  fileName       String
+  fileUrl        String
+  mimeType       String?
+  fileSize       Int?
+  kind           String
+
+  @@map("EoiAnnouncementAttachment")
+  @@index([announcementId])
+}
+
+model EoiAnnouncementDelivery {
+  id             String              @id @default(cuid())
+  announcementId String
+  announcement   EoiAnnouncement     @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String?
+  email          String?
+  channel        AnnouncementChannel
+  status         String
+  sentAt         DateTime?
+
+  @@map("EoiAnnouncementDelivery")
+  @@index([announcementId])
+  @@index([userId])
 }

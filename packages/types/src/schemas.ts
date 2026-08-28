@@ -66,6 +66,7 @@ export const leadCreateSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
   configuration: z.string().optional(),
   fosName: z.string().optional(),
+  teamMemberId: z.string().optional(),
   budget: z.string().optional(),
   city: z.string().optional(),
   notes: z.string().optional(),
@@ -142,6 +143,7 @@ export const adminSettingsSchema = z.object({
     cpRegistration: z.boolean().optional(),
     approvalReminders: z.boolean().optional(),
     projectUpdates: z.boolean().optional(),
+    announcements: z.boolean().optional(),
     emailDigest: z.string().optional(),
   }).optional(),
   eoiRules: z.object({
@@ -287,6 +289,62 @@ export const documentUploadSchema = z.object({
   fileSize: z.number().optional(),
   mimeType: z.string().optional(),
   eoiId: z.string().optional(),
+});
+
+export const cpTeamMemberCreateSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  mobile: z.string().regex(/^[6-9]\d{9}$/, "Invalid mobile number").optional().or(z.literal("")),
+  role: z.string().optional(),
+});
+
+export const cpTeamMemberUpdateSchema = cpTeamMemberCreateSchema.partial().extend({
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+});
+
+export const announcementAudienceSchema = z.enum([
+  "ALL",
+  "ADMINS",
+  "CHANNEL_PARTNERS",
+  "CUSTOMERS",
+  "PROJECT_CPS",
+  "PROJECT_CUSTOMERS",
+]);
+
+export const announcementChannelSchema = z.enum(["IN_APP", "EMAIL"]);
+
+export const announcementBaseSchema = z.object({
+  title: z.string().min(2, "Title is required"),
+  body: z.string().min(1, "Body is required"),
+  audience: announcementAudienceSchema,
+  channels: z.array(announcementChannelSchema).min(1, "Select at least one delivery channel"),
+  projectId: z.string().optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  scheduledAt: z.string().datetime().optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+});
+
+export const announcementCreateSchema = announcementBaseSchema.superRefine((data, ctx) => {
+  if (
+    (data.audience === "PROJECT_CPS" || data.audience === "PROJECT_CUSTOMERS")
+    && !data.projectId
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Project is required for project-scoped audiences",
+      path: ["projectId"],
+    });
+  }
+});
+
+export const announcementUpdateSchema = announcementBaseSchema.partial();
+
+export const announcementAttachmentSchema = z.object({
+  fileName: z.string().min(1),
+  fileUrl: storedFileUrlSchema,
+  mimeType: z.string().optional(),
+  fileSize: z.number().optional(),
+  kind: z.enum(["image", "video", "document"]),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

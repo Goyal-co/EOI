@@ -15,6 +15,7 @@ import {
 } from "@/lib/leads/identity-context";
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
 import { normalizeMobile } from "@/lib/leads/phone";
+import { resolveTeamMemberForLead } from "@/lib/services/team-members";
 
 /** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
 export const maxDuration = 60;
@@ -102,6 +103,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
   const fromDate = searchParams.get("fromDate");
   const toDate = searchParams.get("toDate");
   const fosName = searchParams.get("fosName")?.trim();
+  const teamMemberId = searchParams.get("teamMemberId")?.trim();
 
   const createdAtFilter: { gte?: Date; lte?: Date } = {};
   if (fromDate) {
@@ -125,6 +127,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         ...(status ? { journeyStatus: status as never } : {}),
         ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
         ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" } } : {}),
+        ...(teamMemberId ? { teamMemberId } : {}),
         ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
         ...(search
           ? {
@@ -140,6 +143,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
       include: {
         project: { select: { id: true, name: true, eoiStatus: true } },
         eoi: { select: { status: true, referenceNumber: true, chequeUploaded: true } },
+        teamMember: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -370,9 +374,20 @@ async function postPartnerLead(req: Request) {
     if (!(parsed.data.configuration || "").trim()) {
       return apiError("Unit preference is required");
     }
-    if (!(parsed.data.fosName || "").trim()) {
-      return apiError("FOS name is required");
+    if (!(parsed.data.teamMemberId || parsed.data.fosName || "").trim()) {
+      return apiError("Team member is required");
     }
+  }
+
+  let teamAssignment: { teamMemberId: string | null; fosName: string | null };
+  try {
+    teamAssignment = await resolveTeamMemberForLead(
+      cpId,
+      parsed.data.teamMemberId,
+      parsed.data.fosName,
+    );
+  } catch {
+    return apiError("Invalid team member", 400);
   }
 
   let lead;
@@ -428,7 +443,8 @@ async function postPartnerLead(req: Request) {
         customerEmail: email,
         customerMobile: mobile,
         configuration: parsed.data.configuration || null,
-        fosName: parsed.data.fosName || null,
+        fosName: teamAssignment.fosName,
+        teamMemberId: teamAssignment.teamMemberId,
         budget: parsed.data.budget,
         city: parsed.data.city,
         notes: parsed.data.notes,

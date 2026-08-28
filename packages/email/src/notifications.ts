@@ -293,6 +293,8 @@ export class NotificationService {
     cpUserId: string;
     projectName: string;
     salespersonName?: string;
+    teamMemberEmail?: string;
+    teamMemberName?: string;
   }) {
     const isBooked = params.milestone === "BOOKED";
     const cpPortalUrl = getPartnerLeadsUrl(params.leadId);
@@ -462,7 +464,56 @@ export class NotificationService {
       console.error("[notifyLeadMilestone] admin notify failed", e);
     }
 
+    const teamEmail = (params.teamMemberEmail || "").trim();
+    if (teamEmail) {
+      const teamName = params.teamMemberName || "Team member";
+      const teamTemplateType = isBooked ? "LEAD_BOOKED_CP" : "SITE_VISIT_COMPLETED_CP";
+      try {
+        const teamResolved = await this.resolveEmail(
+          teamTemplateType,
+          { ...vars, recipientName: teamName, portalUrl: cpPortalUrl },
+          {
+            subject: isBooked
+              ? `Booking Confirmed — ${params.customerName} | ${params.projectName}`
+              : `Site Visit Completed — ${params.customerName} | ${params.projectName}`,
+            html: milestoneHtml(teamName, "CP", cpPortalUrl),
+          },
+        );
+        deliveries.push(
+          this.deliverEmail({
+            to: teamEmail,
+            subject: teamResolved.subject,
+            html: teamResolved.html,
+            type: "TEAM_MEMBER_MILESTONE",
+            entityType: "Lead",
+            entityId: params.entityId,
+          }),
+        );
+      } catch (e) {
+        console.error("[notifyLeadMilestone] team member notify failed", e);
+      }
+    }
+
     return Promise.allSettled(deliveries);
+  }
+
+  static async notifyTeamMemberOnLead(params: {
+    teamMemberEmail?: string | null;
+    teamMemberName?: string | null;
+    subject: string;
+    html: string;
+    entityId: string;
+  }) {
+    const to = (params.teamMemberEmail || "").trim();
+    if (!to) return;
+    await this.deliverEmail({
+      to,
+      subject: params.subject,
+      html: params.html,
+      type: "TEAM_MEMBER_MILESTONE",
+      entityType: "Lead",
+      entityId: params.entityId,
+    });
   }
 
   static async notifyEOIInvitation(params: {

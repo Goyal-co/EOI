@@ -45,6 +45,7 @@ interface Lead {
   siteVisitStatus?: string;
   siteVisitDate?: string | null;
   fosName?: string | null;
+  teamMember?: { id: string; name: string } | null;
   createdAt: string;
   lockStatus?: LockStatus;
   isActiveLockHolder?: boolean;
@@ -328,11 +329,11 @@ function PartnerLeadsContent() {
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
           options={[
-            { value: "", label: "All Teams (FOS)" },
+            { value: "", label: "All team members" },
             ...Array.from(
               new Set(
                 leads
-                  .map((l) => l.fosName?.trim())
+                  .map((l) => l.teamMember?.name || l.fosName?.trim())
                   .filter((n): n is string => !!n),
               ),
             )
@@ -459,6 +460,7 @@ function PartnerLeadsContent() {
             </div>
           )},
           { key: "project", header: "Project", render: (row) => row.project.name },
+          { key: "teamMember", header: "Team member", render: (row) => row.teamMember?.name || row.fosName || "—" },
           { key: "intentType", header: "Type", render: (row) => (
             <StatusBadge status={row.intentType === "LEAD_ONLY" ? "LEAD_ONLY" : "EOI"} />
           )},

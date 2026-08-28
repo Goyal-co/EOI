@@ -29,9 +29,25 @@ export const GET = withApiRoute("admin.channel-partners.get", async (_req: Reque
   const approved = cp.eois.filter((e) => e.status === "APPROVED").length;
   const total = cp.eois.length;
 
+  const teamMembers = await prisma.cPTeamMember.findMany({
+    where: { cpId: id },
+    orderBy: { name: "asc" },
+  });
+  const teamWithPerformance = await Promise.all(
+    teamMembers.map(async (member) => {
+      const [totalLeads, booked, siteVisits] = await Promise.all([
+        prisma.lead.count({ where: { cpId: id, teamMemberId: member.id } }),
+        prisma.lead.count({ where: { cpId: id, teamMemberId: member.id, journeyStatus: "BOOKED" } }),
+        prisma.lead.count({ where: { cpId: id, teamMemberId: member.id, siteVisitStatus: "COMPLETED" } }),
+      ]);
+      return { ...member, performance: { totalLeads, booked, siteVisits } };
+    }),
+  );
+
   return apiResponse({
     ...cp,
     documents,
+    teamMembers: teamWithPerformance,
     performance: {
       totalLeads: cp.leads.length,
       totalEOIs: total,

@@ -3,7 +3,7 @@
 import { AppShell, LogoutConfirmModal } from "@goyal/ui";
 import {
   LayoutDashboard, Building2, Users, UserCheck, FileText,
-  CheckCircle, BarChart3, ScrollText,
+  CheckCircle, BarChart3, ScrollText, Megaphone,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,7 @@ const sidebarItems = [
   { label: "Leads", href: "/admin/leads", icon: UserCheck },
   { label: "Customer EOIs", href: "/admin/eois", icon: FileText },
   { label: "Approvals", href: "/admin/approvals", icon: CheckCircle },
+  { label: "Communications", href: "/admin/communications", icon: Megaphone },
   { label: "Audit Log", href: "/admin/audit", icon: ScrollText },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
 ];

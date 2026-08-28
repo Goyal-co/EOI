@@ -500,6 +500,27 @@ export function leadMilestoneEmailHtml(params: {
   ]);
 }
 
+export function announcementEmailHtml(params: {
+  title: string;
+  body: string;
+  attachmentHtml?: string;
+}) {
+  const bodyHtml = params.body
+    .split("\n")
+    .map((line) => `<p style="margin:0 0 12px;color:${MUTED};">${line}</p>`)
+    .join("");
+  return wrapEmail([
+    emailHeader(),
+    emailHero(params.title, "Announcement", "info"),
+    emailBody(`
+      ${bodyHtml}
+      ${params.attachmentHtml || ""}
+    `),
+    emailSupportBlock(),
+    emailFooter(),
+  ]);
+}
+
 /** Placeholder HTML for DB email templates (admin-editable) */
 export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   CP_REGISTRATION_ACK: "Registration Received — Goyal & Co. | Hariyana Group",
@@ -520,6 +541,7 @@ export const DEFAULT_EMAIL_TEMPLATE_SUBJECTS: Record<string, string> = {
   SITE_VISIT_COMPLETED_CUSTOMER: "Your Site Visit is Completed — {{projectName}} | {{cpName}}",
   LEAD_BOOKED_CP: "Booking Confirmed — {{customerName}} | {{projectName}} | {{cpName}}",
   LEAD_BOOKED_CUSTOMER: "Your Booking is Confirmed — {{projectName}} | {{cpName}}",
+  ANNOUNCEMENT: "{{title}}",
 };
 
 export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
@@ -668,5 +690,9 @@ export const DEFAULT_EMAIL_TEMPLATE_BODIES: Record<string, string> = {
     milestone: "BOOKED",
     portalUrl: "{{portalUrl}}",
     recipientType: "CUSTOMER",
+  }),
+  ANNOUNCEMENT: announcementEmailHtml({
+    title: "{{title}}",
+    body: "{{body}}",
   }),
 };

@@ -40,7 +40,7 @@ RUN npm run db:generate \
     && npm run build --workspace=@goyal/web \
     && test -f apps/web/.next/standalone/apps/web/server.js
 
-# --- Prisma CLI bundle (full dependency tree for db push at boot) ---
+# Prisma CLI bundle (full dependency tree for migrate deploy at boot)
 FROM base AS prisma-boot
 WORKDIR /prisma-cli
 RUN npm install prisma@6.19.3 bcryptjs@2.4.3 --ignore-scripts --no-audit --no-fund
@@ -60,7 +60,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --chown=nextjs:nodejs scripts/docker-start.cjs ./docker-start.cjs
 COPY --chown=nextjs:nodejs scripts/docker-bootstrap.cjs ./docker-bootstrap.cjs
 COPY certs/ap-south-1-bundle.pem /ap-south-1-bundle.pem
-# Prisma CLI + schema so the container can sync RDS on every boot.
+# Prisma CLI + schema so the container applies migrations on every boot.
 COPY --from=prisma-boot --chown=nextjs:nodejs /prisma-cli/node_modules/ ./node_modules/
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/prisma ./packages/db/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/packages/db/scripts/prisma-env.cjs ./packages/db/scripts/prisma-env.cjs
@@ -70,7 +70,7 @@ USER nextjs
 EXPOSE 3000
 STOPSIGNAL SIGTERM
 # Liveness only. Full /health still checks DB, S3, Redis.
-# db push against RDS can take a while on cold start.
+# migrate deploy against RDS can take a while on cold start.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:3000/health?live=1" || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]

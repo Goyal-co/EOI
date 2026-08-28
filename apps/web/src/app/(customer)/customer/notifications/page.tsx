@@ -5,6 +5,7 @@ import {
   PageHeader, cn,
 } from "@goyal/ui";
 import { useNotifications, useMarkNotificationsRead } from "@/lib/hooks";
+import { AnnouncementNotificationBody } from "@/components/announcement-notification-body";
 import { Bell, CheckCheck } from "lucide-react";
 
 interface Notification {
@@ -13,6 +14,7 @@ interface Notification {
   body: string;
   type: string;
   read: boolean;
+  entityId?: string;
   createdAt: string;
 }
 
@@ -86,7 +88,11 @@ export default function CustomerNotificationsPage() {
                       <span className="h-2 w-2 rounded-full bg-gold shrink-0 mt-1.5" />
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>
+                  {notif.type === "ANNOUNCEMENT" && notif.entityId ? (
+                    <AnnouncementNotificationBody entityId={notif.entityId} body={notif.body} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{notif.body}</p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-2">{formatDate(notif.createdAt)}</p>
                 </div>
               </CardContent>

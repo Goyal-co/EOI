@@ -20,7 +20,15 @@ export const GET = withApiRoute("admin.eois.get", async (req: Request) => {
       ...(cheque === "missing" ? { chequeUploaded: false, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } } : {}),
     },
     include: {
-      lead: { select: { customerName: true, customerEmail: true, journeyStatus: true } },
+      lead: {
+        select: {
+          customerName: true,
+          customerEmail: true,
+          journeyStatus: true,
+          fosName: true,
+          teamMember: { select: { id: true, name: true } },
+        },
+      },
       project: { select: { name: true } },
       cp: { include: { user: { select: { name: true } } } },
     },
@@ -36,6 +44,7 @@ export const GET = withApiRoute("admin.eois.get", async (req: Request) => {
     customerEmail: e.lead.customerEmail,
     project: e.project.name,
     cpName: e.cp.user.name,
+    teamMemberName: e.lead.teamMember?.name || e.lead.fosName || null,
     chequeUploaded: e.chequeUploaded,
     chequeNumber: e.chequeNumber,
     submittedAt: e.submittedAt,

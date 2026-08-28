@@ -57,6 +57,14 @@ interface CPProfile {
     approvalRatio: number;
     projectWise: Record<string, number>;
   };
+  teamMembers?: Array<{
+    id: string;
+    name: string;
+    email: string | null;
+    role: string | null;
+    status: string;
+    performance: { totalLeads: number; booked: number; siteVisits: number };
+  }>;
 }
 
 interface Project {
@@ -748,6 +756,28 @@ export default function AdminChannelPartnersPage() {
                     <span className="font-medium">{count}</span>
                   </div>
                 ))}
+              </Card>
+            )}
+
+            {(profile.teamMembers?.length ?? 0) > 0 && (
+              <Card className="p-4">
+                <h4 className="text-sm font-semibold text-foreground mb-2">Team members</h4>
+                <div className="space-y-2">
+                  {profile.teamMembers!.map((member) => (
+                    <div key={member.id} className="flex flex-wrap justify-between gap-2 text-sm border-b border-border/60 pb-2 last:border-0">
+                      <div>
+                        <div className="font-medium">{member.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {member.role || "Member"}
+                          {member.email ? ` · ${member.email}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground text-right">
+                        {member.performance.totalLeads} leads · {member.performance.siteVisits} SV · {member.performance.booked} booked
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </Card>
             )}
 

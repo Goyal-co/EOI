@@ -10,7 +10,7 @@
     "start": "next start --port 3000",
     "start:standalone": "node scripts/start-standalone.mjs",
     "start:prod": "npm run build && npm run start:standalone",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },

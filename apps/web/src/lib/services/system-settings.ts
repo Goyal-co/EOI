@@ -20,6 +20,7 @@ export interface NotificationSettings {
   cpRegistration: boolean;
   approvalReminders: boolean;
   projectUpdates: boolean;
+  announcements: boolean;
   emailDigest: string;
 }
 
@@ -43,6 +44,7 @@ export const SYSTEM_SETTINGS_DEFAULTS: SystemSettingsData = {
     cpRegistration: true,
     approvalReminders: true,
     projectUpdates: false,
+    announcements: true,
     emailDigest: "daily",
   },
   eoiRules: {

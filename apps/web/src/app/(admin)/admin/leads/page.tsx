@@ -30,6 +30,7 @@ interface IdentityRow {
   eventCount: number;
   latestProject: string | null;
   latestCp: string | null;
+  latestTeamMember: string | null;
   latestJourneyStatus: string | null;
   latestSiteVisitStatus: string | null;
   createdAt: string;
@@ -61,6 +62,7 @@ interface IdentityDetail {
     projectName: string;
     cpName: string | null;
     companyName?: string | null;
+    teamMemberName?: string | null;
     intentType: string;
     journeyStatus: string;
     siteVisitStatus: string;
@@ -294,6 +296,11 @@ function AdminLeadsContent() {
             render: (row) => (row as IdentityRow).latestCp || "—",
           },
           {
+            key: "latestTeamMember",
+            header: "Team member",
+            render: (row) => (row as IdentityRow).latestTeamMember || "—",
+          },
+          {
             key: "latestJourneyStatus",
             header: "Status",
             render: (row) =>
@@ -421,6 +428,7 @@ function AdminLeadsContent() {
                       <div className="text-xs text-muted-foreground">
                         CP: {a.cpName || "—"}
                         {a.companyName ? ` (${a.companyName})` : ""}
+                        {a.teamMemberName ? ` · Team: ${a.teamMemberName}` : ""}
                         {" · "}
                         {a.intentType}
                       </div>

@@ -24,6 +24,7 @@ export default function AdminSettingsPage() {
     cpRegistration: true,
     approvalReminders: true,
     projectUpdates: false,
+    announcements: true,
     emailDigest: "daily",
   });
 
@@ -139,6 +140,7 @@ export default function AdminSettingsPage() {
             { key: "cpRegistration" as const, label: "Channel partner registrations" },
             { key: "approvalReminders" as const, label: "Pending approval reminders" },
             { key: "projectUpdates" as const, label: "Project status updates" },
+            { key: "announcements" as const, label: "Admin announcements" },
           ].map(({ key, label }) => (
             <label key={key} className="flex items-center gap-3 cursor-pointer">
               <input

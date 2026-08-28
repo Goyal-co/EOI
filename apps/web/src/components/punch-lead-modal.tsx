@@ -82,11 +82,14 @@ export function PunchLeadModal({
     projectId,
     configuration: "",
     fosName: "",
+    teamMemberId: "",
     budget: "",
     city: "",
     notes: "",
     intentType: "LEAD_ONLY",
   });
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string }>>([]);
+  const [useCustomFos, setUseCustomFos] = useState(false);
   const { addToast } = useToast();
   const qc = useQueryClient();
 
@@ -95,6 +98,22 @@ export function PunchLeadModal({
     setActiveProjectId(projectId);
     setActiveProjectName(projectName);
   }, [open, projectId, projectName]);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/partner/team")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTeamMembers(
+            data
+              .filter((m: { status: string }) => m.status === "ACTIVE")
+              .map((m: { id: string; name: string }) => ({ id: m.id, name: m.name })),
+          );
+        }
+      })
+      .catch(() => {});
+  }, [open]);
 
   useEffect(() => {
     if (!open || !initialLead) return;
@@ -131,6 +150,7 @@ export function PunchLeadModal({
       projectId,
       configuration: "",
       fosName: "",
+      teamMemberId: "",
       budget: "",
       city: "",
       notes: "",
@@ -375,12 +395,34 @@ export function PunchLeadModal({
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="customer@email.com"
             />
-            <Input
-              label="FOS Name"
-              value={form.fosName || ""}
-              onChange={(e) => setForm({ ...form, fosName: e.target.value })}
-              placeholder="Field officer name (optional)"
+            <Select
+              label="Team member"
+              value={useCustomFos ? "__other__" : (form.teamMemberId || "")}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__other__") {
+                  setUseCustomFos(true);
+                  setForm({ ...form, teamMemberId: "", fosName: "" });
+                } else {
+                  setUseCustomFos(false);
+                  const member = teamMembers.find((m) => m.id === v);
+                  setForm({ ...form, teamMemberId: v, fosName: member?.name || "" });
+                }
+              }}
+              options={[
+                { value: "", label: "Select team member (optional)" },
+                ...teamMembers.map((m) => ({ value: m.id, label: m.name })),
+                { value: "__other__", label: "Other (enter name)" },
+              ]}
             />
+            {useCustomFos && (
+              <Input
+                label="Team member name"
+                value={form.fosName || ""}
+                onChange={(e) => setForm({ ...form, fosName: e.target.value, teamMemberId: "" })}
+                placeholder="Enter name"
+              />
+            )}
             <Select
               label="Unit Preference"
               value={form.configuration || ""}
