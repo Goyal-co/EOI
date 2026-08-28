@@ -10,6 +10,7 @@
  * Legacy: set DB_PUSH_ON_BOOT=1 to run `prisma db push` after migrate (not recommended on shared DBs).
  */
 const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
@@ -29,6 +30,40 @@ async function schemaReady(prisma) {
   const user = await tableExists(prisma, "User");
   const templates = await tableExists(prisma, "EmailTemplate");
   return user && templates;
+}
+
+async function migrationHistoryExists(prisma) {
+  if (!(await tableExists(prisma, "_prisma_migrations"))) return false;
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS count
+     FROM "_prisma_migrations"
+     WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL`,
+  );
+  return (rows[0]?.count ?? 0) > 0;
+}
+
+function listMigrationDirs() {
+  const dir = path.join(__dirname, "packages/db/prisma/migrations");
+  return fs
+    .readdirSync(dir)
+    .filter((name) => {
+      if (name === "migration_lock.toml") return false;
+      return fs.statSync(path.join(dir, name)).isDirectory();
+    })
+    .sort();
+}
+
+/** Production DBs bootstrapped with db push have tables but no _prisma_migrations rows (Prisma P3005). */
+function baselineLegacySchema({ skipAnnouncements }) {
+  const skip = skipAnnouncements
+    ? new Set(["20260828120000_announcements_teams"])
+    : new Set();
+
+  console.info("[db] existing schema without migration history — baselining prior migrations");
+  for (const name of listMigrationDirs()) {
+    if (skip.has(name)) continue;
+    runPrisma(["migrate", "resolve", "--applied", name], `baseline ${name}`);
+  }
 }
 
 function runPrisma(args, label) {
@@ -138,8 +173,14 @@ async function ensureSchema() {
 
   const prisma = new PrismaClient();
   let migrateLabel = "applying pending Prisma migrations";
+  let ready = false;
+  let hasHistory = false;
+  let announcementsApplied = false;
   try {
-    migrateLabel = (await schemaReady(prisma))
+    ready = await schemaReady(prisma);
+    hasHistory = await migrationHistoryExists(prisma);
+    announcementsApplied = await tableExists(prisma, "CPTeamMember");
+    migrateLabel = ready
       ? "applying pending Prisma migrations"
       : "first boot — applying Prisma migrations";
   } finally {
@@ -147,6 +188,9 @@ async function ensureSchema() {
   }
 
   if (process.env.SKIP_DB_MIGRATE !== "1") {
+    if (ready && !hasHistory) {
+      baselineLegacySchema({ skipAnnouncements: !announcementsApplied });
+    }
     migrateDeploy(migrateLabel);
   }
 
@@ -170,6 +214,9 @@ async function ensureAdmin() {
     console.info("[admin] SKIP_ADMIN_SEED=1 — skipping");
     return;
   }
+  const email = (process.env.ADMIN_EMAIL || "").trim();
+  const password = process.env.ADMIN_PASSWORD || "";
+  const name = (process.env.ADMIN_NAME || "Super Admin").trim();
   if (!email || !password) {
     console.warn("[admin] ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping superadmin");
     return;
