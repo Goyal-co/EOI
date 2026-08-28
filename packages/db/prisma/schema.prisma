@@ -284,6 +284,7 @@ model Project {
   tags           String[]         @default([])
   amenities      String[]
   faqs           Json?
+  unitPreferences Json?
   eoiStatus      ProjectEOIStatus @default(OPEN)
   status         ProjectStatus    @default(ACTIVE)
   bannerUrl      String?

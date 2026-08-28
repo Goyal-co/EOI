@@ -35,6 +35,13 @@ export const projectFaqSchema = z.object({
   answer: z.string().min(1, "Answer is required"),
 });
 
+export const projectUnitPreferenceSchema = z.object({
+  label: z.string().min(1, "Unit preference label is required"),
+  budgetRanges: z.array(z.string().min(1)).min(1, "Add at least one budget range"),
+});
+
+export type ProjectUnitPreference = z.infer<typeof projectUnitPreferenceSchema>;
+
 export const projectSchema = z.object({
   name: z.string().min(2, "Project name is required"),
   location: z.string().min(2, "Location is required"),
@@ -52,6 +59,7 @@ export const projectSchema = z.object({
   tags: z.array(z.string().min(1)).optional(),
   amenities: z.array(z.string()).optional(),
   faqs: z.array(projectFaqSchema).optional(),
+  unitPreferences: z.array(projectUnitPreferenceSchema).optional(),
   eoiStatus: z.enum(["OPEN", "CLOSED"]).default("OPEN"),
   status: z.enum(["ACTIVE", "INACTIVE", "UPCOMING"]).default("ACTIVE"),
 });
@@ -237,7 +245,19 @@ export const leadPatchSchema = z.object({
       z.null(),
     ])
     .optional(),
-});
+  email: z.preprocess(
+    (val) => (typeof val === "string" ? normalizeEmail(val) : val),
+    z.string().email("Invalid email").optional(),
+  ),
+  mobile: z.string().regex(/^[6-9]\d{9}$/, "Invalid mobile number").optional(),
+}).refine(
+  (data) =>
+    data.siteVisitStatus !== undefined
+    || data.siteVisitDate !== undefined
+    || data.email !== undefined
+    || data.mobile !== undefined,
+  { message: "No changes provided" },
+);
 
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),

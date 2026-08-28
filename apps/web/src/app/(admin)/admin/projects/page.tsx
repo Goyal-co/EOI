@@ -61,6 +61,7 @@ interface ProjectForm {
   amenities: string[];
   amenityInput: string;
   faqs: Array<{ question: string; answer: string }>;
+  unitPreferences: Array<{ label: string; budgetRanges: string[]; budgetInput: string }>;
   eoiRule: { minBudget: string; requiredDocuments: string[]; docInput: string };
 }
 
@@ -95,6 +96,7 @@ const emptyForm: ProjectForm = {
   amenities: [],
   amenityInput: "",
   faqs: [],
+  unitPreferences: [],
   eoiRule: { minBudget: "", requiredDocuments: [], docInput: "" },
 };
 
@@ -112,6 +114,13 @@ function loadDraft(key: string): ProjectForm | null {
       amenities: Array.isArray(parsed.amenities) ? parsed.amenities : [],
       amenityInput: "",
       faqs: Array.isArray(parsed.faqs) ? parsed.faqs : [],
+      unitPreferences: Array.isArray(parsed.unitPreferences)
+        ? parsed.unitPreferences.map((p) => ({
+            label: p.label || "",
+            budgetRanges: Array.isArray(p.budgetRanges) ? p.budgetRanges : [],
+            budgetInput: "",
+          }))
+        : [],
       eoiRule: {
         minBudget: parsed.eoiRule?.minBudget ?? "",
         requiredDocuments: Array.isArray(parsed.eoiRule?.requiredDocuments)
@@ -223,6 +232,13 @@ export default function AdminProjectsPage() {
         amenities: full.amenities || [],
         amenityInput: "",
         faqs: (full.faqs as Array<{ question: string; answer: string }> | null) || [],
+        unitPreferences: Array.isArray(full.unitPreferences)
+          ? (full.unitPreferences as Array<{ label: string; budgetRanges: string[] }>).map((p) => ({
+              label: p.label || "",
+              budgetRanges: Array.isArray(p.budgetRanges) ? p.budgetRanges : [],
+              budgetInput: "",
+            }))
+          : [],
         eoiRule: {
           minBudget: rule?.minBudget ? String(rule.minBudget) : "",
           requiredDocuments: rule?.requiredDocuments || [],
@@ -313,6 +329,12 @@ export default function AdminProjectsPage() {
         tags: form.tags,
         amenities: form.amenities,
         faqs: form.faqs.filter((f) => f.question.trim() && f.answer.trim()),
+        unitPreferences: form.unitPreferences
+          .filter((p) => p.label.trim())
+          .map((p) => ({
+            label: p.label.trim(),
+            budgetRanges: p.budgetRanges,
+          })),
         eoiRule: {
           minBudget: form.eoiRule.minBudget ? Number(form.eoiRule.minBudget) : undefined,
           requiredDocuments: form.eoiRule.requiredDocuments,
@@ -708,6 +730,104 @@ export default function AdminProjectsPage() {
             </span>
           ))}
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">Unit Preferences &amp; Budget Ranges</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setForm({
+                ...form,
+                unitPreferences: [...form.unitPreferences, { label: "", budgetRanges: [], budgetInput: "" }],
+              })
+            }
+          >
+            <Plus className="h-4 w-4" /> Add Unit Type
+          </Button>
+        </div>
+        {form.unitPreferences.map((pref, index) => (
+          <div key={index} className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Unit {index + 1}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    unitPreferences: form.unitPreferences.filter((_, i) => i !== index),
+                  })
+                }
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <FormField label="Unit preference label" htmlFor={`unit-label-${index}`}>
+              <Input
+                id={`unit-label-${index}`}
+                value={pref.label}
+                onChange={(e) => {
+                  const next = [...form.unitPreferences];
+                  next[index] = { ...next[index], label: e.target.value };
+                  setForm({ ...form, unitPreferences: next });
+                }}
+                placeholder="e.g. 2 BHK, 3 BHK Premium"
+              />
+            </FormField>
+            <div className="flex gap-2">
+              <Input
+                value={pref.budgetInput}
+                onChange={(e) => {
+                  const next = [...form.unitPreferences];
+                  next[index] = { ...next[index], budgetInput: e.target.value };
+                  setForm({ ...form, unitPreferences: next });
+                }}
+                placeholder="Budget range e.g. 75L - 1Cr"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (!pref.budgetInput.trim()) return;
+                  const next = [...form.unitPreferences];
+                  next[index] = {
+                    ...next[index],
+                    budgetRanges: [...next[index].budgetRanges, pref.budgetInput.trim()],
+                    budgetInput: "",
+                  };
+                  setForm({ ...form, unitPreferences: next });
+                }}
+              >
+                Add range
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pref.budgetRanges.map((range) => (
+                <span key={range} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs">
+                  {range}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = [...form.unitPreferences];
+                      next[index] = {
+                        ...next[index],
+                        budgetRanges: next[index].budgetRanges.filter((r) => r !== range),
+                      };
+                      setForm({ ...form, unitPreferences: next });
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-3">

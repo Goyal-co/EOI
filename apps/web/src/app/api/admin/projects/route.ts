@@ -62,6 +62,7 @@ export const POST = withApiRoute("admin.projects.post", async (req: Request) => 
       tags: parsed.data.tags || [],
       amenities: parsed.data.amenities || [],
       faqs: parsed.data.faqs || [],
+      unitPreferences: parsed.data.unitPreferences || [],
       eoiStatus: parsed.data.eoiStatus,
       status: parsed.data.status,
       bannerUrl: typeof body.bannerUrl === "string" ? body.bannerUrl : null,

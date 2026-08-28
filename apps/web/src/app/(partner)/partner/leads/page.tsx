@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DataTable, Drawer, StatusBadge, Select, Button, Input, formatDate, useToast, PageHeader, LoadingSkeleton,
 } from "@goyal/ui";
-import { Clock, Copy, Layers3, Lock, Mail, MapPin, Phone, Send } from "lucide-react";
+import { Clock, Copy, Layers3, Lock, Mail, MapPin, Pencil, Phone, Send } from "lucide-react";
 import { usePartnerLeads, usePartnerProjects } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
@@ -113,6 +113,10 @@ function PartnerLeadsContent() {
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [editEmail, setEditEmail] = useState("");
+  const [editMobile, setEditMobile] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
   const { addToast } = useToast();
   const qc = useQueryClient();
 
@@ -141,7 +145,10 @@ function PartnerLeadsContent() {
 
   useEffect(() => {
     setMapProjectId("");
-  }, [selectedLead?.id]);
+    setEditingContact(false);
+    setEditEmail(selectedLead?.customerEmail || "");
+    setEditMobile(selectedLead?.customerMobile || "");
+  }, [selectedLead?.id, selectedLead?.customerEmail, selectedLead?.customerMobile]);
 
   const lockCountdown = (expiresAt?: string | null) => {
     if (!expiresAt) return "—";
@@ -255,6 +262,47 @@ function PartnerLeadsContent() {
   const copyEmail = (email: string) => {
     navigator.clipboard.writeText(email);
     addToast({ type: "info", title: "Copied", message: "Email copied to clipboard" });
+  };
+
+  const contactLocked = (lead: Lead) =>
+    lead.journeyStatus === "BOOKED" || lead.leadStatus === "BOOKED";
+
+  const handleSaveContact = async () => {
+    if (!selectedLead) return;
+    setSavingContact(true);
+    try {
+      const payload: { email?: string; mobile?: string } = {};
+      if (editEmail.trim() !== selectedLead.customerEmail) payload.email = editEmail.trim();
+      if (editMobile.trim() !== selectedLead.customerMobile) payload.mobile = editMobile.trim();
+      if (!payload.email && !payload.mobile) {
+        setEditingContact(false);
+        return;
+      }
+      const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update contact");
+      const updated = {
+        ...selectedLead,
+        customerEmail: data.customerEmail ?? editEmail.trim(),
+        customerMobile: data.customerMobile ?? editMobile.trim(),
+      };
+      setSelectedLead(updated);
+      setEditingContact(false);
+      addToast({ type: "success", title: "Contact updated", message: "Customer email and mobile have been saved." });
+      await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+    } catch (e) {
+      addToast({
+        type: "error",
+        title: "Update failed",
+        message: e instanceof Error ? e.message : "Could not update contact details",
+      });
+    } finally {
+      setSavingContact(false);
+    }
   };
 
   const canSendConfirmation = (lead: Lead) =>
@@ -558,17 +606,69 @@ function PartnerLeadsContent() {
             )}
 
             <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span>{selectedLead.customerEmail}</span>
-                <Button variant="ghost" size="sm" onClick={() => copyEmail(selectedLead.customerEmail)}>
-                  <Copy className="h-3 w-3" />
-                </Button>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Contact</span>
+                {!contactLocked(selectedLead) && !editingContact && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditEmail(selectedLead.customerEmail);
+                      setEditMobile(selectedLead.customerMobile);
+                      setEditingContact(true);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" /> Edit
+                  </Button>
+                )}
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{selectedLead.customerMobile}</span>
-              </div>
+              {editingContact ? (
+                <div className="space-y-3 rounded-lg border border-border p-3">
+                  <Input
+                    label="Email"
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                  <Input
+                    label="Mobile"
+                    type="tel"
+                    value={editMobile}
+                    onChange={(e) => setEditMobile(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="gold" size="sm" loading={savingContact} onClick={handleSaveContact}>
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={savingContact}
+                      onClick={() => {
+                        setEditingContact(false);
+                        setEditEmail(selectedLead.customerEmail);
+                        setEditMobile(selectedLead.customerMobile);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedLead.customerEmail}</span>
+                    <Button variant="ghost" size="sm" onClick={() => copyEmail(selectedLead.customerEmail)}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{selectedLead.customerMobile}</span>
+                  </div>
+                </>
+              )}
               {selectedLead.city && (
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />

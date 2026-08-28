@@ -2,6 +2,7 @@ import { prisma } from "@goyal/db";
 import { leadPatchSchema } from "@goyal/types";
 import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { leadScopeWhere, leadBelongsToSession } from "@/lib/partner-scope";
+import { updateLeadCustomerContact } from "@/lib/services/lead-contact-update";
 
 function resolveSiteVisit(data: {
   siteVisitStatus?: "NOT_SCHEDULED" | "SCHEDULED" | "COMPLETED" | "CANCELLED";
@@ -35,12 +36,10 @@ function resolveSiteVisit(data: {
     patch.siteVisitDate = null;
   }
 
-  // Partners may schedule a visit; COMPLETED is set only via reception webhook — never auto-complete by date.
   if (status === "SCHEDULED" || (status === undefined && visitDate)) {
     patch.siteVisitStatus = "SCHEDULED";
   }
 
-  // Partners cannot mark COMPLETED themselves through this route.
   if (status === "COMPLETED") {
     throw new Error("Site visit can only be marked completed from reception");
   }
@@ -65,6 +64,28 @@ export const PATCH = withApiRoute("partner.leads.patch", async (req: Request, { 
   if (!lead) return apiError("Lead not found", 404);
   if (!leadBelongsToSession(session!, lead)) return apiError("Lead not found", 404);
 
+  let updated = lead;
+
+  if (parsed.data.email !== undefined || parsed.data.mobile !== undefined) {
+    try {
+      updated = await updateLeadCustomerContact({
+        leadId: id,
+        cpId: session!.user.cpId!,
+        email: parsed.data.email,
+        mobile: parsed.data.mobile,
+      });
+    } catch (e) {
+      return apiError(e instanceof Error ? e.message : "Failed to update contact", 400);
+    }
+  }
+
+  const hasSiteVisitPatch =
+    parsed.data.siteVisitStatus !== undefined || parsed.data.siteVisitDate !== undefined;
+
+  if (!hasSiteVisitPatch) {
+    return apiResponse(updated);
+  }
+
   if (
     lead.siteVisitStatus === "COMPLETED"
     && (parsed.data.siteVisitStatus !== undefined || parsed.data.siteVisitDate !== undefined)
@@ -86,7 +107,7 @@ export const PATCH = withApiRoute("partner.leads.patch", async (req: Request, { 
     return apiError("Site visit date is required when scheduling");
   }
 
-  const updated = await prisma.lead.update({
+  updated = await prisma.lead.update({
     where: { id },
     data: patch,
   });

@@ -40,6 +40,7 @@ export const GET = withApiRoute("partner.projects.get", async () => {
         amenities: a.project.amenities,
         possessionDate: a.project.possessionDate,
         faqs: (a.project.faqs as Array<{ question: string; answer: string }> | null) || [],
+        unitPreferences: a.project.unitPreferences,
         assets: a.project.assets,
         myLeads: a.project._count.leads,
       }))

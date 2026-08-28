@@ -8,6 +8,7 @@ import {
 } from "@goyal/ui";
 import { CheckCircle, Clock, Layers3 } from "lucide-react";
 import type { LeadCreateInput } from "@goyal/types";
+import { ProjectUnitBudgetFields } from "@/components/project-unit-budget-fields";
 
 const STEPS = [
   { id: "customer", title: "Customer Details", description: "Enter customer information for the EOI" },
@@ -386,29 +387,13 @@ export function SubmitEOIModal({
               onChange={(e) => setForm({ ...form, fosName: e.target.value })}
               placeholder="Field officer name"
             />
-            <Select
-              label="Unit Preference"
-              value={form.configuration || ""}
-              onChange={(e) => setForm({ ...form, configuration: e.target.value })}
-              options={[
-                { value: "", label: "Select unit preference" },
-                { value: "2 BHK", label: "2 BHK" },
-                { value: "3 BHK", label: "3 BHK" },
-                { value: "4 BHK", label: "4 BHK" },
-                { value: "Penthouse", label: "Penthouse" },
-              ]}
-            />
-            <Select
-              label="Budget Range"
-              value={form.budget || ""}
-              onChange={(e) => setForm({ ...form, budget: e.target.value })}
-              options={[
-                { value: "", label: "Select budget" },
-                { value: "50L - 75L", label: "₹50L - ₹75L" },
-                { value: "75L - 1Cr", label: "₹75L - ₹1Cr" },
-                { value: "1Cr - 1.5Cr", label: "₹1Cr - ₹1.5Cr" },
-                { value: "1.5Cr+", label: "₹1.5Cr+" },
-              ]}
+            <ProjectUnitBudgetFields
+              projectId={activeProjectId}
+              configuration={form.configuration || ""}
+              budget={form.budget || ""}
+              onConfigurationChange={(configuration) => setForm({ ...form, configuration })}
+              onBudgetChange={(budget) => setForm({ ...form, budget })}
+              configurationRequired
             />
             <Input
               label="City"
