@@ -17,14 +17,21 @@ export const POST = withApiRoute("auth.reset-password.post", async (req: Request
     return apiError("Invalid or expired reset token", 400);
   }
 
-  if (record.user.role !== "CHANNEL_PARTNER" && record.user.role !== "CUSTOMER") {
+  if (
+    record.user.role !== "CHANNEL_PARTNER"
+    && record.user.role !== "CP_TEAM_MEMBER"
+    && record.user.role !== "CUSTOMER"
+  ) {
     return apiError("Invalid reset token", 400);
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   await prisma.user.update({
     where: { id: record.userId },
-    data: { passwordHash },
+    data: {
+      passwordHash,
+      ...(record.user.role === "CP_TEAM_MEMBER" ? { status: "ACTIVE" } : {}),
+    },
   });
   await prisma.passwordResetToken.delete({ where: { id: record.id } });
 

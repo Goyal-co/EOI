@@ -18,12 +18,26 @@ export const POST = withApiRoute("partner.check-status.post", async (req: Reques
   const parsed = checkStatusSchema.safeParse(body);
   if (!parsed.success) return apiError("Valid email is required");
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-    include: { cpProfile: true },
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: parsed.data.email.trim(), mode: "insensitive" } },
+    include: { cpProfile: true, teamMemberProfile: true },
   });
 
-  if (!user || user.role !== "CHANNEL_PARTNER" || !user.cpProfile) {
+  if (!user) {
+    return apiResponse({ status: "invalid" as const });
+  }
+
+  if (user.role === "CP_TEAM_MEMBER") {
+    if (!user.teamMemberProfile || user.teamMemberProfile.status !== "ACTIVE") {
+      return apiResponse({ status: "invalid" as const });
+    }
+    if (user.status === "INACTIVE") {
+      return apiResponse({ status: "invalid" as const });
+    }
+    return apiResponse({ status: "approved" as const });
+  }
+
+  if (user.role !== "CHANNEL_PARTNER" || !user.cpProfile) {
     return apiResponse({ status: "invalid" as const });
   }
 

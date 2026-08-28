@@ -115,7 +115,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (user.role === "CP_TEAM_MEMBER") {
-          const teamMember = user.teamMemberProfile;
+          let teamMember = user.teamMemberProfile;
+          if (!teamMember) {
+            teamMember = await prisma.cPTeamMember.findFirst({
+              where: { userId: user.id },
+              include: { cp: true },
+            });
+          }
           if (!teamMember || teamMember.status !== "ACTIVE") {
             console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: team member inactive`);
             return null;
@@ -124,6 +130,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} cpStatus=${teamMember.cp.status} msg=login failed: parent channel partner not approved`);
             return null;
           }
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role as UserRole,
+            status: user.status,
+            cpId: teamMember.cpId,
+            cpStatus: teamMember.cp.status,
+            customerId: user.customerProfile?.id,
+            teamMemberId: teamMember.id,
+          };
         }
 
         return {
