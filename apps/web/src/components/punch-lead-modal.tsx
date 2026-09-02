@@ -312,8 +312,8 @@ export function PunchLeadModal({
           : null)
       );
       setStep(2);
-      qc.invalidateQueries({ queryKey: ["partner", "leads"] });
-      qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
+      void qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+      void qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
       addToast({
         type: data.sentConfirmation ? "success" : sendConfirmation ? "warning" : "success",
         title: sendConfirmation

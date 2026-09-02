@@ -46,6 +46,7 @@ export type IdentityLockEvaluation =
 
 /**
  * 15-day other-CP lock + 7-day prior-CP cooldown after lock ends.
+ * Single DB round-trip — evaluates ownership in memory.
  */
 export async function evaluateIdentityLock(params: {
   cpId: string;
@@ -55,118 +56,33 @@ export async function evaluateIdentityLock(params: {
 }): Promise<IdentityLockEvaluation> {
   const now = params.now ?? new Date();
   const emailLower = params.email.trim().toLowerCase();
+  const lookbackStart = new Date(now.getTime() - phoneLockWindowMs() - priorCpCooldownMs());
 
-  const firstInWindow = await prisma.lead.findFirst({
+  const rows = await prisma.lead.findMany({
     where: {
       journeyStatus: { not: "REJECTED" },
-      createdAt: { gte: new Date(now.getTime() - phoneLockWindowMs()) },
+      createdAt: { gte: lookbackStart },
       OR: [
         { customerMobile: params.mobile },
         { customerEmail: { equals: emailLower, mode: "insensitive" } },
       ],
     },
-    orderBy: { createdAt: "asc" },
-    select: { createdAt: true, cpId: true },
-  });
-
-  if (firstInWindow) {
-    const lockExpiresAt = new Date(firstInWindow.createdAt.getTime() + phoneLockWindowMs());
-    const owning = await prisma.lead.findMany({
-      where: {
-        journeyStatus: { not: "REJECTED" },
-        createdAt: {
-          gte: firstInWindow.createdAt,
-          lte: lockExpiresAt,
-        },
-        OR: [
-          { customerMobile: params.mobile },
-          { customerEmail: { equals: emailLower, mode: "insensitive" } },
-        ],
-      },
-      select: { cpId: true },
-      distinct: ["cpId"],
-    });
-    const owningCpIds = owning.map((o) => o.cpId);
-
-    if (now < lockExpiresAt && !owningCpIds.includes(params.cpId)) {
-      const daysLeft = daysRemainingUntil(lockExpiresAt, now);
-      return {
-        ok: false,
-        code: "IDENTITY_LOCKED",
-        message: `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-        lockExpiresAt,
-      };
-    }
-
-    if (now >= lockExpiresAt && owningCpIds.includes(params.cpId)) {
-      const cooldownExpiresAt = new Date(lockExpiresAt.getTime() + priorCpCooldownMs());
-      if (now < cooldownExpiresAt) {
-        const daysLeft = daysRemainingUntil(cooldownExpiresAt, now);
-        return {
-          ok: false,
-          code: "PRIOR_CP_COOLDOWN",
-          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-          lockExpiresAt,
-          cooldownExpiresAt,
-        };
-      }
-    }
-
-    return {
-      ok: true,
-      lockStart: firstInWindow.createdAt,
-      lockExpiresAt,
-      owningCpIds,
-    };
-  }
-
-  // No active 15-day window — still block prior owners in cooldown from the most recent lock cycle.
-  const lastLockLead = await prisma.lead.findFirst({
-    where: {
-      journeyStatus: { not: "REJECTED" },
-      createdAt: {
-        gte: new Date(now.getTime() - phoneLockWindowMs() - priorCpCooldownMs()),
-        lt: new Date(now.getTime() - phoneLockWindowMs()),
-      },
-      OR: [
-        { customerMobile: params.mobile },
-        { customerEmail: { equals: emailLower, mode: "insensitive" } },
-      ],
+    select: {
+      createdAt: true,
+      cpId: true,
+      customerMobile: true,
+      customerEmail: true,
     },
     orderBy: { createdAt: "asc" },
-    select: { createdAt: true, cpId: true },
   });
 
-  if (lastLockLead) {
-    const lockExpiresAt = new Date(lastLockLead.createdAt.getTime() + phoneLockWindowMs());
-    const cooldownExpiresAt = new Date(lockExpiresAt.getTime() + priorCpCooldownMs());
-    if (now < cooldownExpiresAt) {
-      const owners = await prisma.lead.findMany({
-        where: {
-          journeyStatus: { not: "REJECTED" },
-          createdAt: { gte: lastLockLead.createdAt, lte: lockExpiresAt },
-          OR: [
-            { customerMobile: params.mobile },
-            { customerEmail: { equals: emailLower, mode: "insensitive" } },
-          ],
-        },
-        select: { cpId: true },
-        distinct: ["cpId"],
-      });
-      if (owners.some((o) => o.cpId === params.cpId)) {
-        const daysLeft = daysRemainingUntil(cooldownExpiresAt, now);
-        return {
-          ok: false,
-          code: "PRIOR_CP_COOLDOWN",
-          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
-          lockExpiresAt,
-          cooldownExpiresAt,
-        };
-      }
-    }
-  }
-
-  return { ok: true, lockStart: null, lockExpiresAt: null, owningCpIds: [] };
+  return evaluateIdentityLockFromRows(
+    params.cpId,
+    params.mobile,
+    emailLower,
+    rows,
+    now,
+  );
 }
 
 export type PartnerLockStatus = "ACTIVE" | "EXPIRED" | "COOLDOWN" | "NONE";

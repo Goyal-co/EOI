@@ -276,9 +276,9 @@ export function SubmitEOIModal({
           : null)
       );
       setStep(2);
-      qc.invalidateQueries({ queryKey: ["partner", "leads"] });
-      qc.invalidateQueries({ queryKey: ["partner", "eois"] });
-      qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
+      void qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+      void qc.invalidateQueries({ queryKey: ["partner", "eois"] });
+      void qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
       addToast({
         type: data.sentConfirmation ? "success" : "warning",
         title: sendConfirmation

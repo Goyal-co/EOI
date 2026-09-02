@@ -405,17 +405,17 @@ async function postPartnerLead(req: Request) {
   const scope = getPartnerScope(session!);
 
   let teamAssignment: { teamMemberId: string | null; fosName: string | null };
-  let priorCpLeads: number;
+  let priorCpLead: { id: string } | null;
   let existingLead: { id: string } | null;
   let lockEval: Awaited<ReturnType<typeof evaluateIdentityLock>>;
   try {
-    const [assignment, priorCount, existing, lock] = await Promise.all([
+    const [assignment, prior, existing, lock] = await Promise.all([
       resolveTeamMemberForLead(
         cpId,
         scope.teamMemberId ?? parsed.data.teamMemberId,
         scope.teamMemberId ? null : parsed.data.fosName,
       ),
-      prisma.lead.count({
+      prisma.lead.findFirst({
         where: {
           cpId,
           journeyStatus: { not: "REJECTED" },
@@ -424,6 +424,7 @@ async function postPartnerLead(req: Request) {
             { customerEmail: { equals: email, mode: "insensitive" } },
           ],
         },
+        select: { id: true },
       }),
       prisma.lead.findFirst({
         where: {
@@ -440,7 +441,7 @@ async function postPartnerLead(req: Request) {
       evaluateIdentityLock({ cpId, mobile, email }),
     ]);
     teamAssignment = assignment;
-    priorCpLeads = priorCount;
+    priorCpLead = prior;
     existingLead = existing;
     lockEval = lock;
   } catch (error) {
@@ -450,7 +451,7 @@ async function postPartnerLead(req: Request) {
     throw error;
   }
 
-  const isRemap = priorCpLeads > 0;
+  const isRemap = Boolean(priorCpLead);
   let sendConfirmation = parsed.data.sendConfirmation ?? false;
   if (isRemap && project.eoiStatus !== "OPEN") {
     sendConfirmation = false;
@@ -495,16 +496,6 @@ async function postPartnerLead(req: Request) {
       projectName: project.name,
     });
 
-    // Other CP attaching after lock → CP_ATTACHED; same CP remap → MAPPED; first → PUNCHED
-    const otherCpOnIdentity = await prisma.lead.findFirst({
-      where: {
-        identityId: identity.identityId,
-        cpId: { not: cpId },
-        journeyStatus: { not: "REJECTED" },
-      },
-      select: { id: true },
-    });
-
     const createdLead = await prisma.lead.create({
       data: {
         leadId: identity.publicLeadId,
@@ -527,6 +518,17 @@ async function postPartnerLead(req: Request) {
         leadStatus: "LEAD_REGISTERED",
         inviteToken,
         inviteExpiresAt,
+        ...(!isLeadOnly
+          ? {
+              eoi: {
+                create: {
+                  projectId: parsed.data.projectId,
+                  cpId,
+                  status: "PENDING_SUBMISSION",
+                },
+              },
+            }
+          : {}),
       },
       include: {
         project: { select: { id: true, name: true, location: true, eoiStatus: true } },
@@ -534,25 +536,23 @@ async function postPartnerLead(req: Request) {
       },
     });
 
-    if (!isLeadOnly) {
-      await prisma.eOI.create({
-        data: {
-          leadId: createdLead.id,
-          projectId: parsed.data.projectId,
-          cpId,
-          status: "PENDING_SUBMISSION",
-        },
-      });
-    }
-
-    const eventType = isRemap
-      ? "MAPPED"
-      : otherCpOnIdentity
-        ? "CP_ATTACHED"
-        : "PUNCHED";
-
-    // Events are important but not needed for the punch HTTP response.
+    // Events + other-CP detection are not needed for the HTTP response.
     deferWork("partner.lead.events", async () => {
+      const otherCpOnIdentity = await prisma.lead.findFirst({
+        where: {
+          identityId: identity.identityId,
+          cpId: { not: cpId },
+          journeyStatus: { not: "REJECTED" },
+          id: { not: createdLead.id },
+        },
+        select: { id: true },
+      });
+      const eventType = isRemap
+        ? "MAPPED"
+        : otherCpOnIdentity
+          ? "CP_ATTACHED"
+          : "PUNCHED";
+
       await recordLeadEvent({
         identityId: identity.identityId,
         type: eventType,

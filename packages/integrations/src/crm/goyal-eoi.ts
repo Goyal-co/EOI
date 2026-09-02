@@ -114,7 +114,7 @@ async function postWebhook(path: string, payload: GoyalEoiPayload, key: string) 
       "X-EOI-Api-Key": key,
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(5_000),
   });
 
   const parsed = await parseJson(res);

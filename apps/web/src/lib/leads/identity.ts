@@ -31,6 +31,7 @@ export async function findLeadIdentityByContact(mobile: string, email: string, t
 /**
  * Resolve an existing identity or create one with a new public leadId.
  * Reuses earliest matching public leadId from Lead rows when present.
+ * Non-critical attach/normalize writes are deferred so punch stays fast.
  */
 export async function resolveOrCreateLeadIdentity(params: {
   mobile: string;
@@ -45,26 +46,32 @@ export async function resolveOrCreateLeadIdentity(params: {
 
   const existing = await findLeadIdentityByContact(phone, emailLower, client);
   if (existing) {
-    // Keep phone/email normalized and attach any orphan Lead rows to this identity
-    await client.leadIdentity.update({
-      where: { id: existing.id },
-      data: {
-        primaryPhone: existing.primaryPhone || phone,
-        primaryEmail: existing.primaryEmail || emailLower,
-      },
-    });
-    await client.lead.updateMany({
-      where: {
-        identityId: null,
-        OR: [
-          { customerMobile: phone },
-          { customerMobile: { endsWith: phone } },
-          { customerEmail: { equals: emailLower, mode: "insensitive" } },
-          { leadId: existing.leadId },
-        ],
-      },
-      data: { identityId: existing.id },
-    });
+    // Background hygiene — punch only needs ids.
+    void (async () => {
+      try {
+        await client.leadIdentity.update({
+          where: { id: existing.id },
+          data: {
+            primaryPhone: existing.primaryPhone || phone,
+            primaryEmail: existing.primaryEmail || emailLower,
+          },
+        });
+        await client.lead.updateMany({
+          where: {
+            identityId: null,
+            OR: [
+              { customerMobile: phone },
+              { customerMobile: { endsWith: phone } },
+              { customerEmail: { equals: emailLower, mode: "insensitive" } },
+              { leadId: existing.leadId },
+            ],
+          },
+          data: { identityId: existing.id },
+        });
+      } catch (e) {
+        console.error("[resolveOrCreateLeadIdentity] deferred attach failed:", e);
+      }
+    })();
     return {
       identityId: existing.id,
       publicLeadId: existing.leadId,
@@ -108,18 +115,20 @@ export async function resolveOrCreateLeadIdentity(params: {
     },
   });
 
-  await client.lead.updateMany({
-    where: {
-      identityId: null,
-      OR: [
-        { customerMobile: phone },
-        { customerMobile: { endsWith: phone } },
-        { customerEmail: { equals: emailLower, mode: "insensitive" } },
-        { leadId: publicLeadId },
-      ],
-    },
-    data: { identityId: created.id },
-  });
+  void client.lead
+    .updateMany({
+      where: {
+        identityId: null,
+        OR: [
+          { customerMobile: phone },
+          { customerMobile: { endsWith: phone } },
+          { customerEmail: { equals: emailLower, mode: "insensitive" } },
+          { leadId: publicLeadId },
+        ],
+      },
+      data: { identityId: created.id },
+    })
+    .catch((e) => console.error("[resolveOrCreateLeadIdentity] orphan attach failed:", e));
 
   return {
     identityId: created.id,
