@@ -255,8 +255,8 @@ function PartnerLeadsContent() {
   }, [projectFilter, statusFilter, intentFilter, debouncedSearch, fromDate, toDate, teamFilter]);
 
   const { data, isLoading } = usePartnerLeads(filters);
-  const { data: projects } = usePartnerProjects();
-  const leads = (data as Lead[] | undefined) || [];
+  const { data: projects } = usePartnerProjects({ slim: true });
+  const leads = (data?.items || []) as unknown as Lead[];
   const projectList = (projects as Project[] | undefined) || [];
 
   const copyEmail = (email: string) => {

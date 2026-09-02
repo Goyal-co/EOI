@@ -11,14 +11,15 @@ import { resolveLeadIntent } from "@/lib/leads/intent";
 import {
   evaluateIdentityLock,
   getIdentityPunchContext,
-  resolvePartnerLockState,
+  batchResolvePartnerLockStates,
 } from "@/lib/leads/identity-context";
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
-import { normalizeMobile } from "@/lib/leads/phone";
+import { normalizeMobile, daysRemainingUntil, phoneLockWindowMs } from "@/lib/leads/phone";
 import { resolveTeamMemberForLead } from "@/lib/services/team-members";
 import { getPartnerScope, leadScopeWhere } from "@/lib/partner-scope";
+import { deferWork } from "@/lib/defer";
 
-/** Punch can wait on Neon + CRM + email; avoid empty 504 bodies on Vercel. */
+/** Punch returns after DB commit; CRM/email run in background. */
 export const maxDuration = 60;
 
 class LeadCreateConflict extends Error {
@@ -97,6 +98,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
   if (cpError) return cpError;
 
   const { searchParams } = new URL(req.url);
+  const facet = searchParams.get("facet")?.trim();
   const projectId = searchParams.get("projectId");
   const status = searchParams.get("status");
   const intentType = searchParams.get("intentType");
@@ -105,6 +107,32 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
   const toDate = searchParams.get("toDate");
   const fosName = searchParams.get("fosName")?.trim();
   const teamMemberId = searchParams.get("teamMemberId")?.trim();
+  const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get("pageSize") || "40") || 40));
+  const includeHistory = searchParams.get("includeHistory") === "1";
+
+  const cpId = session!.user.cpId!;
+  const memberScope = leadScopeWhere(session!);
+
+  // Lightweight facet for dashboard FOS filters — no lock / page payload.
+  if (facet === "fosNames") {
+    const rows = await prisma.lead.findMany({
+      where: {
+        cpId,
+        ...memberScope,
+        fosName: { not: null },
+      },
+      select: { fosName: true },
+      distinct: ["fosName"],
+      orderBy: { fosName: "asc" },
+      take: 200,
+    });
+    return apiResponse({
+      fosNames: rows
+        .map((r) => r.fosName?.trim())
+        .filter((name): name is string => Boolean(name)),
+    });
+  }
 
   const createdAtFilter: { gte?: Date; lte?: Date } = {};
   if (fromDate) {
@@ -118,37 +146,41 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
     createdAtFilter.lte = to;
   }
 
-  const cpId = session!.user.cpId!;
-  const memberScope = leadScopeWhere(session!);
+  const where = {
+    cpId,
+    ...memberScope,
+    ...(projectId ? { projectId } : {}),
+    ...(status ? { journeyStatus: status as never } : {}),
+    ...(intentType === "EOI" || intentType === "LEAD_ONLY"
+      ? { intentType: intentType as "EOI" | "LEAD_ONLY" }
+      : {}),
+    ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" as const } } : {}),
+    ...(teamMemberId ? { teamMemberId } : {}),
+    ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
+    ...(search
+      ? {
+          OR: [
+            { customerName: { contains: search, mode: "insensitive" as const } },
+            { customerEmail: { contains: search, mode: "insensitive" as const } },
+            { customerMobile: { contains: search } },
+            { leadId: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
 
-  const [leads, projectAccess, cpIdentityLeads] = await Promise.all([
+  const [total, leads, projectAccess] = await Promise.all([
+    prisma.lead.count({ where }),
     prisma.lead.findMany({
-      where: {
-        cpId,
-        ...memberScope,
-        ...(projectId ? { projectId } : {}),
-        ...(status ? { journeyStatus: status as never } : {}),
-        ...(intentType === "EOI" || intentType === "LEAD_ONLY" ? { intentType } : {}),
-        ...(fosName ? { fosName: { equals: fosName, mode: "insensitive" } } : {}),
-        ...(teamMemberId ? { teamMemberId } : {}),
-        ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
-        ...(search
-          ? {
-              OR: [
-                { customerName: { contains: search, mode: "insensitive" } },
-                { customerEmail: { contains: search, mode: "insensitive" } },
-                { customerMobile: { contains: search } },
-                { leadId: { contains: search, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-      },
+      where,
       include: {
         project: { select: { id: true, name: true, eoiStatus: true } },
         eoi: { select: { status: true, referenceNumber: true, chequeUploaded: true } },
         teamMember: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
     prisma.cPProjectAccess.findMany({
       where: { cpId },
@@ -158,37 +190,43 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         },
       },
     }),
-    prisma.lead.findMany({
-      where: { cpId, journeyStatus: { not: "REJECTED" } },
-      select: {
-        projectId: true,
-        customerMobile: true,
-        customerEmail: true,
-        leadId: true,
-      },
-    }),
   ]);
+
+  const phones = [...new Set(leads.map((l) => l.customerMobile).filter(Boolean))];
+  const emails = [...new Set(leads.map((l) => l.customerEmail.trim().toLowerCase()).filter(Boolean))];
+
+  const identities = leads.map((l) => ({
+    mobile: normalizeMobile(l.customerMobile),
+    email: l.customerEmail.trim().toLowerCase(),
+  }));
 
   const now = new Date();
 
-  // Compute lock state per unique phone/email identity (cached)
-  const lockCache = new Map<string, Awaited<ReturnType<typeof resolvePartnerLockState>>>();
-  async function lockFor(mobile: string, email: string) {
-    const key = `${normalizeMobile(mobile)}|${email.trim().toLowerCase()}`;
-    const cached = lockCache.get(key);
-    if (cached) return cached;
-    const state = await resolvePartnerLockState({
-      cpId,
-      mobile: normalizeMobile(mobile),
-      email,
-      now,
-    });
-    lockCache.set(key, state);
-    return state;
-  }
+  const [cpIdentityLeads, lockCache] = await Promise.all([
+    phones.length || emails.length
+      ? prisma.lead.findMany({
+          where: {
+            cpId,
+            journeyStatus: { not: "REJECTED" },
+            OR: [
+              ...(phones.length ? [{ customerMobile: { in: phones } }] : []),
+              ...(emails.length
+                ? emails.map((e) => ({ customerEmail: { equals: e, mode: "insensitive" as const } }))
+                : []),
+            ],
+          },
+          select: {
+            projectId: true,
+            customerMobile: true,
+            customerEmail: true,
+            leadId: true,
+          },
+        })
+      : Promise.resolve([]),
+    batchResolvePartnerLockStates({ cpId, identities, now }),
+  ]);
 
-  const result = [];
-  for (const lead of leads) {
+  const result = leads.map((lead) => {
     const sameIdentity = (candidate: {
       customerMobile: string;
       customerEmail: string;
@@ -224,9 +262,10 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
       }));
 
-    const lock = await lockFor(lead.customerMobile, lead.customerEmail);
+    const lockKey = `${normalizeMobile(lead.customerMobile)}|${lead.customerEmail.trim().toLowerCase()}`;
+    const lock = lockCache.get(lockKey)!;
 
-    result.push({
+    return {
       ...lead,
       lockStatus: lock.lockStatus,
       isActiveLockHolder: lock.isActiveLockHolder,
@@ -245,51 +284,57 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         salesperson: string | null;
         metadata: unknown;
       }>,
-    });
+    };
+  });
+
+  if (includeHistory) {
+    const leadIds = result.map((l) => l.id);
+    const identityIds = [
+      ...new Set(
+        leads.map((l) => l.identityId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (identityIds.length && leadIds.length) {
+      const events = await prisma.leadEvent.findMany({
+        where: {
+          identityId: { in: identityIds },
+          cpId,
+          type: { in: ["SITE_VISIT", "BOOKED"] },
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 100,
+        include: { project: { select: { name: true } } },
+      });
+      const byLead = new Map<string, typeof events>();
+      for (const ev of events) {
+        if (!ev.leadId) continue;
+        const list = byLead.get(ev.leadId) || [];
+        list.push(ev);
+        byLead.set(ev.leadId, list);
+      }
+      for (const row of result) {
+        const list = byLead.get(row.id) || [];
+        row.siteVisitHistory = list.map((ev) => ({
+          id: ev.id,
+          type: ev.type,
+          occurredAt: ev.occurredAt.toISOString(),
+          projectName: ev.project?.name || null,
+          salesperson:
+            ev.metadata && typeof ev.metadata === "object" && "salesperson" in ev.metadata
+              ? String((ev.metadata as { salesperson?: unknown }).salesperson || "") || null
+              : null,
+          metadata: ev.metadata,
+        }));
+      }
+    }
   }
 
-  // Attach this CP's site-visit / booked events for partner history UI
-  const leadIds = result.map((l) => l.id);
-  const identityIds = [
-    ...new Set(
-      leads.map((l) => l.identityId).filter((id): id is string => Boolean(id)),
-    ),
-  ];
-  if (identityIds.length && leadIds.length) {
-    const events = await prisma.leadEvent.findMany({
-      where: {
-        identityId: { in: identityIds },
-        cpId,
-        type: { in: ["SITE_VISIT", "BOOKED"] },
-      },
-      orderBy: { occurredAt: "desc" },
-      take: 200,
-      include: { project: { select: { name: true } } },
-    });
-    const byLead = new Map<string, typeof events>();
-    for (const ev of events) {
-      if (!ev.leadId) continue;
-      const list = byLead.get(ev.leadId) || [];
-      list.push(ev);
-      byLead.set(ev.leadId, list);
-    }
-    for (const row of result) {
-      const list = byLead.get(row.id) || [];
-      row.siteVisitHistory = list.map((ev) => ({
-        id: ev.id,
-        type: ev.type,
-        occurredAt: ev.occurredAt.toISOString(),
-        projectName: ev.project?.name || null,
-        salesperson:
-          ev.metadata && typeof ev.metadata === "object" && "salesperson" in ev.metadata
-            ? String((ev.metadata as { salesperson?: unknown }).salesperson || "") || null
-            : null,
-        metadata: ev.metadata,
-      }));
-    }
-  }
-
-  return apiResponse(result);
+  return apiResponse({
+    items: result,
+    total,
+    page,
+    pageSize,
+  });
 });
 
 export const POST = withApiRoute("partner.leads.create", async (req: Request) => {
@@ -329,22 +374,24 @@ async function postPartnerLead(req: Request) {
 
   const cpId = session!.user.cpId!;
 
-  const project = await prisma.project.findUnique({
-    where: { id: parsed.data.projectId },
-    select: { eoiStatus: true, name: true },
-  });
+  const [project, access] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: { eoiStatus: true, name: true, location: true },
+    }),
+    prisma.cPProjectAccess.findUnique({
+      where: { cpId_projectId: { cpId, projectId: parsed.data.projectId } },
+      select: { id: true },
+    }),
+  ]);
   if (!project) return apiError("Project not found", 404);
+  if (!access) return apiError("You do not have access to this project", 403);
 
   let intentType = parsed.data.intentType ?? (project.eoiStatus === "CLOSED" ? "LEAD_ONLY" : "EOI");
 
   const resolved = resolveLeadIntent(project.eoiStatus as "OPEN" | "CLOSED", intentType);
   if ("error" in resolved) return apiError(resolved.error, resolved.status);
   intentType = resolved.intentType;
-
-  const access = await prisma.cPProjectAccess.findUnique({
-    where: { cpId_projectId: { cpId, projectId: parsed.data.projectId } },
-  });
-  if (!access) return apiError("You do not have access to this project", 403);
 
   const mobile = normalizeMobile(parsed.data.mobile);
   const email = parsed.data.email.trim().toLowerCase();
@@ -355,18 +402,54 @@ async function postPartnerLead(req: Request) {
   const inviteToken = generateInviteToken();
   const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const isLeadOnly = intentType === "LEAD_ONLY";
+  const scope = getPartnerScope(session!);
 
-  // Remap within identity: confirmation email only when mapping to an EOI-OPEN project.
-  const priorCpLeads = await prisma.lead.count({
-    where: {
-      cpId,
-      journeyStatus: { not: "REJECTED" },
-      OR: [
-        { customerMobile: mobile },
-        { customerEmail: { equals: email, mode: "insensitive" } },
-      ],
-    },
-  });
+  let teamAssignment: { teamMemberId: string | null; fosName: string | null };
+  let priorCpLeads: number;
+  let existingLead: { id: string } | null;
+  let lockEval: Awaited<ReturnType<typeof evaluateIdentityLock>>;
+  try {
+    const [assignment, priorCount, existing, lock] = await Promise.all([
+      resolveTeamMemberForLead(
+        cpId,
+        scope.teamMemberId ?? parsed.data.teamMemberId,
+        scope.teamMemberId ? null : parsed.data.fosName,
+      ),
+      prisma.lead.count({
+        where: {
+          cpId,
+          journeyStatus: { not: "REJECTED" },
+          OR: [
+            { customerMobile: mobile },
+            { customerEmail: { equals: email, mode: "insensitive" } },
+          ],
+        },
+      }),
+      prisma.lead.findFirst({
+        where: {
+          cpId,
+          projectId: parsed.data.projectId,
+          OR: [
+            { customerMobile: mobile },
+            { customerEmail: { equals: email, mode: "insensitive" } },
+          ],
+          journeyStatus: { not: "REJECTED" },
+        },
+        select: { id: true },
+      }),
+      evaluateIdentityLock({ cpId, mobile, email }),
+    ]);
+    teamAssignment = assignment;
+    priorCpLeads = priorCount;
+    existingLead = existing;
+    lockEval = lock;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Invalid team member") {
+      return apiError("Invalid team member", 400);
+    }
+    throw error;
+  }
+
   const isRemap = priorCpLeads > 0;
   let sendConfirmation = parsed.data.sendConfirmation ?? false;
   if (isRemap && project.eoiStatus !== "OPEN") {
@@ -377,38 +460,15 @@ async function postPartnerLead(req: Request) {
     if (!(parsed.data.configuration || "").trim()) {
       return apiError("Unit preference is required");
     }
-    const scope = getPartnerScope(session!);
     if (!scope.teamMemberId && !(parsed.data.teamMemberId || parsed.data.fosName || "").trim()) {
       return apiError("Team member is required");
     }
   }
 
-  let teamAssignment: { teamMemberId: string | null; fosName: string | null };
-  try {
-    const scope = getPartnerScope(session!);
-    teamAssignment = await resolveTeamMemberForLead(
-      cpId,
-      scope.teamMemberId ?? parsed.data.teamMemberId,
-      scope.teamMemberId ? null : parsed.data.fosName,
-    );
-  } catch {
-    return apiError("Invalid team member", 400);
-  }
-
   let lead;
+  let lockExpiresAtIso: string | null = null;
+  let lockDaysRemaining = 0;
   try {
-    const existingLead = await prisma.lead.findFirst({
-      where: {
-        cpId,
-        projectId: parsed.data.projectId,
-        OR: [
-          { customerMobile: mobile },
-          { customerEmail: { equals: email, mode: "insensitive" } },
-        ],
-        journeyStatus: { not: "REJECTED" },
-      },
-      select: { id: true },
-    });
     if (existingLead) {
       throw new LeadCreateConflict(
         "This customer is already registered on this project. Open the lead to punch another project.",
@@ -416,9 +476,16 @@ async function postPartnerLead(req: Request) {
       );
     }
 
-    const lockEval = await evaluateIdentityLock({ cpId, mobile, email });
     if (!lockEval.ok) {
       throw new LeadCreateConflict(lockEval.message, lockEval.code);
+    }
+    if (lockEval.lockExpiresAt) {
+      lockExpiresAtIso = lockEval.lockExpiresAt.toISOString();
+      lockDaysRemaining = daysRemainingUntil(lockEval.lockExpiresAt);
+    } else {
+      const approx = new Date(Date.now() + phoneLockWindowMs());
+      lockExpiresAtIso = approx.toISOString();
+      lockDaysRemaining = daysRemainingUntil(approx);
     }
 
     const identity = await resolveOrCreateLeadIdentity({
@@ -461,7 +528,10 @@ async function postPartnerLead(req: Request) {
         inviteToken,
         inviteExpiresAt,
       },
-      select: { id: true },
+      include: {
+        project: { select: { id: true, name: true, location: true, eoiStatus: true } },
+        cp: { select: { companyName: true, user: { select: { name: true } } } },
+      },
     });
 
     if (!isLeadOnly) {
@@ -480,38 +550,36 @@ async function postPartnerLead(req: Request) {
       : otherCpOnIdentity
         ? "CP_ATTACHED"
         : "PUNCHED";
-    await recordLeadEvent({
-      identityId: identity.identityId,
-      type: eventType,
-      leadId: createdLead.id,
-      cpId,
-      projectId: parsed.data.projectId,
-      actorType: "CP",
-      metadata: {
-        intentType,
-        sendConfirmation,
-        isRemap,
-        identityCreated: identity.created,
-      },
-    });
-    if (identity.created) {
+
+    // Events are important but not needed for the punch HTTP response.
+    deferWork("partner.lead.events", async () => {
       await recordLeadEvent({
         identityId: identity.identityId,
-        type: "LOCK_STARTED",
+        type: eventType,
         leadId: createdLead.id,
         cpId,
         projectId: parsed.data.projectId,
-        actorType: "SYSTEM",
+        actorType: "CP",
+        metadata: {
+          intentType,
+          sendConfirmation,
+          isRemap,
+          identityCreated: identity.created,
+        },
       });
-    }
-
-    lead = await prisma.lead.findUniqueOrThrow({
-      where: { id: createdLead.id },
-      include: {
-        project: { select: { id: true, name: true, location: true, eoiStatus: true } },
-        cp: { select: { companyName: true, user: { select: { name: true } } } },
-      },
+      if (identity.created) {
+        await recordLeadEvent({
+          identityId: identity.identityId,
+          type: "LOCK_STARTED",
+          leadId: createdLead.id,
+          cpId,
+          projectId: parsed.data.projectId,
+          actorType: "SYSTEM",
+        });
+      }
     });
+
+    lead = createdLead;
   } catch (creationError) {
     if (isLeadCreateConflict(creationError)) {
       if (creationError.code === "DUPLICATE_LEAD") {
@@ -558,121 +626,130 @@ async function postPartnerLead(req: Request) {
     );
   }
 
-  const identityContext = await getIdentityPunchContext(cpId, mobile, email);
   const publicLeadId = lead.leadId!;
 
   const acceptUrl = getCustomerConfirmUrl(inviteToken, "accept");
   const rejectUrl = getCustomerConfirmUrl(inviteToken, "reject");
 
-  let emailSent = false;
-  let emailError: string | undefined;
-  let emailMocked = false;
+  const leadSnapshot = {
+    id: lead.id,
+    customerEmail: lead.customerEmail,
+    customerName: lead.customerName,
+    customerMobile: lead.customerMobile,
+    city: lead.city,
+    fosName: lead.fosName,
+    notes: lead.notes,
+    projectId: lead.projectId,
+    cpId: lead.cpId,
+    projectName: lead.project.name,
+    projectLocation: lead.project.location,
+    cpName: lead.cp.user.name || "Channel Partner",
+    companyName: lead.cp.companyName || undefined,
+  };
 
-  if (sendConfirmation) {
-    const emailResult = await NotificationService.notifyCustomerConfirmation({
-      customerEmail: lead.customerEmail,
-      customerName: lead.customerName,
-      cpName: lead.cp.user.name || "Channel Partner",
-      companyName: lead.cp.companyName || undefined,
-      projectName: lead.project.name,
-      projectLocation: lead.project.location,
-      acceptUrl,
-      rejectUrl,
-      entityId: lead.id,
-      leadId: publicLeadId,
-      intentType,
-    });
-
-    emailMocked = !!emailResult.mocked;
-    emailSent = !!emailResult.success && !emailResult.skipped && !emailResult.mocked;
-    if (!emailSent) {
-      emailError = emailResult.mocked
-        ? "Email not sent — BREVO_API_KEY not loaded. Restart the dev server after saving .env.local"
-        : (emailResult.error || "Failed to send confirmation email");
-    } else {
-      const sms = getSMSProvider();
-      await sms.sendSMS(
-        lead.customerMobile,
-        `Goyal Hariyana Projects: ${lead.cp.user.name} invites you to confirm your interest in ${lead.project.name}. Check your email for the confirmation link.`
-      );
+  deferWork("partner.lead.side-effects", async () => {
+    if (sendConfirmation) {
+      try {
+        const emailResult = await NotificationService.notifyCustomerConfirmation({
+          customerEmail: leadSnapshot.customerEmail,
+          customerName: leadSnapshot.customerName,
+          cpName: leadSnapshot.cpName,
+          companyName: leadSnapshot.companyName,
+          projectName: leadSnapshot.projectName,
+          projectLocation: leadSnapshot.projectLocation,
+          acceptUrl,
+          rejectUrl,
+          entityId: leadSnapshot.id,
+          leadId: publicLeadId,
+          intentType,
+        });
+        if (emailResult.success && !emailResult.skipped && !emailResult.mocked) {
+          const sms = getSMSProvider();
+          await sms.sendSMS(
+            leadSnapshot.customerMobile,
+            `Goyal Hariyana Projects: ${leadSnapshot.cpName} invites you to confirm your interest in ${leadSnapshot.projectName}. Check your email for the confirmation link.`,
+          );
+        }
+      } catch (e) {
+        console.error("[Partner leads] confirmation notify failed:", e);
+      }
     }
-  }
 
-  let titanCrmId: string | undefined;
-  let crmSynced = false;
-  // Punch to Goyal Hariyana CRM as soon as the partner creates the lead so
-  // Reception can list/search it. Accept / EOI-submit paths remain idempotent.
-  try {
-    const { punchPartnerLeadToCrm } = await import("@/lib/services/goyal-crm-sync");
-    const crmResult = await punchPartnerLeadToCrm({
-      leadDbId: lead.id,
-      customerName: lead.customerName,
-      customerEmail: lead.customerEmail,
-      customerMobile: lead.customerMobile,
-      projectName: lead.project.name,
-      city: lead.city,
-      fosName: lead.fosName,
-      notes: lead.notes,
-      intentType,
-      publicLeadId,
-    });
-    crmSynced = !!crmResult.success;
-    titanCrmId = crmResult.crmId;
-  } catch (e) {
-    console.error("[Goyal CRM] immediate punch failed:", e);
-  }
-
-  try {
-    const { publishEvent } = await import("@goyal/integration-hub");
-    await publishEvent({
-      type: "lead.created",
-      entityId: lead.id,
-      payload: {
-        leadId: publicLeadId,
-        eoiCpLeadId: lead.id,
-        customerName: lead.customerName,
-        customerEmail: lead.customerEmail,
-        customerPhone: lead.customerMobile,
-        customerMobile: lead.customerMobile,
-        projectId: lead.projectId,
-        titanCrmId,
-        cpId: lead.cpId,
+    let titanCrmId: string | undefined;
+    try {
+      const { punchPartnerLeadToCrm } = await import("@/lib/services/goyal-crm-sync");
+      const crmResult = await punchPartnerLeadToCrm({
+        leadDbId: leadSnapshot.id,
+        customerName: leadSnapshot.customerName,
+        customerEmail: leadSnapshot.customerEmail,
+        customerMobile: leadSnapshot.customerMobile,
+        projectName: leadSnapshot.projectName,
+        city: leadSnapshot.city,
+        fosName: leadSnapshot.fosName,
+        notes: leadSnapshot.notes,
         intentType,
-      },
-    });
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { bookingLeadId: publicLeadId },
-    });
-  } catch (e) {
-    console.error("[Integration Hub] lead.created failed:", e);
-  }
+        publicLeadId,
+      });
+      titanCrmId = crmResult.crmId;
+    } catch (e) {
+      console.error("[Goyal CRM] deferred punch failed:", e);
+    }
 
-  await writeAudit({
-    actorId: session!.user.id,
-    action: isLeadOnly
-      ? "LEAD_ONLY_PUNCHED"
-      : sendConfirmation
-        ? "LEAD_CREATED_WITH_CONFIRMATION"
-        : "LEAD_CREATED_DRAFT",
-    entityType: "Lead",
-    entityId: lead.id,
-    metadata: { customerEmail: lead.customerEmail, projectId: lead.projectId, intentType },
-    ipAddress: getIpFromRequest(req),
+    try {
+      const { publishEvent } = await import("@goyal/integration-hub");
+      await publishEvent({
+        type: "lead.created",
+        entityId: leadSnapshot.id,
+        payload: {
+          leadId: publicLeadId,
+          eoiCpLeadId: leadSnapshot.id,
+          customerName: leadSnapshot.customerName,
+          customerEmail: leadSnapshot.customerEmail,
+          customerPhone: leadSnapshot.customerMobile,
+          customerMobile: leadSnapshot.customerMobile,
+          projectId: leadSnapshot.projectId,
+          titanCrmId,
+          cpId: leadSnapshot.cpId,
+          intentType,
+        },
+      });
+      await prisma.lead.update({
+        where: { id: leadSnapshot.id },
+        data: { bookingLeadId: publicLeadId },
+      });
+    } catch (e) {
+      console.error("[Integration Hub] deferred lead.created failed:", e);
+    }
+
+    try {
+      await writeAudit({
+        actorId: session!.user.id,
+        action: isLeadOnly
+          ? "LEAD_ONLY_PUNCHED"
+          : sendConfirmation
+            ? "LEAD_CREATED_WITH_CONFIRMATION"
+            : "LEAD_CREATED_DRAFT",
+        entityType: "Lead",
+        entityId: leadSnapshot.id,
+        metadata: { customerEmail: leadSnapshot.customerEmail, projectId: leadSnapshot.projectId, intentType },
+        ipAddress: getIpFromRequest(req),
+      });
+    } catch (e) {
+      console.error("[Partner leads] deferred audit failed:", e);
+    }
   });
 
   return apiResponse({
-    lead: serializePartnerLead(lead, publicLeadId, titanCrmId),
+    lead: serializePartnerLead(lead, publicLeadId),
     intentType,
-    sentConfirmation: emailSent,
-    emailError,
-    emailMocked,
-    crmSynced,
-    crmId: titanCrmId,
-    lockExpiresAt: identityContext.lockExpiresAt,
-    lockDaysRemaining: identityContext.lockDaysRemaining,
-    availableProjects: identityContext.availableProjects,
-    mappedProjects: identityContext.mappedProjects,
+    // Optimistic: confirmation is queued; actual send happens in background.
+    sentConfirmation: sendConfirmation,
+    emailQueued: sendConfirmation,
+    crmSynced: false,
+    lockExpiresAt: lockExpiresAtIso,
+    lockDaysRemaining,
+    availableProjects: [],
+    mappedProjects: [],
     ...(process.env.NODE_ENV !== "production" && sendConfirmation
       ? { devConfirmationLinks: { acceptUrl, rejectUrl } }
       : {}),

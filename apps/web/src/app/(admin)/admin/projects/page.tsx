@@ -317,6 +317,12 @@ export default function AdminProjectsPage() {
         }
       }
 
+      const labeledPrefs = form.unitPreferences.filter((p) => p.label.trim());
+      const prefMissingRanges = labeledPrefs.find((p) => p.budgetRanges.length === 0);
+      if (prefMissingRanges) {
+        throw new Error(`Add at least one budget range for unit "${prefMissingRanges.label.trim()}"`);
+      }
+
       const payload = {
         name: form.name.trim(),
         location: form.location.trim(),
@@ -329,12 +335,10 @@ export default function AdminProjectsPage() {
         tags: form.tags,
         amenities: form.amenities,
         faqs: form.faqs.filter((f) => f.question.trim() && f.answer.trim()),
-        unitPreferences: form.unitPreferences
-          .filter((p) => p.label.trim())
-          .map((p) => ({
-            label: p.label.trim(),
-            budgetRanges: p.budgetRanges,
-          })),
+        unitPreferences: labeledPrefs.map((p) => ({
+          label: p.label.trim(),
+          budgetRanges: p.budgetRanges,
+        })),
         eoiRule: {
           minBudget: form.eoiRule.minBudget ? Number(form.eoiRule.minBudget) : undefined,
           requiredDocuments: form.eoiRule.requiredDocuments,

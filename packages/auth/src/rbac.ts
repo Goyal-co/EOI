@@ -28,9 +28,9 @@ export function canAccessRoute(role: UserRole, pathname: string): boolean {
   return allowedRoles.includes(role);
 }
 
-/** Owner-only partner pages (team roster, company settings). */
+/** Owner-only partner pages (company settings). Team page is also open to Team Leaders (API-gated). */
 export function isPartnerOwnerRoute(pathname: string): boolean {
-  return pathname.startsWith("/partner/team") || pathname.startsWith("/partner/settings");
+  return pathname.startsWith("/partner/settings");
 }
 
 export function isPublicRoute(pathname: string): boolean {

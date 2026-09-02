@@ -10,6 +10,7 @@ import {
 import { CheckCircle, Clock, Layers3 } from "lucide-react";
 import type { LeadCreateInput } from "@goyal/types";
 import { ProjectUnitBudgetFields } from "@/components/project-unit-budget-fields";
+import { usePartnerProjects } from "@/lib/hooks";
 
 const STEPS = [
   { id: "customer", title: "Customer Details", description: "Register customer interest for this project" },
@@ -95,6 +96,15 @@ export function PunchLeadModal({
   const { addToast } = useToast();
   const qc = useQueryClient();
   const { data: session } = useSession();
+  // Warm slim project prefs cache so unit dropdowns render immediately.
+  const { data: slimProjects } = usePartnerProjects({ slim: true });
+  const activeUnitPreferences = useMemo(() => {
+    if (!slimProjects) return undefined;
+    const project = slimProjects.find((p) => p.id === activeProjectId);
+    // Unknown project → let the field component fetch/retry instead of showing empty.
+    if (!project) return undefined;
+    return project.unitPreferences ?? null;
+  }, [slimProjects, activeProjectId]);
   const sessionTeamMemberId = (session?.user as { teamMemberId?: string } | undefined)?.teamMemberId;
   const isTeamMemberLogin = session?.user?.role === "CP_TEAM_MEMBER";
 
@@ -106,7 +116,7 @@ export function PunchLeadModal({
 
   useEffect(() => {
     if (!open || isTeamMemberLogin) return;
-    fetch("/api/partner/team")
+    fetch("/api/partner/team?slim=1")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -452,8 +462,13 @@ export function PunchLeadModal({
               projectId={activeProjectId}
               configuration={form.configuration || ""}
               budget={form.budget || ""}
-              onConfigurationChange={(configuration) => setForm({ ...form, configuration })}
-              onBudgetChange={(budget) => setForm({ ...form, budget })}
+              onConfigurationChange={(configuration) =>
+                setForm((current) => ({ ...current, configuration }))
+              }
+              onBudgetChange={(budget) =>
+                setForm((current) => ({ ...current, budget }))
+              }
+              unitPreferences={activeUnitPreferences}
             />
             <Input
               label="City"

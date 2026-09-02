@@ -181,26 +181,12 @@ export type PartnerLockState = {
   canActivate: boolean;
 };
 
-/**
- * Lock presentation for a CP viewing their own lead rows.
- * Timer only when this CP holds an active 15-day lock.
- */
-export async function resolvePartnerLockState(params: {
-  cpId: string;
-  mobile: string;
-  email: string;
-  now?: Date;
-}): Promise<PartnerLockState> {
-  const now = params.now ?? new Date();
-  const mobile = params.mobile;
-  const emailLower = params.email.trim().toLowerCase();
-  const lockEval = await evaluateIdentityLock({
-    cpId: params.cpId,
-    mobile,
-    email: emailLower,
-    now,
-  });
-
+function partnerLockStateFromEval(
+  cpId: string,
+  lockEval: IdentityLockEvaluation,
+  now: Date,
+  historicalCreatedAt: Date | null,
+): PartnerLockState {
   if (!lockEval.ok) {
     if (lockEval.code === "IDENTITY_LOCKED") {
       // Another CP holds the active lock — this CP's historical rows show expired (no timer)
@@ -229,7 +215,7 @@ export async function resolvePartnerLockState(params: {
   }
 
   const { lockExpiresAt, owningCpIds } = lockEval;
-  const isHolder = owningCpIds.includes(params.cpId);
+  const isHolder = owningCpIds.includes(cpId);
 
   if (lockExpiresAt && now < lockExpiresAt && isHolder) {
     return {
@@ -268,23 +254,9 @@ export async function resolvePartnerLockState(params: {
     };
   }
 
-  // No active window in evaluateIdentityLock — check whether this CP has
-  // historical associations for the identity (expired lock cycle finished).
-  const historical = await prisma.lead.findFirst({
-    where: {
-      cpId: params.cpId,
-      journeyStatus: { not: "REJECTED" },
-      OR: [
-        { customerMobile: mobile },
-        { customerEmail: { equals: emailLower, mode: "insensitive" } },
-      ],
-    },
-    select: { id: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (historical) {
-    const historicalLockEnd = new Date(historical.createdAt.getTime() + phoneLockWindowMs());
+  // No active window — check whether this CP has historical associations.
+  if (historicalCreatedAt) {
+    const historicalLockEnd = new Date(historicalCreatedAt.getTime() + phoneLockWindowMs());
     if (now >= historicalLockEnd) {
       return {
         lockStatus: "EXPIRED",
@@ -307,6 +279,270 @@ export async function resolvePartnerLockState(params: {
     cooldownDaysRemaining: 0,
     canActivate: false,
   };
+}
+
+type LockLeadRow = {
+  createdAt: Date;
+  cpId: string;
+  customerMobile: string;
+  customerEmail: string;
+};
+
+function matchesIdentity(
+  row: LockLeadRow,
+  mobile: string,
+  emailLower: string,
+): boolean {
+  return (
+    row.customerMobile === mobile
+    || row.customerEmail.trim().toLowerCase() === emailLower
+  );
+}
+
+/** In-memory equivalent of evaluateIdentityLock using a preloaded lead window. */
+function evaluateIdentityLockFromRows(
+  cpId: string,
+  mobile: string,
+  emailLower: string,
+  rows: LockLeadRow[],
+  now: Date,
+): IdentityLockEvaluation {
+  const lockMs = phoneLockWindowMs();
+  const cooldownMs = priorCpCooldownMs();
+  const activeWindowStart = new Date(now.getTime() - lockMs);
+
+  const inActiveWindow = rows
+    .filter((r) => matchesIdentity(r, mobile, emailLower) && r.createdAt >= activeWindowStart)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const firstInWindow = inActiveWindow[0];
+  if (firstInWindow) {
+    const lockExpiresAt = new Date(firstInWindow.createdAt.getTime() + lockMs);
+    const owningCpIds = [
+      ...new Set(
+        rows
+          .filter(
+            (r) =>
+              matchesIdentity(r, mobile, emailLower)
+              && r.createdAt >= firstInWindow.createdAt
+              && r.createdAt <= lockExpiresAt,
+          )
+          .map((r) => r.cpId),
+      ),
+    ];
+
+    if (now < lockExpiresAt && !owningCpIds.includes(cpId)) {
+      const daysLeft = daysRemainingUntil(lockExpiresAt, now);
+      return {
+        ok: false,
+        code: "IDENTITY_LOCKED",
+        message: `Another CP already registered this phone number or email. Both stay locked for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+        lockExpiresAt,
+      };
+    }
+
+    if (now >= lockExpiresAt && owningCpIds.includes(cpId)) {
+      const cooldownExpiresAt = new Date(lockExpiresAt.getTime() + cooldownMs);
+      if (now < cooldownExpiresAt) {
+        const daysLeft = daysRemainingUntil(cooldownExpiresAt, now);
+        return {
+          ok: false,
+          code: "PRIOR_CP_COOLDOWN",
+          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+          lockExpiresAt,
+          cooldownExpiresAt,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      lockStart: firstInWindow.createdAt,
+      lockExpiresAt,
+      owningCpIds,
+    };
+  }
+
+  const cooldownLookbackStart = new Date(now.getTime() - lockMs - cooldownMs);
+  const priorCycle = rows
+    .filter(
+      (r) =>
+        matchesIdentity(r, mobile, emailLower)
+        && r.createdAt >= cooldownLookbackStart
+        && r.createdAt < activeWindowStart,
+    )
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const lastLockLead = priorCycle[0];
+  if (lastLockLead) {
+    const lockExpiresAt = new Date(lastLockLead.createdAt.getTime() + lockMs);
+    const cooldownExpiresAt = new Date(lockExpiresAt.getTime() + cooldownMs);
+    if (now < cooldownExpiresAt) {
+      const owners = [
+        ...new Set(
+          rows
+            .filter(
+              (r) =>
+                matchesIdentity(r, mobile, emailLower)
+                && r.createdAt >= lastLockLead.createdAt
+                && r.createdAt <= lockExpiresAt,
+            )
+            .map((r) => r.cpId),
+        ),
+      ];
+      if (owners.includes(cpId)) {
+        const daysLeft = daysRemainingUntil(cooldownExpiresAt, now);
+        return {
+          ok: false,
+          code: "PRIOR_CP_COOLDOWN",
+          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+          lockExpiresAt,
+          cooldownExpiresAt,
+        };
+      }
+    }
+  }
+
+  return { ok: true, lockStart: null, lockExpiresAt: null, owningCpIds: [] };
+}
+
+/**
+ * Lock presentation for a CP viewing their own lead rows.
+ * Timer only when this CP holds an active 15-day lock.
+ */
+export async function resolvePartnerLockState(params: {
+  cpId: string;
+  mobile: string;
+  email: string;
+  now?: Date;
+}): Promise<PartnerLockState> {
+  const now = params.now ?? new Date();
+  const mobile = params.mobile;
+  const emailLower = params.email.trim().toLowerCase();
+  const [lockEval, historical] = await Promise.all([
+    evaluateIdentityLock({
+      cpId: params.cpId,
+      mobile,
+      email: emailLower,
+      now,
+    }),
+    prisma.lead.findFirst({
+      where: {
+        cpId: params.cpId,
+        journeyStatus: { not: "REJECTED" },
+        OR: [
+          { customerMobile: mobile },
+          { customerEmail: { equals: emailLower, mode: "insensitive" } },
+        ],
+      },
+      select: { createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return partnerLockStateFromEval(
+    params.cpId,
+    lockEval,
+    now,
+    historical?.createdAt ?? null,
+  );
+}
+
+/**
+ * One DB round-trip for lock state across many identities on a leads page.
+ * Key format: `${normalizeMobile(mobile)}|${emailLower}`.
+ */
+export async function batchResolvePartnerLockStates(params: {
+  cpId: string;
+  identities: Array<{ mobile: string; email: string }>;
+  now?: Date;
+}): Promise<Map<string, PartnerLockState>> {
+  const now = params.now ?? new Date();
+  const result = new Map<string, PartnerLockState>();
+  if (!params.identities.length) return result;
+
+  const unique = new Map<string, { mobile: string; email: string }>();
+  for (const id of params.identities) {
+    const mobile = id.mobile;
+    const email = id.email.trim().toLowerCase();
+    unique.set(`${mobile}|${email}`, { mobile, email });
+  }
+
+  const mobiles = [...new Set([...unique.values()].map((i) => i.mobile).filter(Boolean))];
+  const emails = [...new Set([...unique.values()].map((i) => i.email).filter(Boolean))];
+  const lookbackStart = new Date(now.getTime() - phoneLockWindowMs() - priorCpCooldownMs());
+
+  const [windowRows, cpHistorical] = await Promise.all([
+    mobiles.length || emails.length
+      ? prisma.lead.findMany({
+          where: {
+            journeyStatus: { not: "REJECTED" },
+            createdAt: { gte: lookbackStart },
+            OR: [
+              ...(mobiles.length ? [{ customerMobile: { in: mobiles } }] : []),
+              ...(emails.length
+                ? emails.map((e) => ({
+                    customerEmail: { equals: e, mode: "insensitive" as const },
+                  }))
+                : []),
+            ],
+          },
+          select: {
+            createdAt: true,
+            cpId: true,
+            customerMobile: true,
+            customerEmail: true,
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : Promise.resolve([] as LockLeadRow[]),
+    prisma.lead.findMany({
+      where: {
+        cpId: params.cpId,
+        journeyStatus: { not: "REJECTED" },
+        OR: [
+          ...(mobiles.length ? [{ customerMobile: { in: mobiles } }] : []),
+          ...(emails.length
+            ? emails.map((e) => ({
+                customerEmail: { equals: e, mode: "insensitive" as const },
+              }))
+            : []),
+        ],
+      },
+      select: {
+        createdAt: true,
+        customerMobile: true,
+        customerEmail: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  for (const [key, identity] of unique) {
+    const lockEval = evaluateIdentityLockFromRows(
+      params.cpId,
+      identity.mobile,
+      identity.email,
+      windowRows,
+      now,
+    );
+    const historical = cpHistorical.find(
+      (r) =>
+        r.customerMobile === identity.mobile
+        || r.customerEmail.trim().toLowerCase() === identity.email,
+    );
+    result.set(
+      key,
+      partnerLockStateFromEval(
+        params.cpId,
+        lockEval,
+        now,
+        historical?.createdAt ?? null,
+      ),
+    );
+  }
+
+  return result;
 }
 
 /**

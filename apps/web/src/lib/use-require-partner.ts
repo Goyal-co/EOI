@@ -14,10 +14,16 @@ const LOGIN_FOR_ROLE: Record<UserRole, string> = {
 const PARTNER_ROLES: UserRole[] = ["CHANNEL_PARTNER", "CP_TEAM_MEMBER"];
 
 /** Partner portal access for CP owners and roster team members. */
-export function useRequirePartnerAccess(options?: { ownerOnly?: boolean }) {
+export function useRequirePartnerAccess(options?: {
+  ownerOnly?: boolean;
+  /** Allow Team Leaders (and owners) on team pages. */
+  teamPage?: boolean;
+}) {
   const { data: session, status } = useSession();
   const role = session?.user?.role;
+  const jobRole = (session?.user as { jobRole?: string | null } | undefined)?.jobRole ?? null;
   const isOwner = role === "CHANNEL_PARTNER";
+  const isTeamLeader = jobRole === "TEAM_LEADER";
   const allowed = status === "authenticated" && !!role && PARTNER_ROLES.includes(role);
 
   useEffect(() => {
@@ -29,16 +35,22 @@ export function useRequirePartnerAccess(options?: { ownerOnly?: boolean }) {
     if (!role || PARTNER_ROLES.includes(role)) {
       if (options?.ownerOnly && role && !isOwner) {
         window.location.replace("/partner");
+        return;
+      }
+      if (options?.teamPage && role && !isOwner && !isTeamLeader) {
+        window.location.replace("/partner");
       }
       return;
     }
     void signOut({ callbackUrl: LOGIN_FOR_ROLE[role] || "/login" });
-  }, [isOwner, options?.ownerOnly, role, status]);
+  }, [isOwner, isTeamLeader, options?.ownerOnly, options?.teamPage, role, status]);
 
   return {
     allowed,
     isOwner,
+    isTeamLeader,
     teamMemberId: (session?.user as { teamMemberId?: string } | undefined)?.teamMemberId ?? null,
+    jobRole,
     status,
     session,
   };

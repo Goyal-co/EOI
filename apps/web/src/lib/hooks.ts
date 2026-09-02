@@ -63,18 +63,49 @@ export function usePartnerAnalytics() {
   });
 }
 
-export function usePartnerProjects() {
+export function usePartnerProjects(options?: { slim?: boolean }) {
+  const slim = options?.slim === true;
   return useQuery({
-    queryKey: ["partner", "projects"],
-    queryFn: () => fetcher<PartnerProject[]>("/api/partner/projects"),
+    queryKey: ["partner", "projects", slim ? "slim" : "full"],
+    queryFn: () =>
+      fetcher<PartnerProject[]>(
+        slim ? "/api/partner/projects?slim=1" : "/api/partner/projects",
+      ),
+    staleTime: slim ? 60_000 : 30_000,
   });
 }
 
+export function usePartnerFosNames(enabled = true) {
+  return useQuery({
+    queryKey: ["partner", "leads", "fosNames"],
+    queryFn: async () => {
+      const data = await fetcher<{ fosNames: string[] }>("/api/partner/leads?facet=fosNames");
+      return data.fosNames;
+    },
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export type PartnerLeadsPage = {
+  items: Array<Record<string, unknown>>;
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export function usePartnerLeads(filters?: Record<string, string>) {
   const params = new URLSearchParams(filters);
+  if (!params.has("pageSize")) params.set("pageSize", "40");
   return useQuery({
-    queryKey: ["partner", "leads", filters],
-    queryFn: () => fetcher<Lead[]>(`/api/partner/leads?${params}`),
+    queryKey: ["partner", "leads", Object.fromEntries(params.entries())],
+    queryFn: async () => {
+      const data = await fetcher<Array<Record<string, unknown>> | PartnerLeadsPage>(`/api/partner/leads?${params}`);
+      if (Array.isArray(data)) {
+        return { items: data, total: data.length, page: 1, pageSize: data.length } satisfies PartnerLeadsPage;
+      }
+      return data;
+    },
   });
 }
 

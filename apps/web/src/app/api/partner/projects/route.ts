@@ -3,13 +3,40 @@ import { withPartnerAuth, apiResponse, requireApprovedCP, withApiRoute } from "@
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 import { leadScopeWhere } from "@/lib/partner-scope";
 
-export const GET = withApiRoute("partner.projects.get", async () => {
+export const GET = withApiRoute("partner.projects.get", async (req: Request) => {
   const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
 
   const cpId = session!.user.cpId!;
+  const slim = new URL(req.url).searchParams.get("slim") === "1";
+
+  if (slim) {
+    const access = await prisma.cPProjectAccess.findMany({
+      where: { cpId },
+      select: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            eoiStatus: true,
+            status: true,
+            unitPreferences: true,
+          },
+        },
+      },
+    });
+    return apiResponse(
+      access.map((a) => ({
+        id: a.project.id,
+        name: a.project.name,
+        eoiStatus: a.project.eoiStatus,
+        status: a.project.status,
+        unitPreferences: a.project.unitPreferences,
+      })),
+    );
+  }
 
   const access = await prisma.cPProjectAccess.findMany({
     where: { cpId },

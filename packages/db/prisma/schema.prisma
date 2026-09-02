@@ -136,6 +136,11 @@ enum CPTeamMemberStatus {
   INACTIVE
 }
 
+enum CPTeamJobRole {
+  SALES_EXECUTIVE
+  TEAM_LEADER
+}
+
 enum CustomerJourneyStatus {
   ACTIVE
   CONFIRMATION_PENDING
@@ -239,21 +244,27 @@ model ChannelPartner {
 }
 
 model CPTeamMember {
-  id        String             @id @default(cuid())
-  cpId      String
-  cp        ChannelPartner     @relation(fields: [cpId], references: [id], onDelete: Cascade)
-  userId    String?            @unique
-  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  name      String
-  email     String?
-  mobile    String?
-  role      String?
-  status    CPTeamMemberStatus @default(ACTIVE)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  leads     Lead[]
+  id           String             @id @default(cuid())
+  cpId         String
+  cp           ChannelPartner     @relation(fields: [cpId], references: [id], onDelete: Cascade)
+  userId       String?            @unique
+  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  email        String?
+  mobile       String?
+  role         String?
+  jobRole      CPTeamJobRole      @default(SALES_EXECUTIVE)
+  teamLeaderId String?
+  teamLeader   CPTeamMember?      @relation("TeamHierarchy", fields: [teamLeaderId], references: [id], onDelete: SetNull)
+  directReports CPTeamMember[]    @relation("TeamHierarchy")
+  status       CPTeamMemberStatus @default(ACTIVE)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  leads        Lead[]
 
   @@index([cpId, status])
+  @@index([cpId, jobRole])
+  @@index([teamLeaderId])
 }
 
 model Customer {

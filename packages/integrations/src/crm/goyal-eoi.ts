@@ -114,6 +114,7 @@ async function postWebhook(path: string, payload: GoyalEoiPayload, key: string) 
       "X-EOI-Api-Key": key,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8_000),
   });
 
   const parsed = await parseJson(res);
@@ -171,6 +172,7 @@ async function enrichCrmUuid(params: {
     const res = await fetch(`${baseUrl()}/eoi/leads?${qs}`, {
       method: "GET",
       headers: { "X-EOI-Api-Key": params.key },
+      signal: AbortSignal.timeout(5_000),
     });
     const body = await parseJson(res);
     if (!res.ok) return undefined;

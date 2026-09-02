@@ -20,6 +20,7 @@ declare module "next-auth" {
       cpStatus?: string;
       customerId?: string;
       teamMemberId?: string;
+      jobRole?: "SALES_EXECUTIVE" | "TEAM_LEADER" | null;
     };
   }
 
@@ -30,6 +31,7 @@ declare module "next-auth" {
     cpStatus?: string;
     customerId?: string;
     teamMemberId?: string;
+    jobRole?: "SALES_EXECUTIVE" | "TEAM_LEADER" | null;
   }
 }
 
@@ -141,6 +143,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             cpStatus: teamMember.cp.status,
             customerId: user.customerProfile?.id,
             teamMemberId: teamMember.id,
+            jobRole: (teamMember as { jobRole?: "SALES_EXECUTIVE" | "TEAM_LEADER" }).jobRole ?? "SALES_EXECUTIVE",
           };
         }
 
@@ -155,6 +158,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           cpStatus: user.cpProfile?.status ?? user.teamMemberProfile?.cp.status,
           customerId: user.customerProfile?.id,
           teamMemberId: user.teamMemberProfile?.id,
+          jobRole: (user.teamMemberProfile as { jobRole?: "SALES_EXECUTIVE" | "TEAM_LEADER" } | null | undefined)?.jobRole ?? null,
         };
       },
     }),
@@ -296,6 +300,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.cpStatus = dbUser.cpProfile?.status ?? dbUser.teamMemberProfile?.cp.status;
           token.customerId = dbUser.customerProfile?.id;
           token.teamMemberId = dbUser.teamMemberProfile?.id;
+          token.jobRole = dbUser.teamMemberProfile?.jobRole ?? null;
           token.email = dbUser.email;
           token.name = dbUser.name ?? user.name;
           token.picture = dbUser.image ?? user.image;
@@ -308,6 +313,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.cpStatus = user.cpStatus;
         token.customerId = user.customerId;
         token.teamMemberId = user.teamMemberId;
+        token.jobRole = user.jobRole;
       }
 
       if (
@@ -338,6 +344,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.cpId = teamMember.cpId;
           token.cpStatus = teamMember.cp.status;
           token.teamMemberId = teamMember.id;
+          token.jobRole = teamMember.jobRole;
         }
       }
 
@@ -352,6 +359,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.cpStatus = token.cpStatus as string | undefined;
         session.user.customerId = token.customerId as string | undefined;
         session.user.teamMemberId = token.teamMemberId as string | undefined;
+        session.user.jobRole = token.jobRole as "SALES_EXECUTIVE" | "TEAM_LEADER" | null | undefined;
       }
       return session;
     },

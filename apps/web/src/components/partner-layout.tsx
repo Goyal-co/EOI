@@ -25,16 +25,24 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const search = useGlobalSearch();
-  const { allowed, isOwner } = useRequirePartnerAccess();
+  const { allowed, isOwner, isTeamLeader } = useRequirePartnerAccess();
 
   const sidebarItems = useMemo(
     () => allSidebarItems
-      .filter((item) => isOwner || !item.ownerOnly)
+      .filter((item) => {
+        if (!item.ownerOnly) return true;
+        if (item.href === "/partner/team") return isOwner || isTeamLeader;
+        return isOwner;
+      })
       .map(({ ownerOnly: _ownerOnly, ...item }) => item),
-    [isOwner],
+    [isOwner, isTeamLeader],
   );
 
-  const profileRole = isOwner ? "Channel Partner" : "Team Member";
+  const profileRole = isOwner
+    ? "Channel Partner"
+    : isTeamLeader
+      ? "Team Leader"
+      : "Sales Executive";
   const profileName = session?.user?.name || (isOwner ? "Partner" : "Team Member");
 
   if (!allowed) return <div className="min-h-screen bg-background" />;

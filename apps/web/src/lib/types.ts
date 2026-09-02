@@ -152,6 +152,10 @@ export interface Notification {
 export interface PartnerProject extends Project {
   assets?: Array<{ id: string; type: string; fileName: string; fileUrl: string }>;
   myLeads?: number;
+  unitPreferences?: unknown;
+  tags?: string[];
+  locationImageUrl?: string;
+  faqs?: Array<{ question: string; answer: string }>;
 }
 
 export interface PartnerEOI {

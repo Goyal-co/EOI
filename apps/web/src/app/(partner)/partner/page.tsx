@@ -8,7 +8,7 @@ import {
 import {
   UserCheck, FileText, CheckCircle, XCircle, Clock, Send,
 } from "lucide-react";
-import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads } from "@/lib/hooks";
+import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads, usePartnerFosNames } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
 import { useRequirePartnerAccess } from "@/lib/use-require-partner";
@@ -91,20 +91,17 @@ export default function PartnerDashboardPage() {
     return f;
   }, [projectFilter, fromDate, toDate, teamFilter]);
 
-  const { data: leadsData, isLoading: leadsLoading } = usePartnerLeads(leadFilters);
-  const { data: allLeadsData } = usePartnerLeads({});
+  const { data: leadsData, isLoading: leadsLoading } = usePartnerLeads({
+    ...leadFilters,
+    pageSize: "20",
+  });
+  const { data: fosNames } = usePartnerFosNames(isOwner);
   const stats = analytics as PartnerAnalytics | undefined;
   const projectList = (projects as Project[] | undefined) || [];
-  const allLeads = (leadsData as LeadRow[] | undefined) || [];
+  const allLeads = (leadsData?.items || []) as unknown as LeadRow[];
   const recentLeads = allLeads.slice(0, 8);
 
-  const teamOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const lead of (allLeadsData as LeadRow[] | undefined) || []) {
-      if (lead.fosName?.trim()) names.add(lead.fosName.trim());
-    }
-    return Array.from(names).sort();
-  }, [allLeadsData]);
+  const teamOptions = useMemo(() => [...(fosNames || [])].sort(), [fosNames]);
 
   const filteredProjects = projectFilter
     ? projectList.filter((p) => p.id === projectFilter)

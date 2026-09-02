@@ -316,6 +316,9 @@ export const cpTeamMemberCreateSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   mobile: z.string().regex(/^[6-9]\d{9}$/, "Invalid mobile number").optional().or(z.literal("")),
   role: z.string().optional(),
+  jobRole: z.enum(["SALES_EXECUTIVE", "TEAM_LEADER"]).default("SALES_EXECUTIVE"),
+  teamLeaderId: z.string().optional().nullable(),
+  memberIds: z.array(z.string()).optional(),
 });
 
 export const cpTeamMemberUpdateSchema = cpTeamMemberCreateSchema.partial().extend({
