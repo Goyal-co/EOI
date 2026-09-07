@@ -23,6 +23,13 @@ export async function punchPartnerLeadToCrm(params: {
 }): Promise<PunchResult> {
   try {
     const crm = getCRMProvider();
+    const publicLeadId = params.publicLeadId?.trim() || undefined;
+    const notes = [
+      params.notes?.trim() || undefined,
+      publicLeadId ? `Partner Lead ID: ${publicLeadId}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" | ");
     const result = await crm.syncLead({
       fullName: params.customerName,
       customerName: params.customerName,
@@ -32,11 +39,13 @@ export async function punchPartnerLeadToCrm(params: {
       projectName: params.projectName,
       city: params.city || undefined,
       fosName: params.fosName || undefined,
-      notes: params.notes || undefined,
+      notes: notes || undefined,
       intentType: params.intentType,
       sourceOfEnquiry:
         params.intentType === "LEAD_ONLY" ? "Partner Portal Lead" : "Partner Portal EOI",
-      leadId: params.publicLeadId || undefined,
+      // Partner Portal public id — must survive mapToGoyalEoiPayload for CRM differentiation
+      leadId: publicLeadId,
+      publicLeadId,
       nationality: "Indian",
     });
 

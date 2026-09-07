@@ -18,6 +18,9 @@ type GoyalEoiPayload = {
   designation?: string;
   sourceOfFund?: string;
   sourceOfEnquiry?: string;
+  /** Partner Portal public lead id (EOI-… / LEAD-…) — used to differentiate from Presales CRM leads. */
+  leadId?: string;
+  notes?: string;
 };
 
 function baseUrl() {
@@ -58,6 +61,21 @@ export function mapToGoyalEoiPayload(data: Record<string, unknown>): GoyalEoiPay
 
   if (!phone) return null;
 
+  const publicLeadId = str(data.leadId) || str(data.publicLeadId);
+  const baseEnquiry =
+    str(data.sourceOfEnquiry) ||
+    (str(data.intentType) === "LEAD_ONLY" ? "Partner Portal Lead" : "Partner Portal EOI");
+  // Embed Partner Portal lead id so CRM rows stay distinguishable from Presales sources.
+  const sourceOfEnquiry =
+    publicLeadId && !baseEnquiry.includes(publicLeadId)
+      ? `${baseEnquiry} [${publicLeadId}]`
+      : baseEnquiry;
+  const baseNotes = str(data.notes);
+  const notes =
+    publicLeadId && !(baseNotes || "").includes(publicLeadId)
+      ? [baseNotes, `Partner Lead ID: ${publicLeadId}`].filter(Boolean).join(" | ")
+      : baseNotes;
+
   return {
     fullName,
     phone,
@@ -77,9 +95,9 @@ export function mapToGoyalEoiPayload(data: Record<string, unknown>): GoyalEoiPay
     organizationName: str(data.organizationName) || str(data.companyName),
     designation: str(data.designation) || str(data.fosName),
     sourceOfFund: str(data.sourceOfFund),
-    sourceOfEnquiry:
-      str(data.sourceOfEnquiry) ||
-      (str(data.intentType) === "LEAD_ONLY" ? "Partner Portal Lead" : "Partner Portal EOI"),
+    sourceOfEnquiry,
+    leadId: publicLeadId,
+    notes,
   };
 }
 
@@ -232,6 +250,7 @@ async function punch(data: Record<string, unknown>): Promise<{ success: boolean;
   logger.info("crm.goyal", "lead punched", {
     phone: redactPhone(payload.phone),
     projectName: payload.projectName,
+    partnerLeadId: payload.leadId,
     crmId,
     leadCode,
     duplicate: Boolean(bodyObj?.duplicate),
