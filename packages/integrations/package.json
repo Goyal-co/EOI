@@ -8,6 +8,9 @@
     "build": "tsc",
     "lint": "tsc --noEmit"
   },
+  "dependencies": {
+    "@goyal/logger": "*"
+  },
   "devDependencies": {
     "typescript": "^5.7.2"
   }

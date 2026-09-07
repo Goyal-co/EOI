@@ -4,7 +4,9 @@ import { prisma } from "@goyal/db";
 import type { UserRole } from "@goyal/types";
 import {
   logApiError,
+  logServerDebug,
   logServerError,
+  logServerInfo,
   requestPath,
   runWithRequestLog,
 } from "@/lib/server-log";
@@ -48,11 +50,26 @@ export function withApiRoute<T extends (req: any, ctx?: any) => Promise<Response
 ): T {
   return (async (req: Request, ctx?: unknown) => {
     const path = requestPath(req);
-    return runWithRequestLog({ scope, method: req.method, path }, async () => {
+    const method = req.method;
+    return runWithRequestLog({ scope, method, path }, async () => {
+      const started = Date.now();
+      logServerDebug(scope, "request start", { method, path });
       try {
-        return await handler(req, ctx);
+        const res = await handler(req, ctx);
+        logServerInfo(scope, "request complete", {
+          method,
+          path,
+          status: res.status,
+          durationMs: Date.now() - started,
+        });
+        return res;
       } catch (cause) {
-        logServerError(scope, "Unhandled route error", { status: 500, path, method: req.method }, cause);
+        logServerError(
+          scope,
+          "Unhandled route error",
+          { status: 500, path, method, durationMs: Date.now() - started },
+          cause,
+        );
         return NextResponse.json(
           { error: "Internal server error", code: "INTERNAL_ERROR" },
           { status: 500 },

@@ -1,6 +1,5 @@
 import { prisma } from "@goyal/db";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
-import { daysRemainingUntil, phoneLockWindowMs, priorCpCooldownMs } from "@/lib/leads/phone";
 
 /** List canonical lead identities (one row per public Lead ID). */
 export const GET = withApiRoute("admin.lead-identities.list", async (req: Request) => {

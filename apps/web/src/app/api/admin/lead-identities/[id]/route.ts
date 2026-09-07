@@ -3,6 +3,7 @@ import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { daysRemainingUntil, phoneLockWindowMs, priorCpCooldownMs } from "@/lib/leads/phone";
 import { DocumentService } from "@/lib/services/document";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+import { getLeadLockPolicy } from "@/lib/services/system-settings";
 
 /** Full identity drawer: associations + timeline + lock state. */
 export const GET = withApiRoute("admin.lead-identities.get", async (
@@ -53,18 +54,23 @@ export const GET = withApiRoute("admin.lead-identities.get", async (
   if (!identity) return apiError("Lead identity not found", 404);
 
   const now = new Date();
-  const firstInWindow = identity.leads
-    .filter((l) => l.journeyStatus !== "REJECTED")
-    .filter((l) => l.createdAt.getTime() >= now.getTime() - phoneLockWindowMs())
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+  const policy = await getLeadLockPolicy();
+  const lockMs = phoneLockWindowMs(policy.lockDays);
+  const cooldownMs = priorCpCooldownMs(policy.cooldownDays);
+  const firstInWindow = policy.enabled
+    ? identity.leads
+        .filter((l) => l.journeyStatus !== "REJECTED")
+        .filter((l) => l.createdAt.getTime() >= now.getTime() - lockMs)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0]
+    : undefined;
 
   const lockStart = firstInWindow?.createdAt || null;
-  const lockExpiresAt = lockStart
-    ? new Date(lockStart.getTime() + phoneLockWindowMs())
-    : null;
-  const cooldownExpiresAt = lockExpiresAt
-    ? new Date(lockExpiresAt.getTime() + priorCpCooldownMs())
-    : null;
+  const lockExpiresAt =
+    policy.enabled && lockStart ? new Date(lockStart.getTime() + lockMs) : null;
+  const cooldownExpiresAt =
+    policy.enabled && lockExpiresAt
+      ? new Date(lockExpiresAt.getTime() + cooldownMs)
+      : null;
 
   const partners = new Map<string, {
     cpId: string;
@@ -111,6 +117,9 @@ export const GET = withApiRoute("admin.lead-identities.get", async (
     createdAt: identity.createdAt,
     lock: {
       active: !!(lockExpiresAt && lockExpiresAt > now),
+      enabled: policy.enabled,
+      lockDays: policy.lockDays,
+      cooldownDays: policy.cooldownDays,
       lockExpiresAt: lockExpiresAt?.toISOString() || null,
       lockDaysRemaining:
         lockExpiresAt && lockExpiresAt > now ? daysRemainingUntil(lockExpiresAt, now) : 0,

@@ -1,4 +1,5 @@
 import { rewriteEmailHtmlUrls } from "./urls";
+import { logger, redactEmail } from "@goyal/logger";
 
 export interface EmailOptions {
   to: string;
@@ -57,19 +58,15 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
     if (process.env.NODE_ENV === "production") {
       throw new Error("BREVO_API_KEY is required in production");
     }
-    console.warn("[Email] MOCK MODE — BREVO_API_KEY not loaded. Restart the server after updating .env.local");
-    console.log("[Email Mock] From:", `${resolvedSender.name} <${resolvedSender.email}>`);
-    console.log("[Email Mock] To:", options.to);
-    console.log("[Email Mock] Subject:", options.subject);
-    const linkMatch = html.match(/href="(https?:\/\/[^"]+)"/g);
-    if (linkMatch?.length) {
-      console.log("[Email Mock] Links:", linkMatch.map((l) => l.replace(/^href="|"$/g, "")).join("\n  "));
-    }
+    logger.warn("email.send", "MOCK MODE — BREVO_API_KEY not loaded", {
+      to: redactEmail(options.to),
+      subject: options.subject,
+    });
     return { success: true, id: `mock-${Date.now()}`, mocked: true };
   }
 
   const apiKey = getBrevoApiKey()!;
-  console.log("[Email] Sending via Brevo to:", options.to);
+  logger.debug("email.send", "Sending via Brevo", { to: redactEmail(options.to) });
   try {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -91,15 +88,27 @@ export async function sendEmail(options: EmailOptions): Promise<EmailSendResult>
 
     if (!res.ok) {
       const err = await res.text();
-      console.error(`[error] scope=email.brevo status=${res.status} to=${options.to} subject=${options.subject} msg=Brevo API error`, err);
+      logger.error("email.brevo", "Brevo API error", {
+        status: res.status,
+        to: redactEmail(options.to),
+        subject: options.subject,
+      });
       return { success: false, error: err };
     }
 
     const data = (await res.json()) as { messageId?: string };
-    console.log("[Email] Brevo sent:", data.messageId);
+    logger.info("email.send", "Brevo sent", {
+      messageId: data.messageId,
+      to: redactEmail(options.to),
+    });
     return { success: true, id: data.messageId };
   } catch (error) {
-    console.error(`[error] scope=email.brevo to=${options.to} subject=${options.subject} msg=Brevo request failed`, error);
+    logger.error(
+      "email.brevo",
+      "Brevo request failed",
+      { to: redactEmail(options.to), subject: options.subject },
+      error,
+    );
     return { success: false, error: String(error) };
   }
 }

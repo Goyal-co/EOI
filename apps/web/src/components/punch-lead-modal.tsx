@@ -293,7 +293,7 @@ export function PunchLeadModal({
             title: "Cooldown active",
             message:
               (typeof data.error === "string" && data.error)
-              || "You previously owned this lead during a lock. Wait for the 7-day cooldown before punching again.",
+              || "You previously owned this lead during a lock. Wait for the cooldown before punching again.",
           });
           return;
         }
@@ -353,7 +353,7 @@ export function PunchLeadModal({
               Customer already on this project
             </div>
             <p className="text-xs text-amber-800">
-              Phone and email stay under your 15-day protection. Map this same customer to another project below.
+              Phone and email stay under your protection lock. Map this same customer to another project below.
             </p>
             {lockExpiresAt && (
               <p className="font-mono text-sm font-semibold text-amber-900">
@@ -538,7 +538,7 @@ export function PunchLeadModal({
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
                   <Clock className="h-4 w-4" />
-                  15-day phone &amp; email lock
+                  Phone &amp; email lock
                 </div>
                 <p className="mt-1 font-mono text-lg font-semibold text-amber-800">
                   {formatLockCountdown(lockExpiresAt, now)}

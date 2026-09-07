@@ -5,6 +5,7 @@ import {
   priorCpCooldownMs,
 } from "@/lib/leads/phone";
 import { findLeadIdentityByContact } from "@/lib/leads/identity";
+import { getLeadLockPolicy, type LeadLockPolicy } from "@/lib/services/system-settings";
 
 export type AvailablePunchProject = {
   id: string;
@@ -32,6 +33,10 @@ export type IdentityPunchContext = {
   cooldownExpiresAt: string | null;
   cooldownDaysRemaining: number;
   isRemap: boolean;
+  /** Admin-configured policy (for UI copy). */
+  leadLockEnabled: boolean;
+  lockDays: number;
+  cooldownDays: number;
 };
 
 export type IdentityLockEvaluation =
@@ -45,7 +50,7 @@ export type IdentityLockEvaluation =
     };
 
 /**
- * 15-day other-CP lock + 7-day prior-CP cooldown after lock ends.
+ * Cross-CP identity lock + prior-CP cooldown (durations from Admin Settings).
  * Single DB round-trip — evaluates ownership in memory.
  */
 export async function evaluateIdentityLock(params: {
@@ -53,10 +58,18 @@ export async function evaluateIdentityLock(params: {
   mobile: string;
   email: string;
   now?: Date;
+  policy?: LeadLockPolicy;
 }): Promise<IdentityLockEvaluation> {
   const now = params.now ?? new Date();
+  const policy = params.policy ?? (await getLeadLockPolicy());
+  if (!policy.enabled) {
+    return { ok: true, lockStart: null, lockExpiresAt: null, owningCpIds: [] };
+  }
+
   const emailLower = params.email.trim().toLowerCase();
-  const lookbackStart = new Date(now.getTime() - phoneLockWindowMs() - priorCpCooldownMs());
+  const lookbackStart = new Date(
+    now.getTime() - phoneLockWindowMs(policy.lockDays) - priorCpCooldownMs(policy.cooldownDays),
+  );
 
   const rows = await prisma.lead.findMany({
     where: {
@@ -82,6 +95,7 @@ export async function evaluateIdentityLock(params: {
     emailLower,
     rows,
     now,
+    policy,
   );
 }
 
@@ -102,7 +116,20 @@ function partnerLockStateFromEval(
   lockEval: IdentityLockEvaluation,
   now: Date,
   historicalCreatedAt: Date | null,
+  policy: LeadLockPolicy,
 ): PartnerLockState {
+  if (!policy.enabled) {
+    return {
+      lockStatus: "NONE",
+      isActiveLockHolder: false,
+      lockExpiresAt: null,
+      lockDaysRemaining: 0,
+      cooldownExpiresAt: null,
+      cooldownDaysRemaining: 0,
+      canActivate: true,
+    };
+  }
+
   if (!lockEval.ok) {
     if (lockEval.code === "IDENTITY_LOCKED") {
       // Another CP holds the active lock — this CP's historical rows show expired (no timer)
@@ -172,7 +199,9 @@ function partnerLockStateFromEval(
 
   // No active window — check whether this CP has historical associations.
   if (historicalCreatedAt) {
-    const historicalLockEnd = new Date(historicalCreatedAt.getTime() + phoneLockWindowMs());
+    const historicalLockEnd = new Date(
+      historicalCreatedAt.getTime() + phoneLockWindowMs(policy.lockDays),
+    );
     if (now >= historicalLockEnd) {
       return {
         lockStatus: "EXPIRED",
@@ -222,10 +251,16 @@ function evaluateIdentityLockFromRows(
   emailLower: string,
   rows: LockLeadRow[],
   now: Date,
+  policy: LeadLockPolicy,
 ): IdentityLockEvaluation {
-  const lockMs = phoneLockWindowMs();
-  const cooldownMs = priorCpCooldownMs();
+  if (!policy.enabled) {
+    return { ok: true, lockStart: null, lockExpiresAt: null, owningCpIds: [] };
+  }
+
+  const lockMs = phoneLockWindowMs(policy.lockDays);
+  const cooldownMs = priorCpCooldownMs(policy.cooldownDays);
   const activeWindowStart = new Date(now.getTime() - lockMs);
+  const lockLabel = `${policy.lockDays}-day`;
 
   const inActiveWindow = rows
     .filter((r) => matchesIdentity(r, mobile, emailLower) && r.createdAt >= activeWindowStart)
@@ -264,7 +299,7 @@ function evaluateIdentityLockFromRows(
         return {
           ok: false,
           code: "PRIOR_CP_COOLDOWN",
-          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+          message: `Your ${lockLabel} protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
           lockExpiresAt,
           cooldownExpiresAt,
         };
@@ -311,7 +346,7 @@ function evaluateIdentityLockFromRows(
         return {
           ok: false,
           code: "PRIOR_CP_COOLDOWN",
-          message: `Your 15-day protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
+          message: `Your ${lockLabel} protection on this lead has ended. You cannot re-punch it for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`,
           lockExpiresAt,
           cooldownExpiresAt,
         };
@@ -324,7 +359,7 @@ function evaluateIdentityLockFromRows(
 
 /**
  * Lock presentation for a CP viewing their own lead rows.
- * Timer only when this CP holds an active 15-day lock.
+ * Timer only when this CP holds an active identity lock.
  */
 export async function resolvePartnerLockState(params: {
   cpId: string;
@@ -335,12 +370,14 @@ export async function resolvePartnerLockState(params: {
   const now = params.now ?? new Date();
   const mobile = params.mobile;
   const emailLower = params.email.trim().toLowerCase();
+  const policy = await getLeadLockPolicy();
   const [lockEval, historical] = await Promise.all([
     evaluateIdentityLock({
       cpId: params.cpId,
       mobile,
       email: emailLower,
       now,
+      policy,
     }),
     prisma.lead.findFirst({
       where: {
@@ -361,6 +398,7 @@ export async function resolvePartnerLockState(params: {
     lockEval,
     now,
     historical?.createdAt ?? null,
+    policy,
   );
 }
 
@@ -386,7 +424,10 @@ export async function batchResolvePartnerLockStates(params: {
 
   const mobiles = [...new Set([...unique.values()].map((i) => i.mobile).filter(Boolean))];
   const emails = [...new Set([...unique.values()].map((i) => i.email).filter(Boolean))];
-  const lookbackStart = new Date(now.getTime() - phoneLockWindowMs() - priorCpCooldownMs());
+  const policy = await getLeadLockPolicy();
+  const lookbackStart = new Date(
+    now.getTime() - phoneLockWindowMs(policy.lockDays) - priorCpCooldownMs(policy.cooldownDays),
+  );
 
   const [windowRows, cpHistorical] = await Promise.all([
     mobiles.length || emails.length
@@ -441,6 +482,7 @@ export async function batchResolvePartnerLockStates(params: {
       identity.email,
       windowRows,
       now,
+      policy,
     );
     const historical = cpHistorical.find(
       (r) =>
@@ -454,6 +496,7 @@ export async function batchResolvePartnerLockStates(params: {
         lockEval,
         now,
         historical?.createdAt ?? null,
+        policy,
       ),
     );
   }
@@ -463,7 +506,7 @@ export async function batchResolvePartnerLockStates(params: {
 
 /**
  * Projects this CP can still punch for the same customer identity,
- * plus the 15-day phone+email protection window and prior-CP cooldown.
+ * plus the admin-configured phone+email protection window and prior-CP cooldown.
  */
 export async function getIdentityPunchContext(
   cpId: string,
@@ -472,6 +515,7 @@ export async function getIdentityPunchContext(
 ): Promise<IdentityPunchContext> {
   const now = new Date();
   const emailLower = email.trim().toLowerCase();
+  const policy = await getLeadLockPolicy();
 
   const [projectAccess, cpIdentityLeads, identity, lockEval] = await Promise.all([
     prisma.cPProjectAccess.findMany({
@@ -508,7 +552,7 @@ export async function getIdentityPunchContext(
       orderBy: { createdAt: "asc" },
     }),
     findLeadIdentityByContact(mobile, emailLower),
-    evaluateIdentityLock({ cpId, mobile, email: emailLower, now }),
+    evaluateIdentityLock({ cpId, mobile, email: emailLower, now, policy }),
   ]);
 
   const existingProjectIds = new Set(cpIdentityLeads.map((l) => l.projectId));
@@ -537,16 +581,34 @@ export async function getIdentityPunchContext(
     });
   }
 
+  if (!policy.enabled) {
+    return {
+      identityId: identity?.id || cpIdentityLeads[0]?.identityId || null,
+      existingLeadId: cpIdentityLeads[0]?.id || null,
+      publicLeadId: identity?.leadId || cpIdentityLeads[0]?.leadId || null,
+      availableProjects,
+      mappedProjects: [...mappedById.values()],
+      lockExpiresAt: now.toISOString(),
+      lockDaysRemaining: 0,
+      cooldownExpiresAt: null,
+      cooldownDaysRemaining: 0,
+      isRemap: cpIdentityLeads.length > 0,
+      leadLockEnabled: false,
+      lockDays: policy.lockDays,
+      cooldownDays: policy.cooldownDays,
+    };
+  }
+
   const lockExpiresAt =
     lockEval.ok
-      ? (lockEval.lockExpiresAt || new Date(now.getTime() + phoneLockWindowMs()))
+      ? (lockEval.lockExpiresAt || new Date(now.getTime() + phoneLockWindowMs(policy.lockDays)))
       : lockEval.lockExpiresAt;
 
   const cooldownExpiresAt =
     !lockEval.ok && lockEval.code === "PRIOR_CP_COOLDOWN"
       ? (lockEval.cooldownExpiresAt || null)
       : lockEval.ok && lockEval.lockExpiresAt
-        ? new Date(lockEval.lockExpiresAt.getTime() + priorCpCooldownMs())
+        ? new Date(lockEval.lockExpiresAt.getTime() + priorCpCooldownMs(policy.cooldownDays))
         : null;
 
   return {
@@ -565,5 +627,8 @@ export async function getIdentityPunchContext(
         ? daysRemainingUntil(cooldownExpiresAt, now)
         : 0,
     isRemap: cpIdentityLeads.length > 0,
+    leadLockEnabled: true,
+    lockDays: policy.lockDays,
+    cooldownDays: policy.cooldownDays,
   };
 }

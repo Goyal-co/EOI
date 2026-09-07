@@ -1,5 +1,5 @@
 {
-  "name": "@goyal/email",
+  "name": "@goyal/logger",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
@@ -8,11 +8,8 @@
     "build": "tsc",
     "lint": "tsc --noEmit"
   },
-  "dependencies": {
-    "@goyal/db": "*",
-    "@goyal/logger": "*"
-  },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
   }
 }

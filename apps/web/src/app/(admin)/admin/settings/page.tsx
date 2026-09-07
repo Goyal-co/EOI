@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import {
   Card, CardHeader, CardTitle, CardContent, Button, Input, Select, useToast, LoadingSkeleton, PageHeader, FormField,
 } from "@goyal/ui";
-import { User, Bell, FileText, Shield } from "lucide-react";
+import { User, Bell, FileText, Shield, Lock } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const { data: session } = useSession();
@@ -34,6 +34,9 @@ export default function AdminSettingsPage() {
     minDeposit: "500000",
     maxPendingDays: "7",
     allowCorrections: true,
+    leadPunchBlockingEnabled: true,
+    leadLockDays: "15",
+    leadCooldownDays: "7",
   });
 
   const [permissions, setPermissions] = useState({
@@ -58,8 +61,8 @@ export default function AdminSettingsPage() {
       .then(([data, users, tpls]) => {
         if (data.profile) setProfile((p) => ({ ...p, ...data.profile }));
         if (data.notifications) setNotifPrefs(data.notifications);
-        if (data.eoiRules) setEoiRules(data.eoiRules);
-        if (data.permissions) setPermissions(data.permissions);
+        if (data.eoiRules) setEoiRules((prev) => ({ ...prev, ...data.eoiRules }));
+        if (data.permissions) setPermissions((prev) => ({ ...prev, ...data.permissions }));
         setAdmins(users || []);
         setTemplates(tpls || []);
         if (tpls?.[0]) setSelectedTemplate(tpls[0].type);
@@ -102,7 +105,7 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Settings"
-        description="Manage your profile, notifications, EOI rules, and permissions"
+        description="Manage your profile, notifications, EOI rules, lead blocking, and permissions"
       />
 
       <Card>
@@ -208,6 +211,84 @@ export default function AdminSettingsPage() {
             <Input id="max-pending" type="number" value={eoiRules.maxPendingDays} onChange={(e) => setEoiRules({ ...eoiRules, maxPendingDays: e.target.value })} />
           </FormField>
           <Button loading={saving === "EOI Rules"} onClick={() => saveSection("EOI Rules")}>Save EOI Rules</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-[#2563EB]" /> Lead punch blocking
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Controls whether channel partners can punch the same customer phone or email.
+            When enabled, the first CP gets a lock window; other CPs are blocked until it expires.
+            After the lock, the original CP waits through a cooldown before re-punching.
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={eoiRules.leadPunchBlockingEnabled}
+              onChange={(e) => setEoiRules({ ...eoiRules, leadPunchBlockingEnabled: e.target.checked })}
+              className="h-4 w-4 rounded border-border text-[#2563EB]"
+            />
+            <span className="text-sm text-foreground">Enable identity lock for lead punch</span>
+          </label>
+          <FormField
+            label="Cross-CP lock (days)"
+            htmlFor="lead-lock-days"
+            hint="How long phone/email stay locked to the first CP (1–90)"
+          >
+            <Input
+              id="lead-lock-days"
+              type="number"
+              min={1}
+              max={90}
+              disabled={!eoiRules.leadPunchBlockingEnabled}
+              value={eoiRules.leadLockDays}
+              onChange={(e) => setEoiRules({ ...eoiRules, leadLockDays: e.target.value })}
+            />
+          </FormField>
+          <FormField
+            label="Prior-CP cooldown (days)"
+            htmlFor="lead-cooldown-days"
+            hint="After lock ends, how long the original CP must wait before punching again (0–90)"
+          >
+            <Input
+              id="lead-cooldown-days"
+              type="number"
+              min={0}
+              max={90}
+              disabled={!eoiRules.leadPunchBlockingEnabled}
+              value={eoiRules.leadCooldownDays}
+              onChange={(e) => setEoiRules({ ...eoiRules, leadCooldownDays: e.target.value })}
+            />
+          </FormField>
+          <Button
+            loading={saving === "EOI Rules"}
+            onClick={() => {
+              const lockDays = Number.parseInt(eoiRules.leadLockDays, 10);
+              const cooldownDays = Number.parseInt(eoiRules.leadCooldownDays, 10);
+              if (
+                eoiRules.leadPunchBlockingEnabled
+                && (!Number.isFinite(lockDays) || lockDays < 1 || lockDays > 90)
+              ) {
+                addToast({ type: "error", title: "Invalid lock days", message: "Use a number from 1 to 90." });
+                return;
+              }
+              if (
+                eoiRules.leadPunchBlockingEnabled
+                && (!Number.isFinite(cooldownDays) || cooldownDays < 0 || cooldownDays > 90)
+              ) {
+                addToast({ type: "error", title: "Invalid cooldown days", message: "Use a number from 0 to 90." });
+                return;
+              }
+              void saveSection("EOI Rules");
+            }}
+          >
+            Save lead blocking
+          </Button>
         </CardContent>
       </Card>
 

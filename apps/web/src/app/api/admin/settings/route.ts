@@ -1,7 +1,7 @@
 import { prisma } from "@goyal/db";
 import { adminSettingsSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
-import { getSystemSettings, invalidateSystemSettingsCache } from "@/lib/services/system-settings";
+import { getSystemSettings, invalidateSystemSettingsCache, normalizeEoiRulesLeadLock } from "@/lib/services/system-settings";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 
 export const GET = withApiRoute("admin.settings.get", async () => {
@@ -33,6 +33,12 @@ export const PUT = withApiRoute("admin.settings.put", async (req: Request) => {
 
   const { profile, notifications, eoiRules, permissions } = parsed.data;
   const existing = await getSystemSettings();
+  const nextEoiRules = eoiRules
+    ? normalizeEoiRulesLeadLock({ ...existing.eoiRules, ...eoiRules })
+    : null;
+  const eoiRulesJson = nextEoiRules
+    ? (JSON.parse(JSON.stringify(nextEoiRules)) as object)
+    : null;
 
   const updated = await prisma.systemSettings.upsert({
     where: { id: "default" },
@@ -40,13 +46,13 @@ export const PUT = withApiRoute("admin.settings.put", async (req: Request) => {
       id: "default",
       profile: profile || existing.profile,
       notifications: notifications || existing.notifications,
-      eoiRules: eoiRules || existing.eoiRules,
+      eoiRules: eoiRulesJson || existing.eoiRules,
       permissions: permissions || existing.permissions,
     },
     update: {
       ...(profile ? { profile: { ...existing.profile, ...profile } } : {}),
       ...(notifications ? { notifications: { ...existing.notifications, ...notifications } } : {}),
-      ...(eoiRules ? { eoiRules: { ...existing.eoiRules, ...eoiRules } } : {}),
+      ...(eoiRulesJson ? { eoiRules: eoiRulesJson } : {}),
       ...(permissions ? { permissions: { ...existing.permissions, ...permissions } } : {}),
     },
   });

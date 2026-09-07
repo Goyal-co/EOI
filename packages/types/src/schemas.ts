@@ -160,6 +160,12 @@ export const adminSettingsSchema = z.object({
     minDeposit: z.string().optional(),
     maxPendingDays: z.string().optional(),
     allowCorrections: z.boolean().optional(),
+    /** Block other CPs from punching the same phone/email identity. */
+    leadPunchBlockingEnabled: z.boolean().optional(),
+    /** Cross-CP identity lock window in days (1–90). */
+    leadLockDays: z.string().regex(/^\d+$/).optional(),
+    /** After lock ends, prior CP cooldown in days (0–90). */
+    leadCooldownDays: z.string().regex(/^\d+$/).optional(),
   }).optional(),
   permissions: z.object({
     cpCanViewAnalytics: z.boolean().optional(),

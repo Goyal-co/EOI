@@ -51,7 +51,7 @@ export const POST = withApiRoute("partner.leads.activate", async (req: Request) 
       return apiError(
         `You cannot reactivate this lead for ${lock.cooldownDaysRemaining} more day${
           lock.cooldownDaysRemaining === 1 ? "" : "s"
-        } (7-day prior-CP cooldown).`,
+        } (prior-CP cooldown).`,
         409,
         "PRIOR_CP_COOLDOWN",
       );

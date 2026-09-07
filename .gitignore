@@ -41,3 +41,14 @@ packages/db/prisma/migrations/**/migration_lock.toml
 
 # Misc
 *.tsbuildinfo
+apps/web/.env
+apps/web/.env.*
+apps/web/.env.example
+apps/web/.env.production
+apps/web/.env.production.example
+apps/web/.env.local
+.env
+.env.*
+.env.example
+.env.production
+.env.production.example

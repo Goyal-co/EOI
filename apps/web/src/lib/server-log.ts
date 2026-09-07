@@ -1,6 +1,13 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type LogLevel = "error" | "warn" | "info";
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+const LEVEL_RANK: Record<LogLevel, number> = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40,
+};
 
 export type RequestLogContext = {
   scope: string;
@@ -9,6 +16,24 @@ export type RequestLogContext = {
 };
 
 const requestLog = new AsyncLocalStorage<RequestLogContext>();
+
+function parseLogLevel(raw?: string | null): LogLevel | null {
+  if (!raw) return null;
+  const v = raw.trim().toLowerCase();
+  if (v === "debug" || v === "info" || v === "warn" || v === "error") return v;
+  return null;
+}
+
+/** Default: debug in non-production when unset; info in production. */
+export function getEffectiveLogLevel(): LogLevel {
+  const fromEnv = parseLogLevel(process.env.LOG_LEVEL);
+  if (fromEnv) return fromEnv;
+  return process.env.NODE_ENV === "production" ? "info" : "debug";
+}
+
+export function shouldLog(level: LogLevel): boolean {
+  return LEVEL_RANK[level] >= LEVEL_RANK[getEffectiveLogLevel()];
+}
 
 export function runWithRequestLog<T>(ctx: RequestLogContext, fn: () => T): T {
   return requestLog.run(ctx, fn);
@@ -60,6 +85,22 @@ function fieldValue(value: unknown): string {
   }
 }
 
+/** Redact email to local***@domain for logs. */
+export function redactEmail(email?: string | null): string | undefined {
+  if (!email || !email.includes("@")) return email || undefined;
+  const [local, domain] = email.split("@");
+  const safeLocal = local.length <= 2 ? "***" : `${local.slice(0, 2)}***`;
+  return `${safeLocal}@${domain}`;
+}
+
+/** Redact phone to last 4 digits. */
+export function redactPhone(phone?: string | null): string | undefined {
+  if (!phone) return undefined;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "***";
+  return `***${digits.slice(-4)}`;
+}
+
 export function formatServerLog(
   level: LogLevel,
   scope: string,
@@ -91,6 +132,7 @@ export function logServer(
   fields?: Record<string, unknown>,
   cause?: unknown,
 ) {
+  if (!shouldLog(level)) return;
   const line = formatServerLog(level, scope, message, fields);
   if (level === "error") {
     if (cause !== undefined) console.error(line, serializeError(cause));
@@ -100,6 +142,11 @@ export function logServer(
   if (level === "warn") {
     if (cause !== undefined) console.warn(line, serializeError(cause));
     else console.warn(line);
+    return;
+  }
+  if (level === "debug") {
+    if (cause !== undefined) console.debug(line, serializeError(cause));
+    else console.debug(line);
     return;
   }
   if (cause !== undefined) console.info(line, serializeError(cause));
@@ -122,6 +169,24 @@ export function logServerWarn(
   cause?: unknown,
 ) {
   logServer("warn", scope, message, fields, cause);
+}
+
+export function logServerInfo(
+  scope: string,
+  message: string,
+  fields?: Record<string, unknown>,
+  cause?: unknown,
+) {
+  logServer("info", scope, message, fields, cause);
+}
+
+export function logServerDebug(
+  scope: string,
+  message: string,
+  fields?: Record<string, unknown>,
+  cause?: unknown,
+) {
+  logServer("debug", scope, message, fields, cause);
 }
 
 export function logApiError(params: {

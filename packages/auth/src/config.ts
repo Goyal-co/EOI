@@ -5,7 +5,20 @@ import bcrypt from "bcryptjs";
 import { prisma, isUniqueConstraintError } from "@goyal/db";
 import type { UserRole } from "@goyal/types";
 import { normalizeEmail } from "@goyal/types";
+import { logger, redactEmail } from "@goyal/logger";
 import { authConfig } from "./auth.config";
+
+function authWarn(msg: string, fields?: Record<string, unknown>) {
+  logger.warn("auth.credentials", msg, { method: "POST", path: "/api/auth", ...fields });
+}
+
+function authInfo(msg: string, fields?: Record<string, unknown>) {
+  logger.info("auth.credentials", msg, { method: "POST", path: "/api/auth", ...fields });
+}
+
+function googleWarn(msg: string, fields?: Record<string, unknown>) {
+  logger.warn("auth.google", msg, fields);
+}
 
 declare module "next-auth" {
   interface Session {
@@ -72,7 +85,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user || !user.passwordHash) {
-          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: user not found or has no password`);
+          authWarn("login failed: user not found or has no password", {
+            portal,
+            email: redactEmail(email),
+          });
           return null;
         }
 
@@ -81,7 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.passwordHash
         );
         if (!valid) {
-          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: invalid password`);
+          authWarn("login failed: invalid password", { portal, email: redactEmail(email) });
           return null;
         }
 
@@ -92,26 +108,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
         if (portal === "partner") {
           if (user.role !== "CHANNEL_PARTNER" && user.role !== "CP_TEAM_MEMBER") {
-            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} role=${user.role} msg=login failed: wrong portal for role`);
+            authWarn("login failed: wrong portal for role", {
+              portal,
+              email: redactEmail(email),
+              role: user.role,
+            });
             return null;
           }
         } else if (portal && expectedRole[portal] && user.role !== expectedRole[portal]) {
-          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} role=${user.role} msg=login failed: wrong portal for role`);
+          authWarn("login failed: wrong portal for role", {
+            portal,
+            email: redactEmail(email),
+            role: user.role,
+          });
           return null;
         }
 
         if (user.status !== "ACTIVE" && user.status !== "PENDING") {
-          console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} status=${user.status} msg=login failed: account status not allowed`);
+          authWarn("login failed: account status not allowed", {
+            portal,
+            email: redactEmail(email),
+            status: user.status,
+          });
           return null;
         }
 
         if (user.role === "CHANNEL_PARTNER") {
           if (user.cpProfile?.status === "BLOCKED") {
-            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: channel partner blocked`);
+            authWarn("login failed: channel partner blocked", {
+              portal,
+              email: redactEmail(email),
+            });
             return null;
           }
           if (user.cpProfile?.status !== "APPROVED") {
-            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} cpStatus=${user.cpProfile?.status || "missing"} msg=login failed: channel partner not approved`);
+            authWarn("login failed: channel partner not approved", {
+              portal,
+              email: redactEmail(email),
+              cpStatus: user.cpProfile?.status || "missing",
+            });
             return null;
           }
         }
@@ -125,13 +160,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
           }
           if (!teamMember || teamMember.status !== "ACTIVE") {
-            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} msg=login failed: team member inactive`);
+            authWarn("login failed: team member inactive", {
+              portal,
+              email: redactEmail(email),
+            });
             return null;
           }
           if (teamMember.cp.status === "BLOCKED" || teamMember.cp.status !== "APPROVED") {
-            console.warn(`[warn] scope=auth.credentials method=POST path=/api/auth portal=${portal} email=${email} cpStatus=${teamMember.cp.status} msg=login failed: parent channel partner not approved`);
+            authWarn("login failed: parent channel partner not approved", {
+              portal,
+              email: redactEmail(email),
+              cpStatus: teamMember.cp.status,
+            });
             return null;
           }
+          authInfo("login success", {
+            portal,
+            email: redactEmail(email),
+            role: user.role,
+            userId: user.id,
+          });
           return {
             id: user.id,
             email: user.email,
@@ -147,6 +195,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
+        authInfo("login success", {
+          portal,
+          email: redactEmail(email),
+          role: user.role,
+          userId: user.id,
+        });
         return {
           id: user.id,
           email: user.email,
@@ -186,7 +240,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               include: { eoi: true },
             });
             if (!linkedLead) {
-              console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: customer has no accepted EOI lead`);
+              googleWarn("google sign-in denied: customer has no accepted EOI lead", {
+                email: redactEmail(email),
+              });
               return "/customer/login?error=AccessDenied";
             }
             if (!existingUser.googleId) {
@@ -212,10 +268,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
           }
           if (existingUser.role === "CHANNEL_PARTNER") {
-            console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: email registered as partner`);
+            googleWarn("google sign-in denied: email registered as partner", {
+              email: redactEmail(email),
+            });
             return "/customer/login?error=EmailRegisteredAsPartner";
           }
-          console.warn(`[warn] scope=auth.google email=${email} role=${existingUser.role} msg=google sign-in denied: email already registered`);
+          googleWarn("google sign-in denied: email already registered", {
+            email: redactEmail(email),
+            role: existingUser.role,
+          });
           return "/customer/login?error=EmailAlreadyRegistered";
         }
 
@@ -269,15 +330,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
           } catch (error) {
             if (isUniqueConstraintError(error, "email")) {
-              console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: unique email constraint`);
+              googleWarn("google sign-in denied: unique email constraint", {
+                email: redactEmail(email),
+              });
               return "/customer/login?error=EmailAlreadyRegistered";
             }
-            console.error(`[error] scope=auth.google email=${email} msg=google customer create failed`, error);
+            logger.error(
+              "auth.google",
+              "google customer create failed",
+              { email: redactEmail(email) },
+              error,
+            );
             throw error;
           }
         }
 
-        console.warn(`[warn] scope=auth.google email=${email} msg=google sign-in denied: no invited EOI lead`);
+        googleWarn("google sign-in denied: no invited EOI lead", {
+          email: redactEmail(email),
+        });
         return "/customer/login?error=AccessDenied";
       }
       return true;

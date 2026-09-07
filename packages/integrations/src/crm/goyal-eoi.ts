@@ -1,4 +1,5 @@
 import type { CRMProvider } from "../types";
+import { logger, redactPhone } from "@goyal/logger";
 
 type GoyalEoiPayload = {
   fullName: string;
@@ -189,7 +190,7 @@ async function enrichCrmUuid(params: {
       return match.id;
     }
   } catch (err) {
-    console.warn("[Goyal CRM] enrichCrmUuid failed", err);
+    logger.warn("crm.goyal", "enrichCrmUuid failed", undefined, err);
   }
   return undefined;
 }
@@ -197,13 +198,13 @@ async function enrichCrmUuid(params: {
 async function punch(data: Record<string, unknown>): Promise<{ success: boolean; crmId?: string }> {
   const key = apiKey();
   if (!key) {
-    console.warn("[Goyal CRM] EOI_API_KEY not configured — skipping punch");
+    logger.warn("crm.goyal", "EOI_API_KEY not configured — skipping punch");
     return { success: false };
   }
 
   const payload = mapToGoyalEoiPayload(data);
   if (!payload) {
-    console.warn("[Goyal CRM] missing phone — skipping punch", { keys: Object.keys(data) });
+    logger.warn("crm.goyal", "missing phone — skipping punch", { keys: Object.keys(data) });
     return { success: false };
   }
 
@@ -211,7 +212,7 @@ async function punch(data: Record<string, unknown>): Promise<{ success: boolean;
   try {
     body = await postWebhook("/webhooks/eoi", payload, key);
   } catch (err) {
-    console.warn("[Goyal CRM] /webhooks/eoi failed, trying /eoi/create", err);
+    logger.warn("crm.goyal", "/webhooks/eoi failed, trying /eoi/create", undefined, err);
     body = await postWebhook("/eoi/create", payload, key);
   }
 
@@ -228,8 +229,8 @@ async function punch(data: Record<string, unknown>): Promise<{ success: boolean;
     if (enriched) crmId = enriched;
   }
 
-  console.log("[Goyal CRM] lead punched", {
-    phone: payload.phone,
+  logger.info("crm.goyal", "lead punched", {
+    phone: redactPhone(payload.phone),
     projectName: payload.projectName,
     crmId,
     leadCode,

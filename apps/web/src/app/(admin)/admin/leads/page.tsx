@@ -91,7 +91,7 @@ const EVENT_LABELS: Record<string, string> = {
   REJECTED: "Customer rejected",
   SITE_VISIT: "Site visit completed",
   BOOKED: "Booking confirmed",
-  LOCK_STARTED: "15-day lock started",
+  LOCK_STARTED: "Identity lock started",
   CP_ATTACHED: "New CP attached",
 };
 
@@ -375,7 +375,7 @@ function AdminLeadsContent() {
               <div className="mt-3 rounded-lg border border-border bg-background px-3 py-2 text-sm">
                 {detail.lock.active ? (
                   <span>
-                    15-day protection active — <strong>{detail.lock.lockDaysRemaining}</strong> day(s) left
+                    Identity protection active — <strong>{detail.lock.lockDaysRemaining}</strong> day(s) left
                     {detail.lock.lockExpiresAt
                       ? ` (until ${formatWhen(detail.lock.lockExpiresAt)})`
                       : ""}

@@ -698,7 +698,7 @@ function PartnerLeadsContent() {
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
                   <Clock className="h-4 w-4" />
-                  Active 15-day lock
+                  Active identity lock
                 </div>
                 <p className="mt-2 font-mono text-lg font-semibold text-amber-800">
                   {lockCountdown(selectedLead.lockExpiresAt)}

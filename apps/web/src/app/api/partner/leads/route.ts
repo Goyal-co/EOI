@@ -15,6 +15,7 @@ import {
 } from "@/lib/leads/identity-context";
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
 import { normalizeMobile, daysRemainingUntil, phoneLockWindowMs } from "@/lib/leads/phone";
+import { getLeadLockPolicy } from "@/lib/services/system-settings";
 import { resolveTeamMemberForLead } from "@/lib/services/team-members";
 import { getPartnerScope, leadScopeWhere } from "@/lib/partner-scope";
 import { deferWork } from "@/lib/defer";
@@ -484,9 +485,12 @@ async function postPartnerLead(req: Request) {
       lockExpiresAtIso = lockEval.lockExpiresAt.toISOString();
       lockDaysRemaining = daysRemainingUntil(lockEval.lockExpiresAt);
     } else {
-      const approx = new Date(Date.now() + phoneLockWindowMs());
-      lockExpiresAtIso = approx.toISOString();
-      lockDaysRemaining = daysRemainingUntil(approx);
+      const policy = await getLeadLockPolicy();
+      if (policy.enabled) {
+        const approx = new Date(Date.now() + phoneLockWindowMs(policy.lockDays));
+        lockExpiresAtIso = approx.toISOString();
+        lockDaysRemaining = daysRemainingUntil(approx);
+      }
     }
 
     const identity = await resolveOrCreateLeadIdentity({

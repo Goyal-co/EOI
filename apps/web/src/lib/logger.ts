@@ -1,34 +1,31 @@
-type LogLevel = "info" | "warn" | "error" | "debug";
+/**
+ * Compatibility re-export — use server-log as the single structured logger.
+ * Prefer: logServer / logServerInfo / logServerWarn / logServerError / logServerDebug
+ */
+export {
+  logServer,
+  logServerDebug,
+  logServerInfo,
+  logServerWarn,
+  logServerError,
+  formatServerLog,
+  getEffectiveLogLevel,
+  shouldLog,
+  redactEmail,
+  redactPhone,
+  type LogLevel,
+} from "./server-log";
 
-interface LogPayload {
-  level: LogLevel;
-  message: string;
-  requestId?: string;
-  userId?: string;
-  route?: string;
-  duration?: number;
-  metadata?: Record<string, unknown>;
-}
+import { logServer } from "./server-log";
 
-export function log(payload: LogPayload) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    ...payload,
-  };
-
-  if (process.env.NODE_ENV === "production") {
-    console.log(JSON.stringify(entry));
-  } else {
-    console[payload.level === "debug" ? "log" : payload.level](
-      `[${entry.level.toUpperCase()}] ${entry.message}`,
-      payload.metadata || ""
-    );
-  }
-}
-
+/** Legacy object API used by a few call sites. */
 export const logger = {
-  info: (message: string, meta?: Record<string, unknown>) => log({ level: "info", message, metadata: meta }),
-  warn: (message: string, meta?: Record<string, unknown>) => log({ level: "warn", message, metadata: meta }),
-  error: (message: string, meta?: Record<string, unknown>) => log({ level: "error", message, metadata: meta }),
-  debug: (message: string, meta?: Record<string, unknown>) => log({ level: "debug", message, metadata: meta }),
+  debug: (message: string, meta?: Record<string, unknown>) =>
+    logServer("debug", "app", message, meta),
+  info: (message: string, meta?: Record<string, unknown>) =>
+    logServer("info", "app", message, meta),
+  warn: (message: string, meta?: Record<string, unknown>) =>
+    logServer("warn", "app", message, meta),
+  error: (message: string, meta?: Record<string, unknown>) =>
+    logServer("error", "app", message, meta),
 };
