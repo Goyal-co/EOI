@@ -62,7 +62,7 @@ function serializePartnerLead(lead: {
   journeyStatus: string;
   confirmationStatus: string | null;
   project: { id: string; name: string; location: string; eoiStatus: string };
-  cp: { companyName: string | null; user: { name: string | null } };
+  cp: { companyName: string | null; mobile?: string | null; user: { name: string | null } };
 }, publicLeadId: string, titanCrmId?: string) {
   return {
     id: lead.id,
@@ -87,6 +87,7 @@ function serializePartnerLead(lead: {
     },
     cp: {
       companyName: lead.cp.companyName,
+      mobile: lead.cp.mobile ?? null,
       user: { name: lead.cp.user.name },
     },
   };
@@ -536,7 +537,7 @@ async function postPartnerLead(req: Request) {
       },
       include: {
         project: { select: { id: true, name: true, location: true, eoiStatus: true } },
-        cp: { select: { companyName: true, user: { select: { name: true } } } },
+        cp: { select: { companyName: true, mobile: true, user: { select: { name: true } } } },
       },
     });
 
@@ -649,6 +650,7 @@ async function postPartnerLead(req: Request) {
     projectLocation: lead.project.location,
     cpName: lead.cp.user.name || "Channel Partner",
     companyName: lead.cp.companyName || undefined,
+    cpMobile: lead.cp.mobile || undefined,
   };
 
   deferWork("partner.lead.side-effects", async () => {
@@ -693,6 +695,22 @@ async function postPartnerLead(req: Request) {
         notes: leadSnapshot.notes,
         intentType,
         publicLeadId,
+        channelPartnerId: leadSnapshot.cpId,
+        channelPartnerName: leadSnapshot.cpName,
+        channelPartnerMobile: leadSnapshot.cpMobile,
+        projectId: leadSnapshot.projectId,
+        projectHistory: [
+          {
+            projectId: leadSnapshot.projectId,
+            projectName: leadSnapshot.projectName,
+            cpId: leadSnapshot.cpId,
+            cpName: leadSnapshot.cpName,
+            punchedAt: new Date().toISOString(),
+            intentType,
+            publicLeadId,
+            journeyStatus: "ACTIVE",
+          },
+        ],
       });
       titanCrmId = crmResult.crmId;
     } catch (e) {

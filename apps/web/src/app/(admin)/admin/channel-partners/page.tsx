@@ -46,6 +46,7 @@ interface CPProfile {
   panNumber?: string | null;
   gstNumber?: string | null;
   city: string;
+  mobile?: string | null;
   status: string;
   user: { name: string; email: string; status: string };
   documents?: CPDocument[];
@@ -61,6 +62,7 @@ interface CPProfile {
     id: string;
     name: string;
     email: string | null;
+    mobile?: string | null;
     role: string | null;
     status: string;
     performance: { totalLeads: number; booked: number; siteVisits: number };
@@ -469,6 +471,15 @@ export default function AdminChannelPartnersPage() {
         columns={[
           { key: "name", header: "Name" },
           { key: "companyName", header: "Company" },
+          {
+            key: "mobile",
+            header: "Mobile",
+            render: (row) => {
+              const mobile = String((row as ChannelPartner).mobile || "").trim();
+              const looksLikeEmail = mobile.includes("@");
+              return looksLikeEmail || !mobile ? "—" : mobile;
+            },
+          },
           { key: "reraNumber", header: "RERA No." },
           { key: "city", header: "City" },
           { key: "registeredLeads", header: "Leads" },
@@ -700,6 +711,9 @@ export default function AdminChannelPartnersPage() {
             <Card className="p-4">
               <h3 className="font-semibold text-foreground">{profile.user.name}</h3>
               <p className="text-sm text-muted-foreground">{profile.user.email}</p>
+              {profile.mobile ? (
+                <p className="mt-1 text-sm font-medium text-foreground">{profile.mobile}</p>
+              ) : null}
               <div className="mt-2"><StatusBadge status={profile.status} /></div>
             </Card>
 
@@ -726,6 +740,7 @@ export default function AdminChannelPartnersPage() {
               <h4 className="text-sm font-semibold text-foreground mb-2">Company Details</h4>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between"><dt className="text-muted-foreground">Company</dt><dd>{profile.companyName || "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Mobile</dt><dd>{profile.mobile || "—"}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted-foreground">RERA</dt><dd>{profile.reraNumber}</dd></div>
                 {profile.panNumber && (
                   <div className="flex justify-between"><dt className="text-muted-foreground">PAN</dt><dd>{profile.panNumber}</dd></div>
@@ -769,6 +784,7 @@ export default function AdminChannelPartnersPage() {
                         <div className="font-medium">{member.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {member.role || "Member"}
+                          {member.mobile ? ` · ${member.mobile}` : ""}
                           {member.email ? ` · ${member.email}` : ""}
                         </div>
                       </div>

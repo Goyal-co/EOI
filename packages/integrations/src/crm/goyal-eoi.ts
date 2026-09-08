@@ -21,6 +21,14 @@ type GoyalEoiPayload = {
   /** Partner Portal public lead id (EOI-… / LEAD-…) — used to differentiate from Presales CRM leads. */
   leadId?: string;
   notes?: string;
+  channelPartnerId?: string;
+  channelPartnerName?: string;
+  channelPartnerMobile?: string;
+  intentType?: string;
+  fosName?: string;
+  projectHistory?: unknown;
+  siteVisitHistory?: unknown;
+  bookingHistory?: unknown;
 };
 
 function baseUrl() {
@@ -71,10 +79,26 @@ export function mapToGoyalEoiPayload(data: Record<string, unknown>): GoyalEoiPay
       ? `${baseEnquiry} [${publicLeadId}]`
       : baseEnquiry;
   const baseNotes = str(data.notes);
-  const notes =
+  const historyBits = [
     publicLeadId && !(baseNotes || "").includes(publicLeadId)
-      ? [baseNotes, `Partner Lead ID: ${publicLeadId}`].filter(Boolean).join(" | ")
-      : baseNotes;
+      ? `Partner Lead ID: ${publicLeadId}`
+      : null,
+    str(data.intentType) ? `Intent: ${str(data.intentType)}` : null,
+    str(data.channelPartnerName) || str(data.cpName)
+      ? `CP: ${str(data.channelPartnerName) || str(data.cpName)}${
+          str(data.channelPartnerId) || str(data.cpId)
+            ? ` (${str(data.channelPartnerId) || str(data.cpId)})`
+            : ""
+        }`
+      : null,
+    str(data.channelPartnerMobile) || str(data.cpMobile)
+      ? `CP mobile: ${str(data.channelPartnerMobile) || str(data.cpMobile)}`
+      : null,
+    str(data.fosName) ? `FOS: ${str(data.fosName)}` : null,
+  ].filter(Boolean);
+  const notes = [...(baseNotes ? [baseNotes] : []), ...historyBits]
+    .filter(Boolean)
+    .join(" | ");
 
   return {
     fullName,
@@ -97,7 +121,15 @@ export function mapToGoyalEoiPayload(data: Record<string, unknown>): GoyalEoiPay
     sourceOfFund: str(data.sourceOfFund),
     sourceOfEnquiry,
     leadId: publicLeadId,
-    notes,
+    notes: notes || undefined,
+    channelPartnerId: str(data.channelPartnerId) || str(data.cpId),
+    channelPartnerName: str(data.channelPartnerName) || str(data.cpName),
+    channelPartnerMobile: str(data.channelPartnerMobile) || str(data.cpMobile),
+    intentType: str(data.intentType),
+    fosName: str(data.fosName),
+    projectHistory: Array.isArray(data.projectHistory) ? data.projectHistory : undefined,
+    siteVisitHistory: Array.isArray(data.siteVisitHistory) ? data.siteVisitHistory : undefined,
+    bookingHistory: Array.isArray(data.bookingHistory) ? data.bookingHistory : undefined,
   };
 }
 

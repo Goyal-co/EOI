@@ -798,6 +798,40 @@ function PartnerLeadsContent() {
                       Date: {formatDate(selectedLead.siteVisitDate)}
                     </p>
                   )}
+                  {(() => {
+                    if (!selectedLead.siteVisitDate) return null;
+                    const doneAt = new Date(selectedLead.siteVisitDate).getTime();
+                    if (!Number.isFinite(doneAt)) return null;
+                    const relevanceMs = 15 * 86_400_000;
+                    const expiresAt = doneAt + relevanceMs;
+                    const remaining = Math.max(0, expiresAt - now);
+                    const daysLeft = Math.ceil(remaining / 86_400_000);
+                    const fresh = remaining > 0;
+                    return (
+                      <div
+                        className={`rounded-md border px-3 py-2 text-xs ${
+                          fresh
+                            ? "border-sky-200 bg-sky-50 text-sky-900"
+                            : "border-slate-200 bg-slate-50 text-slate-600"
+                        }`}
+                      >
+                        <p className="font-semibold">
+                          {fresh
+                            ? `Relevance window · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+                            : "Relevance window ended"}
+                        </p>
+                        <p className="mt-0.5 opacity-90">
+                          Display only — does not block punching. Shows how recent this site visit is
+                          (15 days from completion).
+                        </p>
+                        {fresh ? (
+                          <p className="mt-1 font-mono font-medium">
+                            {lockCountdown(new Date(expiresAt).toISOString())}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                   <p className="text-xs text-emerald-700">
                     Completed when confirmed by reception. Full history is available in Admin.
                   </p>

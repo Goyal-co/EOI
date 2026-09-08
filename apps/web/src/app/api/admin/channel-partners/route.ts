@@ -20,7 +20,7 @@ export const GET = withApiRoute("admin.channel-partners.get", async () => {
     email: cp.user.email,
     companyName: cp.companyName,
     reraNumber: cp.reraNumber,
-    mobile: cp.mobile || cp.user.email,
+    mobile: cp.mobile || null,
     registeredLeads: cp._count.leads,
     submittedEOIs: cp._count.eois,
     approvedEOIs: cp.eois.length,
