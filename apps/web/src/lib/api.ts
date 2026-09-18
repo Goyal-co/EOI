@@ -51,17 +51,38 @@ export function withApiRoute<T extends (req: any, ctx?: any) => Promise<Response
   return (async (req: Request, ctx?: unknown) => {
     const path = requestPath(req);
     const method = req.method;
+    const quiet =
+      scope === "api.health" ||
+      scope === "api.health.head" ||
+      scope === "health" ||
+      scope === "health.head" ||
+      path === "/api/health" ||
+      path === "/health" ||
+      path.startsWith("/api/health?") ||
+      path.startsWith("/health?");
     return runWithRequestLog({ scope, method, path }, async () => {
       const started = Date.now();
-      logServerDebug(scope, "request start", { method, path });
+      if (!quiet) {
+        logServerDebug(scope, "request start", { method, path });
+      }
       try {
         const res = await handler(req, ctx);
-        logServerInfo(scope, "request complete", {
-          method,
-          path,
-          status: res.status,
-          durationMs: Date.now() - started,
-        });
+        // Probe traffic — don't spam info logs on every k8s/load-balancer check.
+        if (!quiet) {
+          logServerInfo(scope, "request complete", {
+            method,
+            path,
+            status: res.status,
+            durationMs: Date.now() - started,
+          });
+        } else if (res.status >= 400) {
+          logServerInfo(scope, "request complete", {
+            method,
+            path,
+            status: res.status,
+            durationMs: Date.now() - started,
+          });
+        }
         return res;
       } catch (cause) {
         logServerError(
