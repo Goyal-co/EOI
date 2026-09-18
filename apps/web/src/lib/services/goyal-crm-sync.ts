@@ -71,6 +71,65 @@ export async function punchPartnerLeadToCrm(params: {
   }
 }
 
+/** Push site-visit done to Goyal CRM (matches CRM_LEAD_SYNC_PAYLOADS.siteVisit). */
+export async function punchSiteVisitToCrm(params: {
+  leadDbId: string;
+  crmLeadId?: string | null;
+  customerMobile: string;
+  publicLeadId?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  visitingCpId?: string | null;
+  visitingCpName?: string | null;
+  visitingCpMobile?: string | null;
+  salespersonId?: string | null;
+  salespersonName?: string | null;
+  completedAt?: Date;
+  projectHistory?: Array<Record<string, unknown>>;
+  siteVisitHistory?: Array<Record<string, unknown>>;
+  notes?: string | null;
+}): Promise<PunchResult> {
+  try {
+    const crm = getCRMProvider();
+    if (!crm.syncSiteVisit) {
+      console.warn("[Goyal CRM] syncSiteVisit not implemented on provider");
+      return { success: false };
+    }
+    const completedAt = params.completedAt || new Date();
+    const day = completedAt.toISOString().slice(0, 10);
+    const result = await crm.syncSiteVisit({
+      crmLeadId: params.crmLeadId || undefined,
+      phone: params.customerMobile,
+      leadId: params.publicLeadId || undefined,
+      publicLeadId: params.publicLeadId || undefined,
+      projectId: params.projectId || undefined,
+      projectName: params.projectName || undefined,
+      visitingCpId: params.visitingCpId || undefined,
+      visitingCpName: params.visitingCpName || undefined,
+      visitingCpMobile: params.visitingCpMobile || undefined,
+      salespersonId: params.salespersonId || undefined,
+      salespersonName: params.salespersonName || undefined,
+      siteVisit: true,
+      siteVisitDone: true,
+      siteVisitDate: day,
+      siteVisitDoneDate: day,
+      notes: params.notes || undefined,
+      projectHistory: params.projectHistory,
+      siteVisitHistory: params.siteVisitHistory,
+    });
+    if (result.crmId) {
+      await prisma.lead.update({
+        where: { id: params.leadDbId },
+        data: { titanCrmId: result.crmId },
+      });
+    }
+    return result;
+  } catch (e) {
+    console.error("[Goyal CRM] punchSiteVisitToCrm failed:", e);
+    return { success: false };
+  }
+}
+
 /** Punch submitted customer EOI (with KYC/address when available) to Goyal CRM. */
 export async function punchSubmittedEoiToCrm(params: {
   leadDbId: string;

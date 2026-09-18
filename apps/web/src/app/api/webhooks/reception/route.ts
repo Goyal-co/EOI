@@ -220,8 +220,39 @@ export const POST = withApiRoute("webhooks.reception", async (req: Request) => {
             repeat: wasComplete,
           },
         });
+
+        // Push site-visit to Goyal Hariyana CRM (same shape as CRM_LEAD_SYNC_PAYLOADS.siteVisit)
+        const { punchSiteVisitToCrm } = await import("@/lib/services/goyal-crm-sync");
+        const { buildIdentityProjectHistory } = await import("@/lib/leads/identity");
+        const projectHistory = await buildIdentityProjectHistory(identityId);
+        await punchSiteVisitToCrm({
+          leadDbId: lead.id,
+          crmLeadId: crmLeadId || lead.titanCrmId,
+          customerMobile: lead.customerMobile,
+          publicLeadId: lead.leadId,
+          projectId: lead.projectId || projectId,
+          projectName: lead.project?.name || projectName,
+          visitingCpId: lead.cpId || cpId,
+          visitingCpName: lead.cp?.companyName || lead.cp?.user?.name || null,
+          visitingCpMobile: lead.cp?.mobile || null,
+          salespersonId,
+          salespersonName,
+          completedAt: visitedAt,
+          projectHistory,
+          siteVisitHistory: [
+            {
+              projectId: lead.projectId || projectId,
+              projectName: lead.project?.name || projectName,
+              cpId: lead.cpId || cpId,
+              cpName: lead.cp?.companyName || lead.cp?.user?.name || null,
+              salespersonName,
+              completedAt: visitedAt.toISOString(),
+              source: "reception",
+            },
+          ],
+        });
       } catch (e) {
-        console.error("[Reception webhook] LeadEvent SITE_VISIT failed", e);
+        console.error("[Reception webhook] LeadEvent/CRM SITE_VISIT failed", e);
       }
     }
 

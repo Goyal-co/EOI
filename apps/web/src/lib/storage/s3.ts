@@ -6,6 +6,9 @@ import {
   HeadObjectCommand,
   HeadBucketCommand,
 } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { Agent as HttpAgent } from "http";
+import { Agent as HttpsAgent } from "https";
 
 export function getS3Bucket(): string {
   return process.env.S3_BUCKET?.trim() || "goyalco-prod-assets";
@@ -30,18 +33,28 @@ function s3Endpoint(): string | undefined {
   return endpoint || undefined;
 }
 
+/** Concurrent S3 sockets (default Node pool is far too small for upload spikes). */
+function s3MaxSockets(): number {
+  const raw = Number(process.env.S3_MAX_SOCKETS || "1500");
+  return Number.isFinite(raw) && raw >= 100 ? Math.floor(raw) : 1500;
+}
+
 let cached: S3Client | null = null;
 let cachedSig = "";
 
 export function getS3Client(): S3Client {
+  const maxSockets = s3MaxSockets();
   const sig = [
     s3Endpoint() || "",
     process.env.S3_REGION || "",
     process.env.S3_ACCESS_KEY || "",
     process.env.S3_FORCE_PATH_STYLE || "",
+    String(maxSockets),
   ].join("|");
   if (cached && cachedSig === sig) return cached;
   cachedSig = sig;
+  const httpAgent = new HttpAgent({ keepAlive: true, maxSockets });
+  const httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets });
   cached = new S3Client({
     endpoint: s3Endpoint(),
     region: process.env.S3_REGION || "ap-south-1",
@@ -50,6 +63,12 @@ export function getS3Client(): S3Client {
       secretAccessKey: process.env.S3_SECRET_KEY || "",
     },
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    requestHandler: new NodeHttpHandler({
+      httpAgent,
+      httpsAgent,
+      connectionTimeout: 10_000,
+      requestTimeout: 120_000,
+    }),
   });
   return cached;
 }

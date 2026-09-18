@@ -18,4 +18,6 @@ export interface SMSProvider {
 export interface CRMProvider {
   syncLead(data: Record<string, unknown>): Promise<{ success: boolean; crmId?: string }>;
   syncEOI(data: Record<string, unknown>): Promise<{ success: boolean; crmId?: string }>;
+  /** Mark site visit done on CRM lead (POST /leads/:id/site-visit). */
+  syncSiteVisit?(data: Record<string, unknown>): Promise<{ success: boolean; crmId?: string }>;
 }

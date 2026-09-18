@@ -291,6 +291,135 @@ async function punch(data: Record<string, unknown>): Promise<{ success: boolean;
   return { success: true, crmId };
 }
 
+function partnerBearer() {
+  return (
+    process.env.BEARER_AUTHORIZATION?.trim() ||
+    process.env.GOYAL_CRM_API_TOKEN?.trim() ||
+    ""
+  );
+}
+
+async function postSiteVisit(
+  crmLeadId: string,
+  payload: Record<string, unknown>,
+  token: string,
+) {
+  const body = compact(payload);
+  const res = await fetch(`${baseUrl()}/leads/${encodeURIComponent(crmLeadId)}/site-visit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8_000),
+  });
+  const parsed = await parseJson(res);
+  if (!res.ok) {
+    // Fallback PATCH when site-visit route missing
+    if (res.status === 404 || res.status === 405) {
+      const patchRes = await fetch(`${baseUrl()}/leads/${encodeURIComponent(crmLeadId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8_000),
+      });
+      const patchBody = await parseJson(patchRes);
+      if (!patchRes.ok) {
+        throw new Error(messageFromBody(patchBody, `Goyal CRM site-visit failed (${patchRes.status})`));
+      }
+      return patchBody;
+    }
+    throw new Error(messageFromBody(parsed, `Goyal CRM site-visit failed (${res.status})`));
+  }
+  return parsed;
+}
+
+async function syncSiteVisitPunch(
+  data: Record<string, unknown>,
+): Promise<{ success: boolean; crmId?: string }> {
+  const token = partnerBearer();
+  if (!token) {
+    logger.warn(
+      "crm.goyal",
+      "BEARER_AUTHORIZATION / GOYAL_CRM_API_TOKEN not set — skipping site-visit punch",
+    );
+    return { success: false };
+  }
+
+  const crmLeadId =
+    str(data.crmLeadId) ||
+    str(data.goyalCrmId) ||
+    str(data.id) ||
+    (str(data.leadUuid) && looksLikeUuid(str(data.leadUuid)!) ? str(data.leadUuid) : undefined);
+
+  let resolved = crmLeadId;
+  if (!resolved || !looksLikeUuid(resolved)) {
+    const key = apiKey();
+    if (key && str(data.phone)) {
+      resolved = await enrichCrmUuid({
+        key,
+        phone: str(data.phone)!,
+        leadCode: str(data.leadCode),
+      });
+    }
+  }
+  if (!resolved) {
+    logger.warn("crm.goyal", "site-visit skipped — no CRM lead UUID", {
+      phone: redactPhone(str(data.phone) || ""),
+      publicLeadId: str(data.leadId),
+    });
+    return { success: false };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const publicLeadId = str(data.leadId) || str(data.publicLeadId);
+  const notes = [
+    str(data.notes),
+    str(data.visitingCpName) || str(data.visitingCpId)
+      ? `Visiting CP: ${str(data.visitingCpName) || str(data.visitingCpId)}${
+          str(data.visitingCpId) && str(data.visitingCpName) ? ` (${str(data.visitingCpId)})` : ""
+        }`
+      : null,
+    str(data.visitingCpMobile) ? `CP mobile: ${str(data.visitingCpMobile)}` : null,
+    str(data.salespersonName) ? `Sales: ${str(data.salespersonName)}` : null,
+    publicLeadId ? `Partner Lead ID: ${publicLeadId}` : null,
+    str(data.projectName) ? `Project: ${str(data.projectName)}` : null,
+    `Site visit at ${new Date().toISOString()}`,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+
+  const payload = compact({
+    siteVisit: true,
+    siteVisitDate: str(data.siteVisitDate) || today,
+    siteVisitDone: true,
+    siteVisitDoneDate: str(data.siteVisitDoneDate) || today,
+    leadId: publicLeadId,
+    projectId: str(data.projectId),
+    projectName: str(data.projectName),
+    visitingCpId: str(data.visitingCpId) || str(data.channelPartnerId),
+    visitingCpName: str(data.visitingCpName) || str(data.channelPartnerName),
+    visitingCpMobile: str(data.visitingCpMobile) || str(data.channelPartnerMobile),
+    salespersonId: str(data.salespersonId),
+    salespersonName: str(data.salespersonName),
+    notes,
+    projectHistory: Array.isArray(data.projectHistory) ? data.projectHistory : undefined,
+    siteVisitHistory: Array.isArray(data.siteVisitHistory) ? data.siteVisitHistory : undefined,
+  });
+
+  await postSiteVisit(resolved, payload, token);
+  logger.info("crm.goyal", "site visit punched", {
+    crmLeadId: resolved,
+    partnerLeadId: publicLeadId,
+    projectName: str(data.projectName),
+  });
+  return { success: true, crmId: resolved };
+}
+
 export const goyalCRMProvider: CRMProvider = {
   async syncLead(data) {
     return punch(data);
@@ -300,5 +429,8 @@ export const goyalCRMProvider: CRMProvider = {
       ...data,
       sourceOfEnquiry: str(data.sourceOfEnquiry) || "Customer EOI Portal",
     });
+  },
+  async syncSiteVisit(data) {
+    return syncSiteVisitPunch(data);
   },
 };

@@ -10,4 +10,9 @@ export const mockCRMProvider: CRMProvider = {
     console.log("[CRM Mock] syncEOI", data);
     return { success: true, crmId: `mock-eoi-${Date.now()}` };
   },
+
+  async syncSiteVisit(data: Record<string, unknown>) {
+    console.log("[CRM Mock] syncSiteVisit", data);
+    return { success: true, crmId: typeof data.crmLeadId === "string" ? data.crmLeadId : undefined };
+  },
 };

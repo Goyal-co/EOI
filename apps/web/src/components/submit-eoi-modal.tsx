@@ -241,6 +241,16 @@ export function SubmitEOIModal({
           });
           return;
         }
+        if (res.status === 409 && data.code === "LEAD_ID_CONFLICT") {
+          addToast({
+            type: "error",
+            title: "Please try again",
+            message:
+              (typeof data.error === "string" && data.error) ||
+              "Temporary lead id conflict. Submit again — this is not a duplicate customer.",
+          });
+          return;
+        }
         if (res.status === 409 && data.code === "IDENTITY_LOCKED") {
           addToast({
             type: "error",

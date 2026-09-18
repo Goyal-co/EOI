@@ -1,8 +1,17 @@
 import { prisma, type LeadEventType, type Prisma } from "@goyal/db";
-import { generatePublicLeadId } from "@/lib/leads/id-generator";
+import { generateUniquePublicLeadId } from "@/lib/leads/id-generator";
 import { normalizeMobile } from "@/lib/leads/phone";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
+
+function isUniqueLeadIdConflict(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; meta?: { target?: string | string[] }; message?: string };
+  if (e.code !== "P2002") return false;
+  const target = e.meta?.target;
+  const targets = Array.isArray(target) ? target.join(",") : String(target || "");
+  return /leadId/i.test(targets) || /leadId/i.test(String(e.message || ""));
+}
 
 export async function findLeadIdentityByContact(mobile: string, email: string, tx: Tx = prisma) {
   const phone = normalizeMobile(mobile);
@@ -30,8 +39,8 @@ export async function findLeadIdentityByContact(mobile: string, email: string, t
 
 /**
  * Resolve an existing identity or create one with a new public leadId.
- * Reuses earliest matching public leadId from Lead rows when present.
- * Non-critical attach/normalize writes are deferred so punch stays fast.
+ * Reuses earliest matching public leadId from Lead rows when present and free.
+ * Generates high-entropy ids with retry on LeadIdentity.leadId collisions.
  */
 export async function resolveOrCreateLeadIdentity(params: {
   mobile: string;
@@ -46,7 +55,6 @@ export async function resolveOrCreateLeadIdentity(params: {
 
   const existing = await findLeadIdentityByContact(phone, emailLower, client);
   if (existing) {
-    // Background hygiene — punch only needs ids.
     void (async () => {
       try {
         await client.leadIdentity.update({
@@ -92,49 +100,67 @@ export async function resolveOrCreateLeadIdentity(params: {
     select: { leadId: true },
   });
 
-  let publicLeadId = legacyLead?.leadId || null;
-  if (!publicLeadId) {
-    const latestForSeq = await client.lead.findFirst({
-      where: { leadId: { not: null } },
-      orderBy: { createdAt: "desc" },
-      select: { leadId: true },
+  // Only reuse a legacy public id if it is not already claimed by another identity.
+  let preferredLeadId: string | null = null;
+  if (legacyLead?.leadId) {
+    const taken = await client.leadIdentity.findUnique({
+      where: { leadId: legacyLead.leadId },
+      select: { id: true },
     });
-    let seq = Date.now() % 1_000_000;
-    if (latestForSeq?.leadId) {
-      const match = latestForSeq.leadId.match(/(\d+)$/);
-      if (match) seq = (Number(match[1]) % 1_000_000) + 1;
-    }
-    publicLeadId = generatePublicLeadId(params.intentType, params.projectName, seq);
+    if (!taken) preferredLeadId = legacyLead.leadId;
   }
 
-  const created = await client.leadIdentity.create({
-    data: {
-      leadId: publicLeadId,
-      primaryPhone: phone,
-      primaryEmail: emailLower,
-    },
-  });
+  const maxAttempts = 8;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const publicLeadId =
+      attempt === 0 && preferredLeadId
+        ? preferredLeadId
+        : generateUniquePublicLeadId(params.intentType, params.projectName, attempt);
 
-  void client.lead
-    .updateMany({
-      where: {
-        identityId: null,
-        OR: [
-          { customerMobile: phone },
-          { customerMobile: { endsWith: phone } },
-          { customerEmail: { equals: emailLower, mode: "insensitive" } },
-          { leadId: publicLeadId },
-        ],
-      },
-      data: { identityId: created.id },
-    })
-    .catch((e) => console.error("[resolveOrCreateLeadIdentity] orphan attach failed:", e));
+    try {
+      const created = await client.leadIdentity.create({
+        data: {
+          leadId: publicLeadId,
+          primaryPhone: phone,
+          primaryEmail: emailLower,
+        },
+      });
 
-  return {
-    identityId: created.id,
-    publicLeadId: created.leadId,
-    created: true,
-  };
+      void client.lead
+        .updateMany({
+          where: {
+            identityId: null,
+            OR: [
+              { customerMobile: phone },
+              { customerMobile: { endsWith: phone } },
+              { customerEmail: { equals: emailLower, mode: "insensitive" } },
+              { leadId: publicLeadId },
+            ],
+          },
+          data: { identityId: created.id },
+        })
+        .catch((e) => console.error("[resolveOrCreateLeadIdentity] orphan attach failed:", e));
+
+      return {
+        identityId: created.id,
+        publicLeadId: created.leadId,
+        created: true,
+      };
+    } catch (err) {
+      lastError = err;
+      // Race on preferred legacy id — fall through and mint a fresh unique id.
+      if (isUniqueLeadIdConflict(err)) {
+        preferredLeadId = null;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to allocate a unique partner lead id");
 }
 
 export async function recordLeadEvent(params: {
@@ -188,4 +214,30 @@ export async function ensureLeadHasIdentity(lead: {
     },
   });
   return resolved.identityId;
+}
+
+/** Full project history for CRM punch (all active leads under the identity). */
+export async function buildIdentityProjectHistory(identityId: string) {
+  const leads = await prisma.lead.findMany({
+    where: {
+      identityId,
+      journeyStatus: { not: "REJECTED" },
+    },
+    include: {
+      project: { select: { id: true, name: true } },
+      cp: { select: { id: true, companyName: true, user: { select: { name: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return leads.map((l) => ({
+    projectId: l.projectId,
+    projectName: l.project?.name || null,
+    cpId: l.cpId,
+    cpName: l.cp?.companyName || l.cp?.user?.name || null,
+    punchedAt: l.createdAt.toISOString(),
+    intentType: l.intentType,
+    publicLeadId: l.leadId,
+    journeyStatus: l.journeyStatus,
+  }));
 }

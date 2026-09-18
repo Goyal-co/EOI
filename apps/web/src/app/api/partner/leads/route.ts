@@ -603,7 +603,24 @@ async function postPartnerLead(req: Request) {
     console.error("[Partner leads] create failed:", creationError);
     const message =
       creationError instanceof Error ? creationError.message : "Failed to create lead";
-    if (/unique|duplicate|P2002/i.test(message)) {
+    // LeadIdentity.leadId collisions are allocation races — not "customer already on project".
+    const prismaMeta =
+      creationError && typeof creationError === "object"
+        ? (creationError as { code?: string; meta?: { target?: string | string[] } })
+        : null;
+    const target = prismaMeta?.meta?.target;
+    const targetStr = Array.isArray(target) ? target.join(",") : String(target || "");
+    const isLeadIdRace =
+      prismaMeta?.code === "P2002" && /leadId/i.test(targetStr || message);
+    if (isLeadIdRace) {
+      return apiError(
+        "Could not allocate a unique lead id. Please try punching again.",
+        409,
+        "LEAD_ID_CONFLICT",
+      );
+    }
+    // True project duplicate: unique on (cpId, projectId, mobile) or similar — not leadId alone.
+    if (/unique|duplicate|P2002/i.test(message) && !/leadId/i.test(message)) {
       const context = await getIdentityPunchContext(cpId, mobile, email);
       return apiError(
         "This customer is already registered on this project. Open the lead to punch another project.",
@@ -617,6 +634,13 @@ async function postPartnerLead(req: Request) {
           lockExpiresAt: context.lockExpiresAt,
           lockDaysRemaining: context.lockDaysRemaining,
         },
+      );
+    }
+    if (/unique|duplicate|P2002/i.test(message)) {
+      return apiError(
+        "Could not create lead due to a temporary id conflict. Please try again.",
+        409,
+        "LEAD_ID_CONFLICT",
       );
     }
     if (/serializ|deadlock|40001|40P01|P2028|timed out|timeout/i.test(message)) {
@@ -684,6 +708,22 @@ async function postPartnerLead(req: Request) {
     let titanCrmId: string | undefined;
     try {
       const { punchPartnerLeadToCrm } = await import("@/lib/services/goyal-crm-sync");
+      const { buildIdentityProjectHistory } = await import("@/lib/leads/identity");
+      const identityId = lead.identityId;
+      const fullHistory = identityId
+        ? await buildIdentityProjectHistory(identityId)
+        : [
+            {
+              projectId: leadSnapshot.projectId,
+              projectName: leadSnapshot.projectName,
+              cpId: leadSnapshot.cpId,
+              cpName: leadSnapshot.cpName,
+              punchedAt: new Date().toISOString(),
+              intentType,
+              publicLeadId,
+              journeyStatus: "ACTIVE",
+            },
+          ];
       const crmResult = await punchPartnerLeadToCrm({
         leadDbId: leadSnapshot.id,
         customerName: leadSnapshot.customerName,
@@ -699,18 +739,7 @@ async function postPartnerLead(req: Request) {
         channelPartnerName: leadSnapshot.cpName,
         channelPartnerMobile: leadSnapshot.cpMobile,
         projectId: leadSnapshot.projectId,
-        projectHistory: [
-          {
-            projectId: leadSnapshot.projectId,
-            projectName: leadSnapshot.projectName,
-            cpId: leadSnapshot.cpId,
-            cpName: leadSnapshot.cpName,
-            punchedAt: new Date().toISOString(),
-            intentType,
-            publicLeadId,
-            journeyStatus: "ACTIVE",
-          },
-        ],
+        projectHistory: fullHistory,
       });
       titanCrmId = crmResult.crmId;
     } catch (e) {

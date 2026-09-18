@@ -25,6 +25,7 @@
     "@goyal/integrations": "*",
     "@goyal/types": "*",
     "@goyal/ui": "*",
+    "@smithy/node-http-handler": "^4.12.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@tanstack/react-query": "^5.62.8",
     "@types/bcryptjs": "^2.4.6",
