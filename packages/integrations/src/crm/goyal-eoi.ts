@@ -18,6 +18,8 @@ type GoyalEoiPayload = {
   designation?: string;
   sourceOfFund?: string;
   sourceOfEnquiry?: string;
+  /** Preferred CRM source tab (e.g. walk_in). Server may override. */
+  source?: string;
   /** Partner Portal public lead id (EOI-… / LEAD-…) — used to differentiate from Presales CRM leads. */
   leadId?: string;
   notes?: string;
@@ -120,6 +122,7 @@ export function mapToGoyalEoiPayload(data: Record<string, unknown>): GoyalEoiPay
     designation: str(data.designation) || str(data.fosName),
     sourceOfFund: str(data.sourceOfFund),
     sourceOfEnquiry,
+    source: str(data.source),
     leadId: publicLeadId,
     notes: notes || undefined,
     channelPartnerId: str(data.channelPartnerId) || str(data.cpId),

@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  DataTable, StatusBadge, Button, Drawer, Card, Modal, useToast, Textarea, PageHeader,
+  DataTable, StatusBadge, Button, Drawer, Card, Modal, useToast, Textarea, PageHeader, Input,
 } from "@goyal/ui";
-import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText, Trash2 } from "lucide-react";
+import { Eye, CheckCircle, Ban, ExternalLink, Download, FileText, Trash2, Search } from "lucide-react";
 import { useAdminCPs, useAdminProjects } from "@/lib/hooks";
 import {
   downloadPresignedAsset,
@@ -183,6 +183,7 @@ export default function AdminChannelPartnersPage() {
   const { addToast } = useToast();
 
   const [tab, setTab] = useState<TabFilter>("all");
+  const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profile, setProfile] = useState<CPProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -204,9 +205,32 @@ export default function AdminChannelPartnersPage() {
   const [cpToAssign, setCpToAssign] = useState<CPProfile | null>(null);
 
   const cps = useMemo(() => {
-    if (tab === "pending") return allCps.filter((cp) => cp.status === "PENDING");
-    return allCps;
-  }, [allCps, tab]);
+    const byTab =
+      tab === "pending" ? allCps.filter((cp) => cp.status === "PENDING") : allCps;
+    const q = search.trim().toLowerCase();
+    if (!q) return byTab;
+    const digits = q.replace(/\D/g, "");
+    return byTab.filter((cp) => {
+      const haystack = [
+        cp.name,
+        cp.email,
+        cp.companyName,
+        cp.reraNumber,
+        cp.mobile,
+        cp.city,
+        cp.status,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (haystack.includes(q)) return true;
+      if (digits.length >= 4) {
+        const mobileDigits = String(cp.mobile || "").replace(/\D/g, "");
+        if (mobileDigits.includes(digits)) return true;
+      }
+      return false;
+    });
+  }, [allCps, tab, search]);
 
   const viewProfile = async (cp: ChannelPartner) => {
     setDrawerOpen(true);
@@ -450,21 +474,33 @@ export default function AdminChannelPartnersPage() {
         }
       />
 
-      <div className="flex gap-2">
-        <Button
-          variant={tab === "all" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setTab("all")}
-        >
-          All
-        </Button>
-        <Button
-          variant={tab === "pending" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setTab("pending")}
-        >
-          Pending
-        </Button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2">
+          <Button
+            variant={tab === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTab("all")}
+          >
+            All
+          </Button>
+          <Button
+            variant={tab === "pending" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTab("pending")}
+          >
+            Pending
+          </Button>
+        </div>
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, company, mobile, email, RERA…"
+            className="pl-9"
+            aria-label="Search channel partners"
+          />
+        </div>
       </div>
 
       <DataTable
@@ -488,8 +524,18 @@ export default function AdminChannelPartnersPage() {
         ]}
         data={cps}
         loading={isLoading}
-        emptyTitle={tab === "pending" ? "No pending partners" : "No channel partners"}
-        emptyDescription="Channel partners will appear here once they register."
+        emptyTitle={
+          search.trim()
+            ? "No matching partners"
+            : tab === "pending"
+              ? "No pending partners"
+              : "No channel partners"
+        }
+        emptyDescription={
+          search.trim()
+            ? "Try a different name, company, mobile, email, or RERA number."
+            : "Channel partners will appear here once they register."
+        }
         actions={(row) => {
           const cp = row as ChannelPartner;
           return (

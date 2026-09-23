@@ -677,35 +677,12 @@ async function postPartnerLead(req: Request) {
     cpMobile: lead.cp.mobile || undefined,
   };
 
-  deferWork("partner.lead.side-effects", async () => {
-    if (sendConfirmation) {
-      try {
-        const emailResult = await NotificationService.notifyCustomerConfirmation({
-          customerEmail: leadSnapshot.customerEmail,
-          customerName: leadSnapshot.customerName,
-          cpName: leadSnapshot.cpName,
-          companyName: leadSnapshot.companyName,
-          projectName: leadSnapshot.projectName,
-          projectLocation: leadSnapshot.projectLocation,
-          acceptUrl,
-          rejectUrl,
-          entityId: leadSnapshot.id,
-          leadId: publicLeadId,
-          intentType,
-        });
-        if (emailResult.success && !emailResult.skipped && !emailResult.mocked) {
-          const sms = getSMSProvider();
-          await sms.sendSMS(
-            leadSnapshot.customerMobile,
-            `Goyal Hariyana Projects: ${leadSnapshot.cpName} invites you to confirm your interest in ${leadSnapshot.projectName}. Check your email for the confirmation link.`,
-          );
-        }
-      } catch (e) {
-        console.error("[Partner leads] confirmation notify failed:", e);
-      }
-    }
-
-    let titanCrmId: string | undefined;
+  // Await CRM punch so partner / EOI leads always land in Goyal Platform Leads
+  // (deferred after() is unreliable on some hosts — walk-ins already awaited).
+  let titanCrmId: string | undefined = lead.titanCrmId || undefined;
+  let crmSynced = Boolean(titanCrmId);
+  let crmError: string | undefined;
+  if (!titanCrmId) {
     try {
       const { punchPartnerLeadToCrm } = await import("@/lib/services/goyal-crm-sync");
       const { buildIdentityProjectHistory } = await import("@/lib/leads/identity");
@@ -742,8 +719,42 @@ async function postPartnerLead(req: Request) {
         projectHistory: fullHistory,
       });
       titanCrmId = crmResult.crmId;
+      crmSynced = Boolean(crmResult.success && crmResult.crmId);
+      if (!crmSynced) {
+        crmError = "CRM punch returned no lead id";
+      }
     } catch (e) {
-      console.error("[Goyal CRM] deferred punch failed:", e);
+      crmError = e instanceof Error ? e.message : "CRM punch failed";
+      console.error("[Goyal CRM] partner punch failed:", e);
+    }
+  }
+
+  deferWork("partner.lead.side-effects", async () => {
+    if (sendConfirmation) {
+      try {
+        const emailResult = await NotificationService.notifyCustomerConfirmation({
+          customerEmail: leadSnapshot.customerEmail,
+          customerName: leadSnapshot.customerName,
+          cpName: leadSnapshot.cpName,
+          companyName: leadSnapshot.companyName,
+          projectName: leadSnapshot.projectName,
+          projectLocation: leadSnapshot.projectLocation,
+          acceptUrl,
+          rejectUrl,
+          entityId: leadSnapshot.id,
+          leadId: publicLeadId,
+          intentType,
+        });
+        if (emailResult.success && !emailResult.skipped && !emailResult.mocked) {
+          const sms = getSMSProvider();
+          await sms.sendSMS(
+            leadSnapshot.customerMobile,
+            `Goyal Hariyana Projects: ${leadSnapshot.cpName} invites you to confirm your interest in ${leadSnapshot.projectName}. Check your email for the confirmation link.`,
+          );
+        }
+      } catch (e) {
+        console.error("[Partner leads] confirmation notify failed:", e);
+      }
     }
 
     try {
@@ -791,12 +802,13 @@ async function postPartnerLead(req: Request) {
   });
 
   return apiResponse({
-    lead: serializePartnerLead(lead, publicLeadId),
+    lead: serializePartnerLead(lead, publicLeadId, titanCrmId),
     intentType,
     // Optimistic: confirmation is queued; actual send happens in background.
     sentConfirmation: sendConfirmation,
     emailQueued: sendConfirmation,
-    crmSynced: false,
+    crmSynced,
+    crmError,
     lockExpiresAt: lockExpiresAtIso,
     lockDaysRemaining,
     availableProjects: [],
