@@ -8,6 +8,7 @@ import {
 } from "@goyal/ui";
 import { Clock, Copy, Layers3, Lock, Mail, MapPin, Pencil, Phone, Send } from "lucide-react";
 import { usePartnerLeads, usePartnerProjects } from "@/lib/hooks";
+import { partnerVisibleJourneyStatus } from "@/lib/partner-visible-status";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
 
@@ -127,7 +128,13 @@ function PartnerLeadsContent() {
 
   useEffect(() => {
     const status = searchParams.get("status");
-    if (status) setStatusFilter(status);
+    if (!status) return;
+    // ACTIVE / CONFIRMATION_PENDING are admin-only — ignore in partner filters
+    if (status === "ACTIVE" || status === "CONFIRMATION_PENDING") {
+      setStatusFilter("");
+      return;
+    }
+    setStatusFilter(status);
   }, [searchParams]);
 
   useEffect(() => {
@@ -325,49 +332,47 @@ function PartnerLeadsContent() {
   };
 
   const filterBar = (
-    <div className="flex flex-col gap-3 w-full">
-      <Input
-        placeholder="Search by name, email, or mobile..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="max-w-md"
-      />
-      <div className="flex flex-wrap gap-3">
-        <Select
-          label=""
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          options={[
-            { value: "", label: "All Projects" },
-            ...projectList.map((p) => ({ value: p.id, label: p.name })),
-          ]}
+          <div className="flex flex-col gap-3 w-full">
+            <Input
+              placeholder="Search by name, email, or mobile..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+            <div className="flex flex-wrap gap-3">
+            <Select
+              label=""
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              options={[
+                { value: "", label: "All Projects" },
+                ...projectList.map((p) => ({ value: p.id, label: p.name })),
+              ]}
           className="w-full sm:w-48"
-        />
-        <Select
-          label=""
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          options={[
-            { value: "", label: "All Statuses" },
-            { value: "DRAFT", label: "Draft" },
-            { value: "CONFIRMATION_PENDING", label: "Confirmation Pending" },
-            { value: "ACTIVE", label: "Active" },
-            { value: "SUBMITTED", label: "Submitted" },
-            { value: "APPROVED", label: "Approved" },
-            { value: "BOOKED", label: "Booked" },
-            { value: "REJECTED", label: "Rejected" },
-            { value: "CORRECTION_PENDING", label: "Correction Pending" },
-            { value: "LEAD_CONFIRMED", label: "Lead Confirmed" },
-          ]}
+            />
+            <Select
+              label=""
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: "", label: "All Statuses" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "SUBMITTED", label: "Submitted" },
+                { value: "APPROVED", label: "Approved" },
+                { value: "BOOKED", label: "Booked" },
+                { value: "REJECTED", label: "Rejected" },
+                { value: "CORRECTION_PENDING", label: "Correction Pending" },
+                { value: "LEAD_CONFIRMED", label: "Lead Confirmed" },
+              ]}
           className="w-full sm:w-48"
-        />
-        <Select
-          label=""
-          value={intentFilter}
-          onChange={(e) => setIntentFilter(e.target.value)}
-          options={[
-            { value: "", label: "All Types" },
-            { value: "EOI", label: "EOI" },
+            />
+            <Select
+              label=""
+              value={intentFilter}
+              onChange={(e) => setIntentFilter(e.target.value)}
+              options={[
+                { value: "", label: "All Types" },
+                { value: "EOI", label: "EOI" },
             { value: "LEAD_ONLY", label: "Lead" },
           ]}
           className="w-full sm:w-40"
@@ -389,36 +394,36 @@ function PartnerLeadsContent() {
               .map((name) => ({ value: name, label: name })),
           ]}
           className="w-full sm:w-48"
-        />
-        <Input
-          type="date"
-          label=""
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
+            />
+            <Input
+              type="date"
+              label=""
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
           className="w-full sm:w-40"
-        />
-        <Input
-          type="date"
-          label=""
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
+            />
+            <Input
+              type="date"
+              label=""
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
           className="w-full sm:w-40"
-        />
+            />
         {(projectFilter || statusFilter || intentFilter || teamFilter || debouncedSearch || fromDate || toDate) && (
-          <Button variant="ghost" size="sm" onClick={() => {
-            setProjectFilter("");
-            setStatusFilter("");
-            setIntentFilter("");
+              <Button variant="ghost" size="sm" onClick={() => {
+                setProjectFilter("");
+                setStatusFilter("");
+                setIntentFilter("");
             setTeamFilter("");
-            setSearchQuery("");
-            setFromDate("");
-            setToDate("");
-          }}>
-            Clear filters
-          </Button>
-        )}
-      </div>
-    </div>
+                setSearchQuery("");
+                setFromDate("");
+                setToDate("");
+              }}>
+                Clear filters
+              </Button>
+            )}
+            </div>
+          </div>
   );
 
   return (
@@ -461,7 +466,10 @@ function PartnerLeadsContent() {
                     <p className="font-semibold text-foreground truncate">{lead.customerName}</p>
                     <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{lead.leadId || "—"}</p>
                   </div>
-                  <StatusBadge status={lead.journeyStatus || lead.leadStatus} />
+                  {(() => {
+                    const status = partnerVisibleJourneyStatus(lead.journeyStatus || lead.leadStatus);
+                    return status ? <StatusBadge status={status} /> : null;
+                  })()}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground truncate">{lead.project.name}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -515,9 +523,10 @@ function PartnerLeadsContent() {
           { key: "customerMobile", header: "Mobile", render: (row) => (
             <MaskedPii value={maskMobile(row.customerMobile)} />
           )},
-          { key: "leadStatus", header: "Status", render: (row) => (
-            <StatusBadge status={row.journeyStatus || row.leadStatus} />
-          )},
+          { key: "leadStatus", header: "Status", render: (row) => {
+            const status = partnerVisibleJourneyStatus(row.journeyStatus || row.leadStatus);
+            return status ? <StatusBadge status={status} /> : <span className="text-muted-foreground">—</span>;
+          }},
           { key: "eoi", header: "EOI Status", render: (row) => (
             row.intentType === "LEAD_ONLY"
               ? <span className="text-muted-foreground">N/A</span>
@@ -577,10 +586,16 @@ function PartnerLeadsContent() {
               )}
               <div className="flex items-center gap-2 mt-2">
                 <StatusBadge status={selectedLead.intentType === "LEAD_ONLY" ? "LEAD_ONLY" : "EOI"} />
-                <StatusBadge status={selectedLead.journeyStatus || selectedLead.leadStatus} />
-                {selectedLead.confirmationStatus && (
+                {(() => {
+                  const status = partnerVisibleJourneyStatus(
+                    selectedLead.journeyStatus || selectedLead.leadStatus,
+                  );
+                  return status ? <StatusBadge status={status} /> : null;
+                })()}
+                {selectedLead.confirmationStatus &&
+                selectedLead.confirmationStatus !== "PENDING" ? (
                   <StatusBadge status={selectedLead.confirmationStatus} />
-                )}
+                ) : null}
                 {selectedLead.eoi && selectedLead.intentType !== "LEAD_ONLY" && <StatusBadge status={selectedLead.eoi.status} />}
               </div>
             </div>
@@ -656,17 +671,17 @@ function PartnerLeadsContent() {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedLead.customerEmail}</span>
-                    <Button variant="ghost" size="sm" onClick={() => copyEmail(selectedLead.customerEmail)}>
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedLead.customerMobile}</span>
-                  </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span>{selectedLead.customerEmail}</span>
+                <Button variant="ghost" size="sm" onClick={() => copyEmail(selectedLead.customerEmail)}>
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{selectedLead.customerMobile}</span>
+              </div>
                 </>
               )}
               {selectedLead.city && (
@@ -743,7 +758,7 @@ function PartnerLeadsContent() {
               </p>
               {selectedLead.availableProjects?.length ? (
                 <div className="space-y-3">
-                  <Select
+            <Select
                     label="Project"
                     value={mapProjectId}
                     onChange={(e) => setMapProjectId(e.target.value)}
@@ -842,21 +857,21 @@ function PartnerLeadsContent() {
                     type="date"
                     label="Site Visit Scheduled"
                     value={siteVisitDate}
-                    onChange={async (e) => {
+              onChange={async (e) => {
                       const date = e.target.value;
                       setSiteVisitDate(date);
                       if (!date) return;
-                      const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
+                const res = await fetch(`/api/partner/leads/${selectedLead.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                           siteVisitStatus: "SCHEDULED",
                           siteVisitDate: date,
                         }),
-                      });
-                      if (res.ok) {
+                });
+                if (res.ok) {
                         const updated = await res.json();
-                        await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
+                  await qc.invalidateQueries({ queryKey: ["partner", "leads"] });
                         setSelectedLead({
                           ...selectedLead,
                           siteVisitStatus: updated.siteVisitStatus,

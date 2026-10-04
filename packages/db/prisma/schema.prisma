@@ -645,3 +645,25 @@ model EoiAnnouncementDelivery {
   @@index([announcementId])
   @@index([userId])
 }
+
+/// Partner Portal Guide walkthrough / quick-guide videos (admin-managed).
+model PortalGuideVideo {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?  @db.Text
+  videoUrl      String
+  thumbnailUrl  String?
+  /// Display duration e.g. "04:30"
+  durationLabel String?
+  /// Duration in seconds (optional, for sorting/analytics)
+  durationSec   Int?
+  featured      Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@index([featured])
+  @@map("PortalGuideVideo")
+}

@@ -391,30 +391,43 @@ async function syncSiteVisitPunch(
     str(data.salespersonName) ? `Sales: ${str(data.salespersonName)}` : null,
     publicLeadId ? `Partner Lead ID: ${publicLeadId}` : null,
     str(data.projectName) ? `Project: ${str(data.projectName)}` : null,
+    str(data.projectId) ? `Project ID: ${str(data.projectId)}` : null,
     `Site visit at ${new Date().toISOString()}`,
   ]
     .filter(Boolean)
     .join(" — ");
 
-  const payload = compact({
+  // Live CRM rejects leadId / projectId / projectName / *History on site-visit POST.
+  const coreFlags = {
     siteVisit: true,
     siteVisitDate: str(data.siteVisitDate) || today,
     siteVisitDone: true,
     siteVisitDoneDate: str(data.siteVisitDoneDate) || today,
-    leadId: publicLeadId,
-    projectId: str(data.projectId),
-    projectName: str(data.projectName),
+  };
+  const fullPayload = compact({
+    ...coreFlags,
     visitingCpId: str(data.visitingCpId) || str(data.channelPartnerId),
     visitingCpName: str(data.visitingCpName) || str(data.channelPartnerName),
     visitingCpMobile: str(data.visitingCpMobile) || str(data.channelPartnerMobile),
     salespersonId: str(data.salespersonId),
     salespersonName: str(data.salespersonName),
-    notes,
-    projectHistory: Array.isArray(data.projectHistory) ? data.projectHistory : undefined,
-    siteVisitHistory: Array.isArray(data.siteVisitHistory) ? data.siteVisitHistory : undefined,
+    notes: notes || undefined,
+  });
+  const minimalPayload = compact({
+    ...coreFlags,
+    notes: notes || undefined,
   });
 
-  await postSiteVisit(resolved, payload, token);
+  try {
+    await postSiteVisit(resolved, fullPayload, token);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/should not exist/i.test(msg)) {
+      await postSiteVisit(resolved, minimalPayload, token);
+    } else {
+      throw err;
+    }
+  }
   logger.info("crm.goyal", "site visit punched", {
     crmLeadId: resolved,
     partnerLeadId: publicLeadId,

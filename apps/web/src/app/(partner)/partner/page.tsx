@@ -6,9 +6,10 @@ import {
   StatCard, ProjectCard, CardSkeleton, DataTable, JourneyStatusBadge, formatDate, PageHeader, Select, Input, FilterBar,
 } from "@goyal/ui";
 import {
-  UserCheck, FileText, CheckCircle, XCircle, Clock, Send,
+  UserCheck, FileText, CheckCircle, XCircle, Clock,
 } from "lucide-react";
 import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads, usePartnerFosNames } from "@/lib/hooks";
+import { partnerVisibleJourneyStatus } from "@/lib/partner-visible-status";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
 import { useRequirePartnerAccess } from "@/lib/use-require-partner";
@@ -47,7 +48,6 @@ const KPI_CONFIG = [
   { key: "totalLeads" as const, title: "Total Leads", icon: UserCheck, href: "/partner/leads" },
   { key: "submittedEOIs" as const, title: "EOI's Submitted", icon: FileText, href: "/partner/eois?status=submitted" },
   { key: "eoiPendingCustomer" as const, title: "EOI's Pending (Customer)", icon: Clock, href: "/partner/leads?status=DRAFT" },
-  { key: "confirmationPending" as const, title: "EOI's Confirmation Pending", icon: Send, href: "/partner/leads?status=CONFIRMATION_PENDING" },
   { key: "approvedEOIs" as const, title: "Approved EOI's", icon: CheckCircle, href: "/partner/eois?status=APPROVED" },
   { key: "rejectedEOIs" as const, title: "Rejected EOI's", icon: XCircle, href: "/partner/eois?status=REJECTED" },
 ];
@@ -186,7 +186,14 @@ export default function PartnerDashboardPage() {
             {
               key: "journeyStatus",
               header: "Journey Status",
-              render: (row) => <JourneyStatusBadge status={row.journeyStatus} />,
+              render: (row) => {
+                const status = partnerVisibleJourneyStatus(row.journeyStatus);
+                return status ? (
+                  <JourneyStatusBadge status={status} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                );
+              },
             },
             {
               key: "confirmationSentAt",

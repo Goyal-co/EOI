@@ -376,7 +376,43 @@ export const announcementAttachmentSchema = z.object({
   kind: z.enum(["image", "video", "document"]),
 });
 
+const optionalDurationLabel = z.preprocess(
+  (v) => (typeof v === "string" && !v.trim() ? null : v),
+  z
+    .string()
+    .trim()
+    .regex(/^\d{1,2}:\d{2}$/, "Use MM:SS format (e.g. 04:30)")
+    .optional()
+    .nullable(),
+);
+
+const optionalStoredUrl = z.preprocess(
+  (v) => (typeof v === "string" && !v.trim() ? null : v),
+  storedFileUrlSchema.optional().nullable(),
+);
+
+export const portalGuideVideoCreateSchema = z.object({
+  title: z.string().trim().min(2, "Title is required").max(200),
+  description: z.preprocess(
+    (v) => (typeof v === "string" && !v.trim() ? null : v),
+    z.string().trim().max(2000).optional().nullable(),
+  ),
+  videoUrl: storedFileUrlSchema,
+  thumbnailUrl: optionalStoredUrl,
+  durationLabel: optionalDurationLabel,
+  durationSec: z.number().int().nonnegative().optional().nullable(),
+  featured: z.boolean().optional().default(false),
+  sortOrder: z.number().int().optional().default(0),
+  active: z.boolean().optional().default(true),
+});
+
+export const portalGuideVideoUpdateSchema = portalGuideVideoCreateSchema.partial().extend({
+  videoUrl: storedFileUrlSchema.optional(),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
+export type PortalGuideVideoCreateInput = z.infer<typeof portalGuideVideoCreateSchema>;
+export type PortalGuideVideoUpdateInput = z.infer<typeof portalGuideVideoUpdateSchema>;
 export type CPRegisterStep1 = z.infer<typeof cpRegisterStep1Schema>;
 export type CPRegisterStep2 = z.infer<typeof cpRegisterStep2Schema>;
 export type ProjectInput = z.infer<typeof projectSchema>;

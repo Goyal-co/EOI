@@ -2,7 +2,7 @@
 
 import { AppShell, LogoutConfirmModal } from "@goyal/ui";
 import {
-  LayoutDashboard, Building2, UserCheck, FileText, Users,
+  LayoutDashboard, Building2, UserCheck, FileText, Users, BookOpen,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -17,6 +17,7 @@ const allSidebarItems = [
   { label: "My Leads", href: "/partner/leads", icon: UserCheck, ownerOnly: false },
   { label: "My EOIs", href: "/partner/eois", icon: FileText, ownerOnly: false },
   { label: "My Team", href: "/partner/team", icon: Users, ownerOnly: true },
+  { label: "Portal Guide", href: "/partner/portal-guide", icon: BookOpen, ownerOnly: false },
 ];
 
 export function PartnerLayout({ children }: { children: React.ReactNode }) {
@@ -74,9 +75,7 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
           profileName,
           profileRole,
           onProfileClick: () => router.push("/partner/profile"),
-          onHelpClick: () => {
-            window.location.href = "mailto:support@goyalprojects.com";
-          },
+          onHelpClick: () => router.push("/partner/portal-guide"),
         }}
       >
         <div className="min-w-0">{children}</div>
