@@ -78,6 +78,7 @@ export function PunchLeadModal({
   const [activeProjectId, setActiveProjectId] = useState(projectId);
   const [activeProjectName, setActiveProjectName] = useState(projectName);
   const [now, setNow] = useState(Date.now());
+  const [confirmationFlowEnabled, setConfirmationFlowEnabled] = useState<boolean | null>(null);
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -113,6 +114,19 @@ export function PunchLeadModal({
     setActiveProjectId(projectId);
     setActiveProjectName(projectName);
   }, [open, projectId, projectName]);
+
+  useEffect(() => {
+    if (!open) return;
+    setConfirmationFlowEnabled(null);
+    fetch("/api/partner/settings")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("settings"))))
+      .then((data) => {
+        setConfirmationFlowEnabled(data.permissions?.cpConfirmationFlowEnabled !== false);
+      })
+      .catch(() => {
+        setConfirmationFlowEnabled(false);
+      });
+  }, [open]);
 
   useEffect(() => {
     if (!open || isTeamMemberLogin) return;
@@ -506,19 +520,35 @@ export function PunchLeadModal({
                 <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span className="font-medium">{form.email}</span></div>
               </div>
               <p className="text-muted-foreground text-xs">
-                Save as draft without emailing, or send a confirmation email now. Phone and email stay protected for 15 days after punch.
+                {confirmationFlowEnabled === true
+                  ? "Save as draft without emailing, or send a confirmation email now. Phone and email stay protected for 15 days after punch."
+                  : confirmationFlowEnabled === false
+                    ? "Punch this lead to save the customer. Phone and email stay protected for 15 days after punch."
+                    : "Loading portal permissions…"}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
               <Button variant="outline" onClick={() => setStep(0)} disabled={loading}>
                 Back
               </Button>
-              <Button variant="outline" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
-                Save as Draft
-              </Button>
-              <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(true)}>
-                Punch Lead &amp; Send Confirmation
-              </Button>
+              {confirmationFlowEnabled === null ? (
+                <Button variant="gold" disabled>
+                  Loading…
+                </Button>
+              ) : confirmationFlowEnabled ? (
+                <>
+                  <Button variant="outline" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
+                    Save as Draft
+                  </Button>
+                  <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(true)}>
+                    Punch Lead &amp; Send Confirmation
+                  </Button>
+                </>
+              ) : (
+                <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
+                  Punch Lead
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -536,7 +566,10 @@ export function PunchLeadModal({
             <p className="text-sm text-muted-foreground mt-2">
               {sentConfirmation
                 ? "The customer must accept the confirmation email to complete this lead."
-                : emailWarning || "The lead was saved. You can send confirmation later from the leads page."}
+                : emailWarning
+                  || (confirmationFlowEnabled === true
+                    ? "The lead was saved. You can send confirmation later from the leads page."
+                    : "The lead was punched successfully.")}
             </p>
             {createdLeadId && (
               <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">

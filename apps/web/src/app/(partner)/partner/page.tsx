@@ -12,6 +12,7 @@ import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads, usePartnerFos
 import { partnerVisibleJourneyStatus } from "@/lib/partner-visible-status";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
+import { PartnerPromoCarousel } from "@/components/partner-promo-carousel";
 import { useRequirePartnerAccess } from "@/lib/use-require-partner";
 
 interface PartnerAnalytics {
@@ -109,6 +110,8 @@ export default function PartnerDashboardPage() {
 
   return (
     <div className="space-y-6">
+      <PartnerPromoCarousel />
+
       <PageHeader
         title="Dashboard"
         description="Overview of your partner activity"

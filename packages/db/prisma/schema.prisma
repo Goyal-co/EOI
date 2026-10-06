@@ -667,3 +667,23 @@ model PortalGuideVideo {
   @@index([featured])
   @@map("PortalGuideVideo")
 }
+
+/// Partner dashboard promotional carousel creatives (admin-managed).
+model PartnerPromotion {
+  id        String    @id @default(cuid())
+  title     String
+  mediaUrl  String
+  /// IMAGE | GIF | VIDEO
+  mediaKind String
+  linkUrl   String?
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([active, sortOrder])
+  @@index([startsAt, endsAt])
+  @@map("PartnerPromotion")
+}

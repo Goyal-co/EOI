@@ -44,6 +44,7 @@ export default function AdminSettingsPage() {
     cpCanExportLeads: false,
     customerCanEditEOI: true,
     requireAdminApproval: true,
+    cpConfirmationFlowEnabled: true,
   });
 
   const [saving, setSaving] = useState<string | null>(null);
@@ -76,7 +77,14 @@ export default function AdminSettingsPage() {
     try {
       const payload =
         section === "Profile" ? { profile: { name: profile.name, phone: profile.phone, supportEmail: profile.supportEmail } }
-        : section === "Notifications" ? { notifications: notifPrefs }
+        : section === "Notifications"
+          ? {
+              notifications: notifPrefs,
+              // Confirmation toggle lives under Notifications UI but persists in permissions
+              permissions: {
+                cpConfirmationFlowEnabled: permissions.cpConfirmationFlowEnabled,
+              },
+            }
         : section === "EOI Rules" ? { eoiRules }
         : { permissions };
 
@@ -166,6 +174,35 @@ export default function AdminSettingsPage() {
               { value: "none", label: "None" },
             ]}
           />
+
+          <div className="rounded-lg border border-border bg-blue-50/40 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Customer confirmation (Partner portal)
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                When off, Send Confirmation and Activate are hidden for channel partners,
+                and confirmation emails cannot be sent from the CP portal.
+              </p>
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={permissions.cpConfirmationFlowEnabled}
+                onChange={(e) =>
+                  setPermissions({
+                    ...permissions,
+                    cpConfirmationFlowEnabled: e.target.checked,
+                  })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-border text-[#2563EB] focus:ring-[#2563EB]/20"
+              />
+              <span className="text-sm text-foreground">
+                Allow CPs to send customer confirmation emails and activate leads
+              </span>
+            </label>
+          </div>
+
           <Button loading={saving === "Notifications"} onClick={() => saveSection("Notifications")}>Save Preferences</Button>
         </CardContent>
       </Card>

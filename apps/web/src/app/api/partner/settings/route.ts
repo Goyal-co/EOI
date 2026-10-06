@@ -22,12 +22,11 @@ const DEFAULTS = {
 export const GET = withApiRoute("partner.settings.get", async () => {
   const { error, session } = await withPartnerAuth();
   if (error) return error;
-  const ownerError = await requirePartnerOwner(session!);
-  if (ownerError) return ownerError;
 
+  // Prefer owner prefs when available; team members still need system permission flags.
   const user = await prisma.user.findUnique({
     where: { id: session!.user.id },
-    select: { preferences: true },
+    select: { preferences: true, role: true },
   });
 
   const stored = (user?.preferences as Record<string, boolean> | null) || {};
@@ -39,6 +38,7 @@ export const GET = withApiRoute("partner.settings.get", async () => {
     permissions: {
       cpCanExportLeads: system.permissions.cpCanExportLeads,
       cpCanViewAnalytics: system.permissions.cpCanViewAnalytics,
+      cpConfirmationFlowEnabled: system.permissions.cpConfirmationFlowEnabled !== false,
     },
   });
 });

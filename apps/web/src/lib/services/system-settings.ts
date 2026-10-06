@@ -23,6 +23,8 @@ export interface Permissions {
   cpCanExportLeads: boolean;
   customerCanEditEOI: boolean;
   requireAdminApproval: boolean;
+  /** When true, CPs can send customer confirmation emails and activate leads. */
+  cpConfirmationFlowEnabled: boolean;
 }
 
 export interface NotificationSettings {
@@ -106,6 +108,7 @@ export const SYSTEM_SETTINGS_DEFAULTS: SystemSettingsData = {
     cpCanExportLeads: false,
     customerCanEditEOI: true,
     requireAdminApproval: true,
+    cpConfirmationFlowEnabled: true,
   },
 };
 

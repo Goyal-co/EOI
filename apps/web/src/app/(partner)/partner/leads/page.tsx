@@ -113,6 +113,7 @@ function PartnerLeadsContent() {
   const [now, setNow] = useState(Date.now());
   const [sendingConfirmation, setSendingConfirmation] = useState(false);
   const [canExport, setCanExport] = useState(false);
+  const [confirmationFlowEnabled, setConfirmationFlowEnabled] = useState<boolean | null>(null);
   const [activating, setActivating] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [editEmail, setEditEmail] = useState("");
@@ -139,9 +140,14 @@ function PartnerLeadsContent() {
 
   useEffect(() => {
     fetch("/api/partner/settings")
-      .then((r) => r.json())
-      .then((data) => setCanExport(!!data.permissions?.cpCanExportLeads))
-      .catch(() => {});
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("settings"))))
+      .then((data) => {
+        setCanExport(!!data.permissions?.cpCanExportLeads);
+        setConfirmationFlowEnabled(data.permissions?.cpConfirmationFlowEnabled !== false);
+      })
+      .catch(() => {
+        setConfirmationFlowEnabled(false);
+      });
   }, []);
 
   // Live countdown only when this CP holds an active lock
@@ -313,7 +319,11 @@ function PartnerLeadsContent() {
   };
 
   const canSendConfirmation = (lead: Lead) =>
-    !lead.confirmationStatus || lead.confirmationStatus === "PENDING";
+    confirmationFlowEnabled === true &&
+    (!lead.confirmationStatus || lead.confirmationStatus === "PENDING");
+
+  const showActivate = (lead: Lead) =>
+    confirmationFlowEnabled === true && Boolean(lead.canActivate);
 
   const handleSendConfirmation = async (leadId: string) => {
     setSendingConfirmation(true);
@@ -481,7 +491,7 @@ function PartnerLeadsContent() {
                   {renderLockCell(lead)}
                 </div>
               </button>
-              {lead.canActivate && (
+              {showActivate(lead) && (
                 <div className="mt-3 border-t border-border pt-3">
                   <Button
                     variant="gold"
@@ -543,7 +553,7 @@ function PartnerLeadsContent() {
           { key: "lockExpiresAt", header: "Lock", render: (row) => (
             <div className="flex flex-col items-start gap-1.5">
               {renderLockCell(row)}
-              {row.canActivate && (
+              {showActivate(row) && (
                 <Button
                   variant="gold"
                   size="sm"
@@ -610,7 +620,7 @@ function PartnerLeadsContent() {
               </Button>
             )}
 
-            {selectedLead.canActivate && (
+            {showActivate(selectedLead) && (
               <Button
                 variant="gold"
                 loading={activating}
@@ -741,7 +751,7 @@ function PartnerLeadsContent() {
                   Lock expired
                 </div>
                 <p className="mt-1 text-xs text-rose-700">
-                  {selectedLead.canActivate
+                  {confirmationFlowEnabled === true && selectedLead.canActivate
                     ? "You can activate this lead and punch it again for an available project."
                     : "Another partner may currently hold the identity lock."}
                 </p>

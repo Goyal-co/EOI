@@ -6,7 +6,7 @@ import {
 } from "@goyal/ui";
 import {
   Users, UserCheck, FileText, CheckCircle, XCircle, TrendingUp, Bell,
-  Clock, FileEdit, Upload, AlertCircle, UserPlus,
+  Clock, FileEdit, Upload, AlertCircle, UserPlus, BookOpen,
 } from "lucide-react";
 import { useAdminOverview } from "@/lib/hooks";
 
@@ -105,17 +105,46 @@ export default function AdminDashboardPage() {
         title="Dashboard Overview"
         description="Real-time snapshot of your EOI platform"
         actions={
-          overview.pendingApprovals > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => router.push("/admin/approvals")}
-              className="flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+              type="button"
+              onClick={() => router.push("/admin/portal-guide")}
+              className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors"
             >
-              <Bell className="h-4 w-4" />
-              {overview.pendingApprovals} Pending Approval{overview.pendingApprovals === 1 ? "" : "s"}
+              <BookOpen className="h-4 w-4" />
+              Portal Guide videos
             </button>
-          ) : undefined
+            {overview.pendingApprovals > 0 ? (
+              <button
+                type="button"
+                onClick={() => router.push("/admin/approvals")}
+                className="flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                <Bell className="h-4 w-4" />
+                {overview.pendingApprovals} Pending Approval{overview.pendingApprovals === 1 ? "" : "s"}
+              </button>
+            ) : null}
+          </div>
         }
       />
+
+      <button
+        type="button"
+        onClick={() => router.push("/admin/portal-guide")}
+        className="flex w-full items-start gap-4 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
+      >
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+          <BookOpen className="h-5 w-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-navy">
+            Portal Guide — upload partner videos
+          </span>
+          <span className="mt-0.5 block text-xs text-muted">
+            Add a featured walkthrough and short quick-guide videos for the Channel Partner Portal.
+          </span>
+        </span>
+      </button>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {statConfig.map(({ key, title, icon: Icon }) => (

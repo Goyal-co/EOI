@@ -76,6 +76,7 @@ export function SubmitEOIModal({
   const [activeProjectId, setActiveProjectId] = useState(projectId);
   const [activeProjectName, setActiveProjectName] = useState(projectName);
   const [now, setNow] = useState(Date.now());
+  const [confirmationFlowEnabled, setConfirmationFlowEnabled] = useState<boolean | null>(null);
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -102,6 +103,19 @@ export function SubmitEOIModal({
     setActiveProjectId(projectId);
     setActiveProjectName(projectName);
   }, [open, projectId, projectName]);
+
+  useEffect(() => {
+    if (!open) return;
+    setConfirmationFlowEnabled(null);
+    fetch("/api/partner/settings")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("settings"))))
+      .then((data) => {
+        setConfirmationFlowEnabled(data.permissions?.cpConfirmationFlowEnabled !== false);
+      })
+      .catch(() => {
+        setConfirmationFlowEnabled(false);
+      });
+  }, [open]);
 
   useEffect(() => {
     if (!open || !initialLead) return;
@@ -447,19 +461,35 @@ export function SubmitEOIModal({
                 {form.budget && <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-medium">{form.budget}</span></div>}
               </div>
               <p className="text-muted-foreground text-xs">
-                Save as draft without emailing the customer, or send a confirmation email now. Phone and email stay protected for 15 days after punch.
+                {confirmationFlowEnabled === true
+                  ? "Save as draft without emailing the customer, or send a confirmation email now. Phone and email stay protected for 15 days after punch."
+                  : confirmationFlowEnabled === false
+                    ? "Submit this EOI to save the customer. Phone and email stay protected for 15 days after punch."
+                    : "Loading portal permissions…"}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
               <Button variant="outline" onClick={() => setStep(0)} disabled={loading}>
                 Back
               </Button>
-              <Button variant="outline" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
-                Save as Draft
-              </Button>
-              <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(true)}>
-                Send Confirmation
-              </Button>
+              {confirmationFlowEnabled === null ? (
+                <Button variant="gold" disabled>
+                  Loading…
+                </Button>
+              ) : confirmationFlowEnabled ? (
+                <>
+                  <Button variant="outline" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
+                    Save as Draft
+                  </Button>
+                  <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(true)}>
+                    Send Confirmation
+                  </Button>
+                </>
+              ) : (
+                <Button variant="gold" loading={loading} disabled={!canProceed} onClick={() => handleSubmit(false)}>
+                  Submit EOI
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -479,7 +509,9 @@ export function SubmitEOIModal({
                 ? "A confirmation email has been sent to the customer. They must accept before proceeding with the EOI."
                 : emailWarning
                   ? "The customer was saved but the confirmation email could not be delivered."
-                  : "The customer has been saved. You can send a confirmation email later from the leads page."}
+                  : confirmationFlowEnabled === true
+                    ? "The customer has been saved. You can send a confirmation email later from the leads page."
+                    : "The EOI has been submitted successfully."}
             </p>
             {createdLeadId && (
               <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">

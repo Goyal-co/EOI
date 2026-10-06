@@ -16,6 +16,7 @@ import {
 import { recordLeadEvent, resolveOrCreateLeadIdentity } from "@/lib/leads/identity";
 import { normalizeMobile, daysRemainingUntil, phoneLockWindowMs } from "@/lib/leads/phone";
 import { getLeadLockPolicy } from "@/lib/services/system-settings";
+import { requireCpConfirmationFlowEnabled } from "@/lib/services/cp-confirmation-flow";
 import { resolveTeamMemberForLead } from "@/lib/services/team-members";
 import { getPartnerScope, leadScopeWhere } from "@/lib/partner-scope";
 import { deferWork } from "@/lib/defer";
@@ -457,6 +458,11 @@ async function postPartnerLead(req: Request) {
   let sendConfirmation = parsed.data.sendConfirmation ?? false;
   if (isRemap && project.eoiStatus !== "OPEN") {
     sendConfirmation = false;
+  }
+
+  if (sendConfirmation) {
+    const flowError = await requireCpConfirmationFlowEnabled();
+    if (flowError) return flowError;
   }
 
   if (!isLeadOnly && sendConfirmation) {

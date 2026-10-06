@@ -9,6 +9,7 @@ import {
 import { normalizeMobile } from "@/lib/leads/phone";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
 import { leadScopeWhere } from "@/lib/partner-scope";
+import { requireCpConfirmationFlowEnabled } from "@/lib/services/cp-confirmation-flow";
 
 const activateSchema = z.object({
   leadId: z.string().min(1),
@@ -23,6 +24,8 @@ export const POST = withApiRoute("partner.leads.activate", async (req: Request) 
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+  const flowError = await requireCpConfirmationFlowEnabled();
+  if (flowError) return flowError;
 
   const body = await req.json().catch(() => null);
   const parsed = activateSchema.safeParse(body);

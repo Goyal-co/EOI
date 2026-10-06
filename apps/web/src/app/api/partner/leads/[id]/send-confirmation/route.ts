@@ -3,12 +3,15 @@ import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute
 import { getCustomerConfirmUrl, NotificationService } from "@goyal/email";
 import { getSMSProvider } from "@goyal/integrations";
 import { leadScopeWhere } from "@/lib/partner-scope";
+import { requireCpConfirmationFlowEnabled } from "@/lib/services/cp-confirmation-flow";
 
 export const POST = withApiRoute("partner.leads.send-confirmation", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withPartnerAuth();
   if (error) return error;
   const cpError = await requireApprovedCP(session!);
   if (cpError) return cpError;
+  const flowError = await requireCpConfirmationFlowEnabled();
+  if (flowError) return flowError;
 
   const { id } = await params;
 

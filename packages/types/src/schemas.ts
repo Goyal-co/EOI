@@ -172,6 +172,7 @@ export const adminSettingsSchema = z.object({
     cpCanExportLeads: z.boolean().optional(),
     customerCanEditEOI: z.boolean().optional(),
     requireAdminApproval: z.boolean().optional(),
+    cpConfirmationFlowEnabled: z.boolean().optional(),
   }).optional(),
 });
 
@@ -200,6 +201,10 @@ export const PROJECT_BANNER_WIDTH = 1920;
 export const PROJECT_BANNER_HEIGHT = 600;
 export const PROJECT_LOCATION_WIDTH = 1920;
 export const PROJECT_LOCATION_HEIGHT = 1080;
+export const PARTNER_PROMO_WIDTH = 1920;
+export const PARTNER_PROMO_HEIGHT = 480;
+export const PARTNER_PROMO_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const PARTNER_PROMO_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
 
 /** Same-origin /api/files/… paths or absolute blob/S3 URLs after upload. */
 export const storedFileUrlSchema = z
@@ -410,9 +415,90 @@ export const portalGuideVideoUpdateSchema = portalGuideVideoCreateSchema.partial
   videoUrl: storedFileUrlSchema.optional(),
 });
 
+const optionalHttpUrl = z.preprocess(
+  (v) => (typeof v === "string" && !v.trim() ? null : v),
+  z
+    .string()
+    .url("Invalid link URL")
+    .refine(
+      (u) => u.startsWith("https://") || u.startsWith("http://"),
+      { message: "Link must start with http:// or https://" },
+    )
+    .optional()
+    .nullable(),
+);
+
+const optionalDateTime = z.preprocess(
+  (v) => (typeof v === "string" && !v.trim() ? null : v),
+  z.string().datetime().optional().nullable(),
+);
+
+const partnerPromotionFields = {
+  title: z.string().trim().min(2, "Title is required").max(200),
+  mediaUrl: storedFileUrlSchema,
+  mediaKind: z.enum(["IMAGE", "GIF", "VIDEO"]),
+  linkUrl: optionalHttpUrl,
+  sortOrder: z.number().int().optional().default(0),
+  active: z.boolean().optional().default(true),
+  startsAt: optionalDateTime,
+  endsAt: optionalDateTime,
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+};
+
+function refinePartnerPromotion(
+  data: {
+    mediaKind?: "IMAGE" | "GIF" | "VIDEO";
+    width?: number;
+    height?: number;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  },
+  ctx: z.RefinementCtx,
+  requireMediaKind: boolean,
+) {
+  if (requireMediaKind || data.mediaKind === "IMAGE" || data.mediaKind === "GIF") {
+    if (data.mediaKind === "IMAGE" || data.mediaKind === "GIF") {
+      if (data.width !== PARTNER_PROMO_WIDTH || data.height !== PARTNER_PROMO_HEIGHT) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Promotion creative must be exactly ${PARTNER_PROMO_WIDTH}×${PARTNER_PROMO_HEIGHT}px`,
+        });
+      }
+    }
+  }
+  if (data.startsAt && data.endsAt && new Date(data.startsAt) > new Date(data.endsAt)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "endsAt must be after startsAt",
+    });
+  }
+}
+
+export const partnerPromotionCreateSchema = z
+  .object(partnerPromotionFields)
+  .superRefine((data, ctx) => refinePartnerPromotion(data, ctx, true));
+
+export const partnerPromotionUpdateSchema = z
+  .object({
+    title: partnerPromotionFields.title.optional(),
+    mediaUrl: storedFileUrlSchema.optional(),
+    mediaKind: z.enum(["IMAGE", "GIF", "VIDEO"]).optional(),
+    linkUrl: optionalHttpUrl,
+    sortOrder: z.number().int().optional(),
+    active: z.boolean().optional(),
+    startsAt: optionalDateTime,
+    endsAt: optionalDateTime,
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+  })
+  .superRefine((data, ctx) => refinePartnerPromotion(data, ctx, false));
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PortalGuideVideoCreateInput = z.infer<typeof portalGuideVideoCreateSchema>;
 export type PortalGuideVideoUpdateInput = z.infer<typeof portalGuideVideoUpdateSchema>;
+export type PartnerPromotionCreateInput = z.infer<typeof partnerPromotionCreateSchema>;
+export type PartnerPromotionUpdateInput = z.infer<typeof partnerPromotionUpdateSchema>;
 export type CPRegisterStep1 = z.infer<typeof cpRegisterStep1Schema>;
 export type CPRegisterStep2 = z.infer<typeof cpRegisterStep2Schema>;
 export type ProjectInput = z.infer<typeof projectSchema>;
