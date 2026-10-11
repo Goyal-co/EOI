@@ -79,6 +79,14 @@ export const PUT = withApiRoute("customer.eoi.put", async (req: Request) => {
   });
   if (!eoi) return apiError("No active EOI found");
 
+  if (eoi.filledBy === "CP") {
+    return apiError(
+      "This EOI was submitted by your channel partner. Please contact them for updates.",
+      403,
+      "CP_FILLED_EOI",
+    );
+  }
+
   if (!submit && LOCKED_STATUSES.includes(eoi.status) && !settings.permissions.customerCanEditEOI) {
     return apiError("EOI editing is disabled after submission", 403);
   }

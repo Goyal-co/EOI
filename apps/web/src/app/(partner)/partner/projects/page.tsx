@@ -13,6 +13,7 @@ interface Project {
   location: string;
   startingPrice: number;
   eoiStatus: string;
+  eoiFormFiller?: "CUSTOMER" | "CP";
   tags?: string[];
   bannerUrl?: string;
   myLeads: number;
@@ -22,7 +23,12 @@ export default function PartnerProjectsPage() {
   const router = useRouter();
   const { data, isLoading } = usePartnerProjects();
   const projects = (data as Project[] | undefined) || [];
-  const [eoiModal, setEoiModal] = useState({ open: false, projectId: "", projectName: "" });
+  const [eoiModal, setEoiModal] = useState<{
+    open: boolean;
+    projectId: string;
+    projectName: string;
+    eoiFormFiller?: "CUSTOMER" | "CP";
+  }>({ open: false, projectId: "", projectName: "" });
   const [punchModal, setPunchModal] = useState({ open: false, projectId: "", projectName: "" });
   const [mapSeed, setMapSeed] = useState<{
     customerName: string;
@@ -61,7 +67,12 @@ export default function PartnerProjectsPage() {
               tags={project.tags}
               totalLeads={project.myLeads}
               onViewDetails={() => router.push(`/partner/projects/${project.id}`)}
-              onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
+              onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({
+                open: true,
+                projectId: project.id,
+                projectName: project.name,
+                eoiFormFiller: project.eoiFormFiller,
+              }) : undefined}
               onPunchLead={project.eoiStatus !== "OPEN" ? () => setPunchModal({ open: true, projectId: project.id, projectName: project.name }) : undefined}
             />
           ))}
@@ -76,11 +87,16 @@ export default function PartnerProjectsPage() {
         }}
         projectId={eoiModal.projectId}
         projectName={eoiModal.projectName}
+        eoiFormFiller={eoiModal.eoiFormFiller}
         initialLead={mapSeed || undefined}
         onMapToProject={(project, seed) => {
           setMapSeed(seed);
           setEoiModal({ open: false, projectId: "", projectName: "" });
-          setPunchModal({ open: true, projectId: project.id, projectName: project.name });
+          if (project.action === "EOI") {
+            setEoiModal({ open: true, projectId: project.id, projectName: project.name });
+          } else {
+            setPunchModal({ open: true, projectId: project.id, projectName: project.name });
+          }
         }}
       />
       <PunchLeadModal
@@ -95,7 +111,11 @@ export default function PartnerProjectsPage() {
         onMapToProject={(project, seed) => {
           setMapSeed(seed);
           setPunchModal({ open: false, projectId: "", projectName: "" });
-          setEoiModal({ open: true, projectId: project.id, projectName: project.name });
+          if (project.action === "EOI") {
+            setEoiModal({ open: true, projectId: project.id, projectName: project.name });
+          } else {
+            setPunchModal({ open: true, projectId: project.id, projectName: project.name });
+          }
         }}
       />
     </div>

@@ -61,6 +61,7 @@ export const projectSchema = z.object({
   faqs: z.array(projectFaqSchema).optional(),
   unitPreferences: z.array(projectUnitPreferenceSchema).optional(),
   eoiStatus: z.enum(["OPEN", "CLOSED"]).default("OPEN"),
+  eoiFormFiller: z.enum(["CUSTOMER", "CP"]).default("CUSTOMER"),
   status: z.enum(["ACTIVE", "INACTIVE", "UPCOMING"]).default("ACTIVE"),
 });
 
@@ -80,6 +81,16 @@ export const leadCreateSchema = z.object({
   notes: z.string().optional(),
   sendConfirmation: z.boolean().optional(),
   intentType: z.enum(["EOI", "LEAD_ONLY"]).optional(),
+  /** CP-filled EOI: attach uploaded file URLs and submit immediately */
+  submitAsCpEoi: z.boolean().optional(),
+  eoiDocumentUrl: z.string().optional(),
+  eoiDocumentFileName: z.string().optional(),
+  eoiDocumentMimeType: z.string().optional(),
+  eoiDocumentFileSize: z.number().optional(),
+  chequeDocumentUrl: z.string().optional(),
+  chequeDocumentFileName: z.string().optional(),
+  chequeDocumentMimeType: z.string().optional(),
+  chequeDocumentFileSize: z.number().optional(),
 });
 
 export const eoiPersonalDetailsSchema = z.object({
@@ -312,7 +323,7 @@ export const notificationMarkReadSchema = z.object({
 
 export const documentUploadSchema = z.object({
   type: z.enum([
-    "CHEQUE", "PAN", "AADHAAR", "RERA_CERT", "GST_CERT", "VISITING_CARD",
+    "CHEQUE", "PAN", "AADHAAR", "EOI_DOCUMENT", "RERA_CERT", "GST_CERT", "VISITING_CARD",
     "BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION",
   ]),
   fileName: z.string().min(1),
@@ -320,6 +331,14 @@ export const documentUploadSchema = z.object({
   fileSize: z.number().optional(),
   mimeType: z.string().optional(),
   eoiId: z.string().optional(),
+});
+
+export const partnerEoiDocumentSchema = z.object({
+  type: z.enum(["EOI_DOCUMENT", "CHEQUE"]),
+  fileName: z.string().min(1),
+  fileUrl: storedFileUrlSchema,
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
 });
 
 export const cpTeamMemberCreateSchema = z.object({

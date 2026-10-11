@@ -2,7 +2,7 @@ import { prisma, NotificationType } from "@goyal/db";
 import { sendEmailWithLog, processEmailRetryQueue } from "./email-log";
 import { shouldSendEmail, shouldCreateInAppNotification, isAdminNotificationEnabled, getSupportEmail } from "./prefs";
 import { resolveEmailTemplate } from "./template-loader";
-import { getAdminLeadsUrl, getCustomerLoginUrl, getCustomerPortalUrl, getCustomerEoiUrl, getPartnerLeadsUrl, getPartnerLoginUrl, canonicalizeEmailUrl } from "./urls";
+import { getAdminLeadsUrl, getCustomerLoginUrl, getCustomerPortalUrl, getCustomerEoiUrl, getPartnerEoisUrl, getPartnerLeadsUrl, getPartnerLoginUrl, canonicalizeEmailUrl } from "./urls";
 import {
   cpRegistrationAckEmailHtml,
   cpCredentialsEmailHtml,
@@ -855,6 +855,126 @@ export class NotificationService {
       body: `Corrections needed for your EOI at ${params.projectName}`,
       email: {
         to: params.customerEmail,
+        subject: email.subject,
+        html: email.html,
+      },
+    });
+  }
+
+  /** CP-filled EOI: in-app + email for approve/reject when there is no customer user. */
+  static async notifyCpEoiDecision(params: {
+    cpUserId: string;
+    cpEmail: string;
+    cpName?: string;
+    decision: "APPROVED" | "REJECTED";
+    customerName: string;
+    projectName: string;
+    referenceNumber?: string;
+    reason?: string;
+    eoiId: string;
+  }) {
+    const approved = params.decision === "APPROVED";
+    const recipientName = params.cpName || "Partner";
+    const partnerEoisUrl = getPartnerEoisUrl(approved ? "status=APPROVED" : "status=REJECTED");
+    const email = approved
+      ? await this.resolveEmail(
+          "EOI_APPROVED",
+          {
+            customerName: recipientName,
+            projectName: params.projectName,
+            confirmationNumber: params.referenceNumber || "—",
+            approvedDate: new Date().toISOString(),
+            customerPortalUrl: partnerEoisUrl,
+          },
+          {
+            subject: `EOI Approved — ${params.projectName}`,
+            html: eoiApprovedEmailHtml({
+              customerName: recipientName,
+              projectName: params.projectName,
+              confirmationNumber: params.referenceNumber || "—",
+              approvedDate: new Date().toISOString(),
+              customerPortalUrl: partnerEoisUrl,
+            }),
+          },
+        )
+      : await this.resolveEmail(
+          "EOI_REJECTED",
+          {
+            customerName: recipientName,
+            projectName: params.projectName,
+            reason: params.reason || "Not specified",
+            remarks: `Customer: ${params.customerName}`,
+            customerPortalUrl: partnerEoisUrl,
+          },
+          {
+            subject: `EOI Update — ${params.projectName}`,
+            html: eoiRejectedEmailHtml({
+              customerName: recipientName,
+              projectName: params.projectName,
+              reason: params.reason || "Not specified",
+              remarks: `Customer: ${params.customerName}`,
+              customerPortalUrl: partnerEoisUrl,
+            }),
+          },
+        );
+
+    await this.emit({
+      userId: params.cpUserId,
+      type: approved ? "EOI_APPROVED" : "EOI_REJECTED",
+      title: approved ? "EOI Approved" : "EOI Rejected",
+      body: approved
+        ? `${params.customerName}'s EOI for ${params.projectName} was approved.`
+        : `${params.customerName}'s EOI for ${params.projectName} was rejected${
+            params.reason ? `: ${params.reason}` : "."
+          }`,
+      entityType: "EOI",
+      entityId: params.eoiId,
+      email: {
+        to: params.cpEmail,
+        subject: email.subject,
+        html: email.html,
+      },
+    });
+  }
+
+  /** CP-filled EOI: ask the channel partner to fix documents and resubmit. */
+  static async notifyCpCorrectionRequested(params: {
+    cpUserId: string;
+    cpEmail: string;
+    cpName: string;
+    customerName: string;
+    projectName: string;
+    remarks: string;
+    eoiId: string;
+  }) {
+    const eoiFormUrl = getPartnerEoisUrl("status=CORRECTION_REQUESTED");
+    const email = await this.resolveEmail(
+      "CORRECTION_REQUESTED",
+      {
+        customerName: params.cpName,
+        projectName: params.projectName,
+        remarks: `${params.remarks}\n\nCustomer: ${params.customerName}`,
+        eoiFormUrl,
+      },
+      {
+        subject: `Correction required — ${params.projectName}`,
+        html: correctionRequestedEmailHtml({
+          customerName: params.cpName,
+          projectName: params.projectName,
+          remarks: `${params.remarks}\n\nCustomer: ${params.customerName}`,
+          eoiFormUrl,
+        }),
+      },
+    );
+    await this.emit({
+      userId: params.cpUserId,
+      type: "CORRECTION_REQUESTED",
+      title: "EOI Correction Requested",
+      body: `Admin requested corrections for ${params.customerName}'s EOI at ${params.projectName}`,
+      entityType: "EOI",
+      entityId: params.eoiId,
+      email: {
+        to: params.cpEmail,
         subject: email.subject,
         html: email.html,
       },

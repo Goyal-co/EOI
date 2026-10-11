@@ -69,6 +69,7 @@ enum DocumentType {
   CHEQUE
   PAN
   AADHAAR
+  EOI_DOCUMENT
   RERA_CERT
   GST_CERT
   VISITING_CARD
@@ -80,6 +81,12 @@ enum DocumentType {
   CREATIVE
   WALKTHROUGH
   LOCATION
+}
+
+/// Who completes / submits the EOI application for a project.
+enum EoiFormFiller {
+  CUSTOMER
+  CP
 }
 
 enum DocumentStatus {
@@ -297,6 +304,8 @@ model Project {
   faqs           Json?
   unitPreferences Json?
   eoiStatus      ProjectEOIStatus @default(OPEN)
+  /// CUSTOMER = portal form (default); CP = partner uploads EOI doc + cheque
+  eoiFormFiller  EoiFormFiller    @default(CUSTOMER)
   status         ProjectStatus    @default(ACTIVE)
   bannerUrl      String?
   locationImageUrl String?
@@ -456,6 +465,8 @@ model EOI {
   cpId              String
   cp                ChannelPartner @relation(fields: [cpId], references: [id])
   status            EOIStatus @default(PENDING_SUBMISSION)
+  /// Snapshot of who submitted this EOI (survives project setting changes)
+  filledBy          EoiFormFiller @default(CUSTOMER)
   referenceNumber   String?   @unique
   confirmationNumber String?  @unique
   chequeNumber      String?

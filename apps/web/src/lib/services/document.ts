@@ -17,6 +17,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   CHEQUE: ["image/jpeg", "image/png", "application/pdf"],
   PAN: ["image/jpeg", "image/png", "application/pdf"],
   AADHAAR: ["image/jpeg", "image/png", "application/pdf"],
+  EOI_DOCUMENT: ["image/jpeg", "image/png", "application/pdf"],
   RERA_CERT: ["application/pdf"],
   GST_CERT: ["application/pdf"],
   VISITING_CARD: ["image/jpeg", "image/png", "application/pdf"],
@@ -24,7 +25,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   COST_SHEET: ["application/pdf"],
   FLOOR_PLAN: ["image/jpeg", "image/png", "application/pdf"],
   BANNER: ["image/jpeg", "image/png", "image/webp"],
-  GALLERY: ["image/jpeg", "image/png", "image/webp"],
+  GALLERY: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   CREATIVE: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   WALKTHROUGH: ["video/mp4", "video/webm", "video/quicktime"],
   LOCATION: ["image/jpeg", "image/png", "image/webp"],
@@ -32,8 +33,8 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
   CUSTOMER: ["CHEQUE", "PAN", "AADHAAR"],
-  CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD"],
-  CP_TEAM_MEMBER: [],
+  CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD", "EOI_DOCUMENT"],
+  CP_TEAM_MEMBER: ["CHEQUE", "EOI_DOCUMENT"],
   ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION"],
 };
 

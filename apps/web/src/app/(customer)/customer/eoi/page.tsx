@@ -198,6 +198,19 @@ function CustomerEOIContent() {
     );
   }
 
+  if (eoi.filledBy === "CP") {
+    return (
+      <div className="space-y-6">
+        <EmptyState
+          title="EOI handled by your channel partner"
+          description="This EOI was submitted by your channel partner with documents for admin review. Contact them for updates."
+          actionLabel="View My EOI"
+          onAction={() => router.push(customerPath("/customer/my-eoi", eoiId))}
+        />
+      </div>
+    );
+  }
+
   const editable = ["PENDING_SUBMISSION", "DRAFT", "CORRECTION_REQUESTED"].includes(eoi.status);
 
   if (!editable) {

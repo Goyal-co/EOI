@@ -4,18 +4,33 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
-  Modal, Button, Input, Select, Textarea, MultiStepForm, useToast,
+  Modal, Button, Input, Select, Textarea, MultiStepForm, FileUpload, useToast,
 } from "@goyal/ui";
 import { CheckCircle, Clock, Layers3 } from "lucide-react";
 import type { LeadCreateInput } from "@goyal/types";
 import { ProjectUnitBudgetFields } from "@/components/project-unit-budget-fields";
 import { usePartnerProjects } from "@/lib/hooks";
+import { uploadViaPresign } from "@/lib/uploads/client-upload";
 
-const STEPS = [
+const CUSTOMER_STEPS = [
   { id: "customer", title: "Customer Details", description: "Enter customer information for the EOI" },
   { id: "review", title: "Review", description: "Verify details before submitting" },
   { id: "success", title: "Success", description: "Customer saved" },
 ];
+
+const CP_STEPS = [
+  { id: "customer", title: "Customer Details", description: "Enter customer information for the EOI" },
+  { id: "documents", title: "Documents", description: "Upload EOI document and cancelled cheque" },
+  { id: "review", title: "Review", description: "Verify details before submitting" },
+  { id: "success", title: "Success", description: "EOI submitted" },
+];
+
+type UploadedDoc = {
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+};
 
 type AvailableProject = {
   id: string;
@@ -30,6 +45,8 @@ interface SubmitEOIModalProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectName: string;
+  /** When known from parent, avoids racing slim projects fetch */
+  eoiFormFiller?: "CUSTOMER" | "CP" | null;
   initialLead?: Pick<
     LeadCreateInput,
     "customerName" | "mobile" | "email" | "configuration" | "fosName" | "budget" | "city" | "notes"
@@ -59,6 +76,7 @@ export function SubmitEOIModal({
   onOpenChange,
   projectId,
   projectName,
+  eoiFormFiller: eoiFormFillerProp,
   initialLead,
   onMapToProject,
 }: SubmitEOIModalProps) {
@@ -77,6 +95,10 @@ export function SubmitEOIModal({
   const [activeProjectName, setActiveProjectName] = useState(projectName);
   const [now, setNow] = useState(Date.now());
   const [confirmationFlowEnabled, setConfirmationFlowEnabled] = useState<boolean | null>(null);
+  const [cpEoiSubmitted, setCpEoiSubmitted] = useState(false);
+  const [eoiDocument, setEoiDocument] = useState<UploadedDoc | null>(null);
+  const [chequeDocument, setChequeDocument] = useState<UploadedDoc | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<"EOI_DOCUMENT" | "CHEQUE" | null>(null);
   const [form, setForm] = useState<LeadCreateInput>({
     customerName: "",
     mobile: "",
@@ -90,13 +112,24 @@ export function SubmitEOIModal({
   });
   const { addToast } = useToast();
   const qc = useQueryClient();
-  const { data: slimProjects } = usePartnerProjects({ slim: true });
+  const { data: slimProjects, isLoading: slimLoading } = usePartnerProjects({ slim: true });
+  const activeProject = useMemo(
+    () => slimProjects?.find((p) => p.id === activeProjectId),
+    [slimProjects, activeProjectId],
+  );
+  const resolvedFiller =
+    eoiFormFillerProp
+    ?? activeProject?.eoiFormFiller
+    ?? (slimLoading || !slimProjects ? null : "CUSTOMER");
+  const fillerReady = resolvedFiller !== null;
+  const isCpFilled = resolvedFiller === "CP";
+  const steps = isCpFilled ? CP_STEPS : CUSTOMER_STEPS;
+  const successStep = isCpFilled ? 3 : 2;
+  const reviewStep = isCpFilled ? 2 : 1;
   const activeUnitPreferences = useMemo(() => {
-    if (!slimProjects) return undefined;
-    const project = slimProjects.find((p) => p.id === activeProjectId);
-    if (!project) return undefined;
-    return project.unitPreferences ?? null;
-  }, [slimProjects, activeProjectId]);
+    if (!activeProject) return undefined;
+    return activeProject.unitPreferences ?? null;
+  }, [activeProject]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,7 +138,7 @@ export function SubmitEOIModal({
   }, [open, projectId, projectName]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isCpFilled) return;
     setConfirmationFlowEnabled(null);
     fetch("/api/partner/settings")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("settings"))))
@@ -115,7 +148,7 @@ export function SubmitEOIModal({
       .catch(() => {
         setConfirmationFlowEnabled(false);
       });
-  }, [open]);
+  }, [open, isCpFilled]);
 
   useEffect(() => {
     if (!open || !initialLead) return;
@@ -136,6 +169,10 @@ export function SubmitEOIModal({
   const reset = () => {
     setStep(0);
     setSentConfirmation(false);
+    setCpEoiSubmitted(false);
+    setEoiDocument(null);
+    setChequeDocument(null);
+    setUploadingDoc(null);
     setDevLinks(null);
     setEmailWarning(null);
     setCreatedLeadId(null);
@@ -172,7 +209,33 @@ export function SubmitEOIModal({
         && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)
         && (form.configuration?.length ?? 0) >= 1
         && (form.fosName?.length ?? 0) >= 1
-      : true;
+      : isCpFilled && step === 1
+        ? Boolean(eoiDocument && chequeDocument)
+        : true;
+
+  const uploadCpDoc = async (kind: "EOI_DOCUMENT" | "CHEQUE", file: File) => {
+    setUploadingDoc(kind);
+    try {
+      const uploaded = await uploadViaPresign(file, kind === "CHEQUE" ? "CHEQUE" : "EOI_DOCUMENT");
+      const doc: UploadedDoc = {
+        fileUrl: uploaded.fileUrl,
+        fileName: uploaded.fileName,
+        fileSize: uploaded.fileSize,
+        mimeType: uploaded.mimeType,
+      };
+      if (kind === "EOI_DOCUMENT") setEoiDocument(doc);
+      else setChequeDocument(doc);
+      addToast({ type: "success", title: kind === "EOI_DOCUMENT" ? "EOI document uploaded" : "Cheque uploaded" });
+    } catch (e) {
+      addToast({
+        type: "error",
+        title: "Upload failed",
+        message: e instanceof Error ? e.message : "Try again",
+      });
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
 
   const selectedMapProject = useMemo(
     () => availableProjects.find((p) => p.id === duplicateMapProjectId) || null,
@@ -222,15 +285,34 @@ export function SubmitEOIModal({
   const handleSubmit = async (sendConfirmation: boolean) => {
     setLoading(true);
     try {
+      const payload: Record<string, unknown> = {
+        ...form,
+        projectId: activeProjectId,
+        intentType: "EOI",
+        sendConfirmation: isCpFilled ? false : sendConfirmation,
+      };
+      if (isCpFilled) {
+        if (!eoiDocument || !chequeDocument) {
+          addToast({ type: "error", title: "Documents required", message: "Upload EOI document and cancelled cheque" });
+          setLoading(false);
+          return;
+        }
+        Object.assign(payload, {
+          submitAsCpEoi: true,
+          eoiDocumentUrl: eoiDocument.fileUrl,
+          eoiDocumentFileName: eoiDocument.fileName,
+          eoiDocumentMimeType: eoiDocument.mimeType,
+          eoiDocumentFileSize: eoiDocument.fileSize,
+          chequeDocumentUrl: chequeDocument.fileUrl,
+          chequeDocumentFileName: chequeDocument.fileName,
+          chequeDocumentMimeType: chequeDocument.mimeType,
+          chequeDocumentFileSize: chequeDocument.fileSize,
+        });
+      }
       const res = await fetch("/api/partner/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          projectId: activeProjectId,
-          intentType: "EOI",
-          sendConfirmation,
-        }),
+        body: JSON.stringify(payload),
       });
       const text = await res.text();
       let data: Record<string, unknown> = {};
@@ -289,6 +371,7 @@ export function SubmitEOIModal({
       }
 
       setSentConfirmation(!!data.sentConfirmation);
+      setCpEoiSubmitted(!!data.cpEoiSubmitted);
       setCreatedLeadId((data.lead as { leadId?: string } | undefined)?.leadId || null);
       setLockExpiresAt((data.lockExpiresAt as string) || null);
       setAvailableProjects((data.availableProjects as AvailableProject[]) || []);
@@ -299,27 +382,35 @@ export function SubmitEOIModal({
           ? "Email was not sent — restart the server after adding BREVO_API_KEY to .env.local"
           : null)
       );
-      setStep(2);
+      setStep(successStep);
       void qc.invalidateQueries({ queryKey: ["partner", "leads"] });
       void qc.invalidateQueries({ queryKey: ["partner", "eois"] });
       void qc.invalidateQueries({ queryKey: ["partner", "analytics"] });
-      addToast({
-        type: data.sentConfirmation ? "success" : "warning",
-        title: sendConfirmation
-          ? data.sentConfirmation
-            ? "Confirmation sent"
-            : data.emailMocked
-              ? "Lead saved — email not sent (mock mode)"
-              : "Lead saved — email failed"
-          : "Customer saved",
-        message: data.sentConfirmation
-          ? "Confirmation email sent to the customer via Brevo"
-          : (typeof data.emailError === "string" && data.emailError
-            ? data.emailError
-            : (data.emailMocked
-              ? "Restart the dev server so BREVO_API_KEY loads. Use the dev links below meanwhile."
-              : "Lead saved but email could not be sent. Use the dev links below or resend from Leads.")),
-      });
+      if (isCpFilled || data.cpEoiSubmitted) {
+        addToast({
+          type: "success",
+          title: "EOI submitted",
+          message: "Documents sent for admin review.",
+        });
+      } else {
+        addToast({
+          type: data.sentConfirmation ? "success" : "warning",
+          title: sendConfirmation
+            ? data.sentConfirmation
+              ? "Confirmation sent"
+              : data.emailMocked
+                ? "Lead saved — email not sent (mock mode)"
+                : "Lead saved — email failed"
+            : "Customer saved",
+          message: data.sentConfirmation
+            ? "Confirmation email sent to the customer via Brevo"
+            : (typeof data.emailError === "string" && data.emailError
+              ? data.emailError
+              : (data.emailMocked
+                ? "Restart the dev server so BREVO_API_KEY loads. Use the dev links below meanwhile."
+                : "Lead saved but email could not be sent. Use the dev links below or resend from Leads.")),
+        });
+      }
     } catch (err) {
       addToast({ type: "error", title: "Submission failed", message: err instanceof Error ? err.message : "Try again" });
     } finally {
@@ -329,14 +420,21 @@ export function SubmitEOIModal({
 
   return (
     <Modal open={open} onOpenChange={handleClose} title={`Submit EOI — ${activeProjectName}`} size="lg">
+      {!fillerReady ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Loading project EOI settings…</p>
+      ) : (
       <MultiStepForm
-        steps={STEPS}
+        steps={steps}
         currentStep={step}
         isLastStep={false}
         loading={loading}
         canProceed={canProceed && !showDuplicateMap}
-        onPrevious={step > 0 && step < 2 ? () => setStep(step - 1) : undefined}
-        onNext={step === 0 ? () => setStep(1) : undefined}
+        onPrevious={step > 0 && step < successStep ? () => setStep(step - 1) : undefined}
+        onNext={
+          step === 0 || (isCpFilled && step === 1)
+            ? () => setStep(step + 1)
+            : undefined
+        }
         nextLabel="Continue"
       >
         {showDuplicateMap && (
@@ -448,7 +546,69 @@ export function SubmitEOIModal({
           </div>
         )}
 
-        {step === 1 && (
+        {isCpFilled && step === 1 && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload a PDF or JPEG of the signed EOI form and a cancelled cheque. Admin will review after submit.
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">EOI Document *</label>
+              <FileUpload
+                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                maxSize={10 * 1024 * 1024}
+                disabled={uploadingDoc === "EOI_DOCUMENT"}
+                file={
+                  eoiDocument
+                    ? {
+                        name: eoiDocument.fileName,
+                        size: eoiDocument.fileSize,
+                        url: eoiDocument.fileUrl,
+                        status: uploadingDoc === "EOI_DOCUMENT" ? "uploading" : "success",
+                      }
+                    : null
+                }
+                onUpload={(file) => void uploadCpDoc("EOI_DOCUMENT", file)}
+                onRemove={() => setEoiDocument(null)}
+                onSizeError={(file, max) =>
+                  addToast({
+                    type: "error",
+                    title: "File too large",
+                    message: `${file.name} exceeds ${Math.round(max / (1024 * 1024))}MB`,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">Cancelled cheque *</label>
+              <FileUpload
+                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                maxSize={10 * 1024 * 1024}
+                disabled={uploadingDoc === "CHEQUE"}
+                file={
+                  chequeDocument
+                    ? {
+                        name: chequeDocument.fileName,
+                        size: chequeDocument.fileSize,
+                        url: chequeDocument.fileUrl,
+                        status: uploadingDoc === "CHEQUE" ? "uploading" : "success",
+                      }
+                    : null
+                }
+                onUpload={(file) => void uploadCpDoc("CHEQUE", file)}
+                onRemove={() => setChequeDocument(null)}
+                onSizeError={(file, max) =>
+                  addToast({
+                    type: "error",
+                    title: "File too large",
+                    message: `${file.name} exceeds ${Math.round(max / (1024 * 1024))}MB`,
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {step === reviewStep && (
           <div className="space-y-4">
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-blue-50 p-4 space-y-2">
@@ -459,20 +619,37 @@ export function SubmitEOIModal({
                 <div className="flex justify-between"><span className="text-muted-foreground">FOS Name</span><span className="font-medium">{form.fosName}</span></div>
                 {form.configuration && <div className="flex justify-between"><span className="text-muted-foreground">Unit Preference</span><span className="font-medium">{form.configuration}</span></div>}
                 {form.budget && <div className="flex justify-between"><span className="text-muted-foreground">Budget</span><span className="font-medium">{form.budget}</span></div>}
+                {isCpFilled && (
+                  <>
+                    <div className="flex justify-between"><span className="text-muted-foreground">EOI Document</span><span className="font-medium">{eoiDocument?.fileName || "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Cancelled cheque</span><span className="font-medium">{chequeDocument?.fileName || "—"}</span></div>
+                  </>
+                )}
               </div>
               <p className="text-muted-foreground text-xs">
-                {confirmationFlowEnabled === true
-                  ? "Save as draft without emailing the customer, or send a confirmation email now. Phone and email stay protected for 15 days after punch."
-                  : confirmationFlowEnabled === false
-                    ? "Submit this EOI to save the customer. Phone and email stay protected for 15 days after punch."
-                    : "Loading portal permissions…"}
+                {isCpFilled
+                  ? "Submit for admin review. You will be notified if corrections are needed."
+                  : confirmationFlowEnabled === true
+                    ? "Save as draft without emailing the customer, or send a confirmation email now. Phone and email stay protected for 15 days after punch."
+                    : confirmationFlowEnabled === false
+                      ? "Submit this EOI to save the customer. Phone and email stay protected for 15 days after punch."
+                      : "Loading portal permissions…"}
               </p>
             </div>
             <div className="flex flex-wrap gap-3 justify-end">
-              <Button variant="outline" onClick={() => setStep(0)} disabled={loading}>
+              <Button variant="outline" onClick={() => setStep(reviewStep - 1)} disabled={loading}>
                 Back
               </Button>
-              {confirmationFlowEnabled === null ? (
+              {isCpFilled ? (
+                <Button
+                  variant="gold"
+                  loading={loading}
+                  disabled={!canProceed || !eoiDocument || !chequeDocument}
+                  onClick={() => handleSubmit(false)}
+                >
+                  Submit EOI
+                </Button>
+              ) : confirmationFlowEnabled === null ? (
                 <Button variant="gold" disabled>
                   Loading…
                 </Button>
@@ -494,7 +671,7 @@ export function SubmitEOIModal({
           </div>
         )}
 
-        {step === 2 && (
+        {step === successStep && (
           <div className="text-center py-4">
             <div className="flex justify-center mb-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
@@ -502,16 +679,22 @@ export function SubmitEOIModal({
               </div>
             </div>
             <h3 className="text-lg font-semibold text-foreground">
-              {sentConfirmation ? "Confirmation Sent" : "Customer Saved"}
+              {cpEoiSubmitted
+                ? "EOI Submitted for Review"
+                : sentConfirmation
+                  ? "Confirmation Sent"
+                  : "Customer Saved"}
             </h3>
             <p className="text-sm text-muted-foreground mt-2">
-              {sentConfirmation
-                ? "A confirmation email has been sent to the customer. They must accept before proceeding with the EOI."
-                : emailWarning
-                  ? "The customer was saved but the confirmation email could not be delivered."
-                  : confirmationFlowEnabled === true
-                    ? "The customer has been saved. You can send a confirmation email later from the leads page."
-                    : "The EOI has been submitted successfully."}
+              {cpEoiSubmitted
+                ? "Admin will review the EOI document and cancelled cheque. Track status under My EOIs."
+                : sentConfirmation
+                  ? "A confirmation email has been sent to the customer. They must accept before proceeding with the EOI."
+                  : emailWarning
+                    ? "The customer was saved but the confirmation email could not be delivered."
+                    : confirmationFlowEnabled === true
+                      ? "The customer has been saved. You can send a confirmation email later from the leads page."
+                      : "The EOI has been submitted successfully."}
             </p>
             {createdLeadId && (
               <div className="mt-4 rounded-lg border border-border bg-blue-50/60 p-3">
@@ -580,6 +763,7 @@ export function SubmitEOIModal({
           </div>
         )}
       </MultiStepForm>
+      )}
     </Modal>
   );
 }

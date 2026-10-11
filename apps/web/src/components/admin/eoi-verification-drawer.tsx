@@ -50,19 +50,33 @@ export function EoiVerificationDrawer({ eoiId, onClose, initialData }: EoiVerifi
       setPiiRevealed(false);
       return;
     }
+    // Show list payload immediately, then always load full detail (filledBy, eoiDocument, punch fields).
     if (initialData?.id === eoiId) {
       setEoi(initialData);
-      return;
+    } else {
+      setEoi(null);
+      setLoading(true);
     }
-    setLoading(true);
+    setPiiRevealed(false);
+    let cancelled = false;
     fetch(`/api/admin/eois/${eoiId}`)
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return;
         if (data.error) throw new Error(data.error);
         setEoi(data);
       })
-      .catch((e) => addToast({ type: "error", title: "Failed to load EOI", message: e.message }))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!cancelled) {
+          addToast({ type: "error", title: "Failed to load EOI", message: e.message });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [eoiId, initialData, addToast]);
 
   const openDocumentPreview = async (docId: string) => {
@@ -154,6 +168,11 @@ export function EoiVerificationDrawer({ eoiId, onClose, initialData }: EoiVerifi
               <div className="flex items-center gap-2 flex-wrap mb-2">
                 <StatusBadge status={eoi.status} />
                 {eoi.journeyStatus && <StatusBadge status={eoi.journeyStatus} />}
+                {eoi.filledBy === "CP" && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
+                    CP-submitted
+                  </span>
+                )}
                 {eoi.referenceNumber && (
                   <span className="text-sm font-mono text-muted-foreground">{eoi.referenceNumber}</span>
                 )}
@@ -166,6 +185,12 @@ export function EoiVerificationDrawer({ eoiId, onClose, initialData }: EoiVerifi
               <div className="flex justify-between"><span className="text-muted-foreground">Project</span><span className="font-medium">{eoi.project}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Location</span><span className="font-medium">{eoi.projectLocation}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Channel Partner</span><span className="font-medium">{eoi.cpName}</span></div>
+              {eoi.filledBy === "CP" && eoi.configuration && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Unit preference</span><span className="font-medium">{eoi.configuration}</span></div>
+              )}
+              {eoi.filledBy === "CP" && eoi.fosName && (
+                <div className="flex justify-between"><span className="text-muted-foreground">FOS</span><span className="font-medium">{eoi.fosName}</span></div>
+              )}
               {eoi.submittedAt && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Submitted</span>
@@ -174,7 +199,7 @@ export function EoiVerificationDrawer({ eoiId, onClose, initialData }: EoiVerifi
               )}
             </div>
 
-            {(eoi as { piiMasked?: boolean }).piiMasked !== false && !piiRevealed && (
+            {eoi.filledBy !== "CP" && (eoi as { piiMasked?: boolean }).piiMasked !== false && !piiRevealed && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-4">
                 <p className="text-sm text-amber-800">Sensitive PII fields (PAN, Aadhaar) are masked by default.</p>
                 <Button variant="outline" size="sm" loading={revealingPii} onClick={revealPii}>
@@ -183,24 +208,48 @@ export function EoiVerificationDrawer({ eoiId, onClose, initialData }: EoiVerifi
               </div>
             )}
 
-            <FormSection title="Personal Details" data={formData.personal} />
-            <FormSection title="Address" data={formData.address} />
-            <FormSection title="Unit Preference" data={formData.unitPreference} />
-            <FormSection title="Bank Details" data={bankDetails} />
+            {eoi.filledBy === "CP" ? (
+              <FormSection
+                title="Punch summary"
+                data={(formData.punchSummary as Record<string, unknown> | undefined) || {
+                  customerName: eoi.customerName,
+                  email: eoi.customerEmail,
+                  mobile: eoi.customerMobile,
+                  configuration: eoi.configuration,
+                  fosName: eoi.fosName,
+                }}
+              />
+            ) : (
+              <>
+                <FormSection title="Personal Details" data={formData.personal} />
+                <FormSection title="Address" data={formData.address} />
+                <FormSection title="Unit Preference" data={formData.unitPreference} />
+                <FormSection title="Bank Details" data={bankDetails} />
+              </>
+            )}
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Cheque</h4>
-              <div className="flex items-center gap-2 mb-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                {eoi.filledBy === "CP" ? "Required documents" : "Cheque"}
+              </h4>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <StatusBadge status={eoi.chequeDoc || eoi.chequeUploaded ? "APPROVED" : "PENDING"} />
                 {(eoi.chequeNumber || bankDetails?.chequeNumber) ? (
                   <span className="text-sm text-foreground">#{String(eoi.chequeNumber || bankDetails?.chequeNumber)}</span>
                 ) : null}
               </div>
-              {eoi.chequeDoc && (
-                <Button variant="outline" size="sm" onClick={() => openDocumentPreview(eoi.chequeDoc!.id)}>
-                  <FileText className="h-4 w-4" /> Preview Cheque
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {eoi.eoiDocument && (
+                  <Button variant="outline" size="sm" onClick={() => openDocumentPreview(eoi.eoiDocument!.id)}>
+                    <FileText className="h-4 w-4" /> Preview EOI Document
+                  </Button>
+                )}
+                {eoi.chequeDoc && (
+                  <Button variant="outline" size="sm" onClick={() => openDocumentPreview(eoi.chequeDoc!.id)}>
+                    <FileText className="h-4 w-4" /> Preview Cheque
+                  </Button>
+                )}
+              </div>
             </div>
 
             {(eoi.documents?.length ?? 0) > 0 && (

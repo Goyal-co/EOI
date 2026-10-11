@@ -17,6 +17,7 @@ interface AvailableProject {
   name: string;
   location: string;
   eoiStatus: string;
+  eoiFormFiller?: "CUSTOMER" | "CP";
   action: "EOI" | "LEAD_ONLY";
 }
 
@@ -954,6 +955,7 @@ function PartnerLeadsContent() {
           }}
           projectId={crossProject.id}
           projectName={crossProject.name}
+          eoiFormFiller={crossProject.eoiFormFiller}
           initialLead={{
             customerName: selectedLead.customerName,
             mobile: selectedLead.customerMobile,

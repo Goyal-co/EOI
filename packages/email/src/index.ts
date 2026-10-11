@@ -26,6 +26,7 @@ export {
   getPartnerLoginUrl,
   getPartnerDashboardUrl,
   getPartnerLeadsUrl,
+  getPartnerEoisUrl,
   getPartnerResetPasswordUrl,
   getAdminLoginUrl,
   getAdminLeadsUrl,

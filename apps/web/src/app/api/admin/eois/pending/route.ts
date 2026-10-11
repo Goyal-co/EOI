@@ -16,24 +16,32 @@ export const GET = withApiRoute("admin.eois.pending.get", async () => {
     orderBy: { submittedAt: "desc" },
   });
 
-  return apiResponse(eois.map((e) => ({
-    id: e.id,
-    customerName: e.lead.customerName,
-    customerEmail: e.lead.customerEmail,
-    customerMobile: e.lead.customerMobile,
-    project: e.project.name,
-    projectLocation: e.project.location,
-    cpName: e.cp.user.name,
-    status: e.status,
-    referenceNumber: e.referenceNumber,
-    journeyStatus: e.lead.journeyStatus,
-    formData: e.formData,
-    documents: e.documents,
-    chequeNumber: e.chequeNumber,
-    chequeUploaded: e.chequeUploaded,
-    submittedAt: e.submittedAt,
-    chequeDoc: e.documents.find((d) => d.type === "CHEQUE")
-      ? { id: e.documents.find((d) => d.type === "CHEQUE")!.id, fileUrl: e.documents.find((d) => d.type === "CHEQUE")!.fileUrl }
-      : undefined,
-  })));
+  return apiResponse(eois.map((e) => {
+    const cheque = e.documents.find((d) => d.type === "CHEQUE");
+    const eoiDocument = e.documents.find((d) => d.type === "EOI_DOCUMENT");
+    return {
+      id: e.id,
+      customerName: e.lead.customerName,
+      customerEmail: e.lead.customerEmail,
+      customerMobile: e.lead.customerMobile,
+      configuration: e.lead.configuration,
+      fosName: e.lead.fosName,
+      project: e.project.name,
+      projectLocation: e.project.location,
+      cpName: e.cp.user.name,
+      status: e.status,
+      filledBy: e.filledBy,
+      referenceNumber: e.referenceNumber,
+      journeyStatus: e.lead.journeyStatus,
+      formData: e.formData,
+      documents: e.documents,
+      chequeNumber: e.chequeNumber,
+      chequeUploaded: e.chequeUploaded,
+      submittedAt: e.submittedAt,
+      chequeDoc: cheque ? { id: cheque.id, fileUrl: cheque.fileUrl } : undefined,
+      eoiDocument: eoiDocument
+        ? { id: eoiDocument.id, fileUrl: eoiDocument.fileUrl, fileName: eoiDocument.fileName }
+        : undefined,
+    };
+  }));
 });

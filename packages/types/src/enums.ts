@@ -93,6 +93,7 @@ export const DocumentType = {
   CHEQUE: "CHEQUE",
   PAN: "PAN",
   AADHAAR: "AADHAAR",
+  EOI_DOCUMENT: "EOI_DOCUMENT",
   RERA_CERT: "RERA_CERT",
   GST_CERT: "GST_CERT",
   VISITING_CARD: "VISITING_CARD",
@@ -106,6 +107,12 @@ export const DocumentType = {
   LOCATION: "LOCATION",
 } as const;
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
+
+export const EoiFormFiller = {
+  CUSTOMER: "CUSTOMER",
+  CP: "CP",
+} as const;
+export type EoiFormFiller = (typeof EoiFormFiller)[keyof typeof EoiFormFiller];
 
 export const DocumentStatus = {
   PENDING: "PENDING",
@@ -135,7 +142,7 @@ export const NotificationType = {
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
 export const EOI_TRANSITIONS: Record<EOIStatus, EOIStatus[]> = {
-  PENDING_SUBMISSION: ["DRAFT"],
+  PENDING_SUBMISSION: ["DRAFT", "SUBMITTED"],
   DRAFT: ["DRAFT", "SUBMITTED"],
   SUBMITTED: ["UNDER_REVIEW", "APPROVED", "REJECTED", "CORRECTION_REQUESTED"],
   UNDER_REVIEW: ["APPROVED", "REJECTED", "CORRECTION_REQUESTED"],

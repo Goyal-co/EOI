@@ -27,6 +27,7 @@ interface Project {
   locationImageUrl?: string | null;
   startingPrice: number;
   eoiStatus: string;
+  eoiFormFiller?: "CUSTOMER" | "CP";
   status: string;
   tags?: string[];
   bannerUrl?: string;
@@ -297,6 +298,7 @@ export default function ProjectDetailPage() {
         onOpenChange={setEoiOpen}
         projectId={project.id}
         projectName={project.name}
+        eoiFormFiller={project.eoiFormFiller}
       />
       <PunchLeadModal
         open={punchOpen}

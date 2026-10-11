@@ -143,7 +143,7 @@ export class EOIEngine {
         });
       }
 
-      if (eoi.customer?.user) {
+      if (eoi.filledBy !== "CP" && eoi.customer?.user) {
         await NotificationService.notifyCustomerEOISubmitted({
           customerUserId: eoi.customer.user.id,
           customerEmail: eoi.customer.user.email,
@@ -153,7 +153,8 @@ export class EOIEngine {
         });
       }
 
-      if (eoi.cp.user) {
+      // Customer-filled: tell CP the customer submitted. CP-filled: CP already knows.
+      if (eoi.filledBy !== "CP" && eoi.cp.user) {
         await NotificationService.notifyCPCustomerSubmitted({
           cpUserId: eoi.cp.user.id,
           cpEmail: eoi.cp.user.email,
@@ -182,38 +183,77 @@ export class EOIEngine {
       }
     }
 
-    if (params.toStatus === "APPROVED" && eoi.customer?.user) {
-      await NotificationService.notifyEOIApproved({
-        customerUserId: eoi.customer.user.id,
-        customerEmail: eoi.customer.user.email,
-        customerName: eoi.lead.customerName,
-        projectName: eoi.project.name,
-        confirmationNumber: confirmationNumber!,
-        approvedDate: new Date().toISOString(),
-        cpUserId: eoi.cp.user?.id,
-      });
+    if (params.toStatus === "APPROVED") {
+      if (eoi.customer?.user) {
+        await NotificationService.notifyEOIApproved({
+          customerUserId: eoi.customer.user.id,
+          customerEmail: eoi.customer.user.email,
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          confirmationNumber: confirmationNumber!,
+          approvedDate: new Date().toISOString(),
+          cpUserId: eoi.cp.user?.id,
+        });
+      } else if (eoi.filledBy === "CP" && eoi.cp.user) {
+        await NotificationService.notifyCpEoiDecision({
+          cpUserId: eoi.cp.user.id,
+          cpEmail: eoi.cp.user.email,
+          cpName: eoi.cp.user.name || "Partner",
+          decision: "APPROVED",
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          referenceNumber: confirmationNumber || referenceNumber || undefined,
+          eoiId: eoi.id,
+        });
+      }
     }
 
-    if (params.toStatus === "REJECTED" && eoi.customer?.user) {
-      await NotificationService.notifyEOIRejected({
-        customerUserId: eoi.customer.user.id,
-        customerEmail: eoi.customer.user.email,
-        customerName: eoi.lead.customerName,
-        projectName: eoi.project.name,
-        reason: params.reason || "Not specified",
-        remarks: params.remarks,
-        cpUserId: eoi.cp.user?.id,
-      });
+    if (params.toStatus === "REJECTED") {
+      if (eoi.customer?.user) {
+        await NotificationService.notifyEOIRejected({
+          customerUserId: eoi.customer.user.id,
+          customerEmail: eoi.customer.user.email,
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          reason: params.reason || "Not specified",
+          remarks: params.remarks,
+          cpUserId: eoi.cp.user?.id,
+        });
+      } else if (eoi.filledBy === "CP" && eoi.cp.user) {
+        await NotificationService.notifyCpEoiDecision({
+          cpUserId: eoi.cp.user.id,
+          cpEmail: eoi.cp.user.email,
+          cpName: eoi.cp.user.name || "Partner",
+          decision: "REJECTED",
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          reason: params.reason || "Not specified",
+          eoiId: eoi.id,
+        });
+      }
     }
 
-    if (params.toStatus === "CORRECTION_REQUESTED" && eoi.customer?.user) {
-      await NotificationService.notifyCorrectionRequested({
-        customerUserId: eoi.customer.user.id,
-        customerEmail: eoi.customer.user.email,
-        customerName: eoi.lead.customerName,
-        projectName: eoi.project.name,
-        remarks: params.remarks || "Please review and resubmit",
-      });
+    if (params.toStatus === "CORRECTION_REQUESTED") {
+      const remarks = params.remarks || params.reason || "Please review and resubmit";
+      if (eoi.filledBy === "CP" && eoi.cp.user) {
+        await NotificationService.notifyCpCorrectionRequested({
+          cpUserId: eoi.cp.user.id,
+          cpEmail: eoi.cp.user.email,
+          cpName: eoi.cp.user.name || "Partner",
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          remarks,
+          eoiId: eoi.id,
+        });
+      } else if (eoi.customer?.user) {
+        await NotificationService.notifyCorrectionRequested({
+          customerUserId: eoi.customer.user.id,
+          customerEmail: eoi.customer.user.email,
+          customerName: eoi.lead.customerName,
+          projectName: eoi.project.name,
+          remarks,
+        });
+      }
     }
 
     return updated;

@@ -68,6 +68,7 @@ export interface Project {
   location: string;
   status: string;
   eoiStatus: string;
+  eoiFormFiller?: "CUSTOMER" | "CP";
   startingPrice: number;
   possessionDate?: string;
   eoiCount?: number;
@@ -123,10 +124,13 @@ export interface PendingEOI {
   customerName: string;
   customerEmail: string;
   customerMobile: string;
+  configuration?: string | null;
+  fosName?: string | null;
   project: string;
   projectLocation: string;
   cpName: string;
   status: string;
+  filledBy?: "CUSTOMER" | "CP";
   referenceNumber?: string;
   journeyStatus?: string;
   chequeNumber?: string;
@@ -136,6 +140,9 @@ export interface PendingEOI {
   documents?: Array<{ id: string; type: string; fileName: string; fileUrl: string }>;
   submittedAt?: string;
   chequeDoc?: { id: string; fileUrl: string };
+  eoiDocument?: { id: string; fileUrl: string; fileName?: string };
+  adminRemarks?: string | null;
+  rejectionReason?: string | null;
 }
 
 export interface Notification {
@@ -156,16 +163,21 @@ export interface PartnerProject extends Project {
   tags?: string[];
   locationImageUrl?: string;
   faqs?: Array<{ question: string; answer: string }>;
+  eoiFormFiller?: "CUSTOMER" | "CP";
 }
 
 export interface PartnerEOI {
   id: string;
   status: string;
+  filledBy?: "CUSTOMER" | "CP";
   confirmationNumber?: string;
+  referenceNumber?: string;
   adminRemarks?: string;
+  rejectionReason?: string;
   submittedAt?: string;
   lead: { customerName: string; customerEmail: string };
   project: { name: string };
+  documents?: Array<{ id: string; type: string; fileName: string; fileUrl: string }>;
 }
 
 export interface Document {

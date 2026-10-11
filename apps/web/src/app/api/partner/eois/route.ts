@@ -23,6 +23,10 @@ export const GET = withApiRoute("partner.eois.get", async (req: Request) => {
     include: {
       lead: { select: { customerName: true, customerEmail: true } },
       project: { select: { name: true } },
+      documents: {
+        where: { type: { in: ["EOI_DOCUMENT", "CHEQUE"] } },
+        select: { id: true, type: true, fileName: true, fileUrl: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });

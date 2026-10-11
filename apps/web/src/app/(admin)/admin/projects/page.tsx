@@ -31,6 +31,7 @@ interface Project {
   tags?: string[];
   status: string;
   eoiStatus: string;
+  eoiFormFiller?: string;
   startingPrice: number;
   possessionDate: string;
   eoiCount: number;
@@ -55,6 +56,7 @@ interface ProjectForm {
   possessionDate: string;
   description: string;
   eoiStatus: string;
+  eoiFormFiller: string;
   status: string;
   tags: string[];
   tagInput: string;
@@ -90,6 +92,7 @@ const emptyForm: ProjectForm = {
   possessionDate: "",
   description: "",
   eoiStatus: "OPEN",
+  eoiFormFiller: "CUSTOMER",
   status: "ACTIVE",
   tags: [],
   tagInput: "",
@@ -226,6 +229,7 @@ export default function AdminProjectsPage() {
         possessionDate: full.possessionDate ? new Date(full.possessionDate).toISOString().split("T")[0] : "",
         description: full.description || "",
         eoiStatus: full.eoiStatus,
+        eoiFormFiller: full.eoiFormFiller || "CUSTOMER",
         status: full.status,
         tags: full.tags || [],
         tagInput: "",
@@ -331,6 +335,7 @@ export default function AdminProjectsPage() {
         possessionDate: form.possessionDate || undefined,
         description: form.description.trim() || undefined,
         eoiStatus: form.eoiStatus as "OPEN" | "CLOSED",
+        eoiFormFiller: form.eoiFormFiller as "CUSTOMER" | "CP",
         status: form.status as "ACTIVE" | "INACTIVE" | "UPCOMING",
         tags: form.tags,
         amenities: form.amenities,
@@ -549,6 +554,21 @@ export default function AdminProjectsPage() {
           options={[
             { value: "OPEN", label: "EOI Open" },
             { value: "CLOSED", label: "EOI Closed" },
+          ]}
+        />
+      </FormField>
+      <FormField
+        label="EOI form filled by"
+        htmlFor="project-eoi-filler"
+        hint="Customer = portal form. Channel Partner = uploads EOI document + cancelled cheque."
+      >
+        <Select
+          id="project-eoi-filler"
+          value={form.eoiFormFiller}
+          onChange={(e) => setForm({ ...form, eoiFormFiller: e.target.value })}
+          options={[
+            { value: "CUSTOMER", label: "Customer" },
+            { value: "CP", label: "Channel Partner" },
           ]}
         />
       </FormField>
@@ -945,6 +965,11 @@ export default function AdminProjectsPage() {
           },
           { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status as string} /> },
           { key: "eoiStatus", header: "EOI", render: (row) => <StatusBadge status={row.eoiStatus === "OPEN" ? "OPEN" : "CLOSED_PROJECT"} /> },
+          {
+            key: "eoiFormFiller",
+            header: "Form by",
+            render: (row) => (row.eoiFormFiller === "CP" ? "Channel Partner" : "Customer"),
+          },
           { key: "eoiCount", header: "EOIs" },
           { key: "activeCPs", header: "Active CPs" },
           { key: "closures", header: "Closures" },

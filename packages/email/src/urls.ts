@@ -188,6 +188,11 @@ export function getPartnerDashboardUrl(): string {
   return getPartnerPublicUrl("/partner");
 }
 
+export function getPartnerEoisUrl(search?: string): string {
+  const q = search ? (search.startsWith("?") ? search : `?${search}`) : "";
+  return getPartnerPublicUrl(`/partner/eois${q}`);
+}
+
 export function getPartnerLeadsUrl(search?: string): string {
   const base = getPartnerPublicUrl("/partner/leads");
   if (!search) return base;

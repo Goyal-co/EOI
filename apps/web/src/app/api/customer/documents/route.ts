@@ -29,6 +29,14 @@ export const POST = withApiRoute("customer.documents.post", async (req: Request)
   const eoi = await resolveCustomerEoi(session!.user.id, session!.user.email!, eoiId);
   if (!eoi) return apiError("No EOI found", 404);
 
+  if (eoi.filledBy === "CP") {
+    return apiError(
+      "This EOI was submitted by your channel partner. Please contact them for updates.",
+      403,
+      "CP_FILLED_EOI",
+    );
+  }
+
   const body = await req.json();
   const parsed = documentUploadSchema.safeParse(body);
   if (!parsed.success) return apiError(parsed.error.errors[0].message);

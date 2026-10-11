@@ -20,6 +20,8 @@ import { requireCpConfirmationFlowEnabled } from "@/lib/services/cp-confirmation
 import { resolveTeamMemberForLead } from "@/lib/services/team-members";
 import { getPartnerScope, leadScopeWhere } from "@/lib/partner-scope";
 import { deferWork } from "@/lib/defer";
+import { DocumentService } from "@/lib/services/document";
+import { EOIEngine } from "@/lib/services/eoi-engine";
 
 /** Punch returns after DB commit; CRM/email run in background. */
 export const maxDuration = 60;
@@ -189,7 +191,14 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
       where: { cpId },
       include: {
         project: {
-          select: { id: true, name: true, location: true, eoiStatus: true, status: true },
+          select: {
+            id: true,
+            name: true,
+            location: true,
+            eoiStatus: true,
+            eoiFormFiller: true,
+            status: true,
+          },
         },
       },
     }),
@@ -253,6 +262,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         name: project.name,
         location: project.location,
         eoiStatus: project.eoiStatus,
+        eoiFormFiller: project.eoiFormFiller,
         action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
       }));
     const mappedProjects = projectAccess
@@ -262,6 +272,7 @@ export const GET = withApiRoute("partner.leads.get", async (req: Request) => {
         id: project.id,
         name: project.name,
         eoiStatus: project.eoiStatus,
+        eoiFormFiller: project.eoiFormFiller,
         action: project.eoiStatus === "OPEN" ? "EOI" : "LEAD_ONLY",
       }));
 
@@ -380,7 +391,7 @@ async function postPartnerLead(req: Request) {
   const [project, access] = await Promise.all([
     prisma.project.findUnique({
       where: { id: parsed.data.projectId },
-      select: { eoiStatus: true, name: true, location: true },
+      select: { eoiStatus: true, eoiFormFiller: true, name: true, location: true },
     }),
     prisma.cPProjectAccess.findUnique({
       where: { cpId_projectId: { cpId, projectId: parsed.data.projectId } },
@@ -395,6 +406,31 @@ async function postPartnerLead(req: Request) {
   const resolved = resolveLeadIntent(project.eoiStatus as "OPEN" | "CLOSED", intentType);
   if ("error" in resolved) return apiError(resolved.error, resolved.status);
   intentType = resolved.intentType;
+
+  const submitAsCpEoi = Boolean(parsed.data.submitAsCpEoi);
+  if (submitAsCpEoi) {
+    if (intentType !== "EOI") {
+      return apiError("CP EOI submit is only available for EOI projects", 400);
+    }
+    if (project.eoiFormFiller !== "CP") {
+      return apiError("This project uses the customer EOI form. CP document submit is not allowed.", 400);
+    }
+    if (!parsed.data.eoiDocumentUrl || !parsed.data.chequeDocumentUrl) {
+      return apiError("EOI document and cancelled cheque are required", 400);
+    }
+    const [eoiDocOk, chequeOk] = await Promise.all([
+      DocumentService.objectExists(parsed.data.eoiDocumentUrl),
+      DocumentService.objectExists(parsed.data.chequeDocumentUrl),
+    ]);
+    if (!eoiDocOk || !chequeOk) {
+      return apiError("Uploaded files not found in storage. Please upload again.", 400);
+    }
+  } else if (intentType === "EOI" && project.eoiFormFiller === "CP") {
+    return apiError(
+      "This project requires Channel Partner EOI submission with EOI document and cancelled cheque.",
+      400,
+    );
+  }
 
   const mobile = normalizeMobile(parsed.data.mobile);
   const email = parsed.data.email.trim().toLowerCase();
@@ -455,7 +491,7 @@ async function postPartnerLead(req: Request) {
   }
 
   const isRemap = Boolean(priorCpLead);
-  let sendConfirmation = parsed.data.sendConfirmation ?? false;
+  let sendConfirmation = submitAsCpEoi ? false : (parsed.data.sendConfirmation ?? false);
   if (isRemap && project.eoiStatus !== "OPEN") {
     sendConfirmation = false;
   }
@@ -465,7 +501,7 @@ async function postPartnerLead(req: Request) {
     if (flowError) return flowError;
   }
 
-  if (!isLeadOnly && sendConfirmation) {
+  if ((!isLeadOnly && sendConfirmation) || submitAsCpEoi) {
     if (!(parsed.data.configuration || "").trim()) {
       return apiError("Unit preference is required");
     }
@@ -523,7 +559,11 @@ async function postPartnerLead(req: Request) {
         city: parsed.data.city,
         notes: parsed.data.notes,
         intentType,
-        journeyStatus: sendConfirmation ? "CONFIRMATION_PENDING" : "DRAFT",
+        journeyStatus: submitAsCpEoi
+          ? "DRAFT"
+          : sendConfirmation
+            ? "CONFIRMATION_PENDING"
+            : "DRAFT",
         confirmationStatus: sendConfirmation ? "PENDING" : null,
         confirmationSentAt: sendConfirmation ? new Date() : null,
         leadStatus: "LEAD_REGISTERED",
@@ -536,6 +576,21 @@ async function postPartnerLead(req: Request) {
                   projectId: parsed.data.projectId,
                   cpId,
                   status: "PENDING_SUBMISSION",
+                  filledBy: submitAsCpEoi ? "CP" : "CUSTOMER",
+                  formData: submitAsCpEoi
+                    ? {
+                        punchSummary: {
+                          customerName: parsed.data.customerName,
+                          mobile,
+                          email,
+                          configuration: parsed.data.configuration || null,
+                          fosName: teamAssignment.fosName,
+                          budget: parsed.data.budget || null,
+                          city: parsed.data.city || null,
+                          notes: parsed.data.notes || null,
+                        },
+                      }
+                    : undefined,
                 },
               },
             }
@@ -544,6 +599,7 @@ async function postPartnerLead(req: Request) {
       include: {
         project: { select: { id: true, name: true, location: true, eoiStatus: true } },
         cp: { select: { companyName: true, mobile: true, user: { select: { name: true } } } },
+        eoi: { select: { id: true } },
       },
     });
 
@@ -662,6 +718,48 @@ async function postPartnerLead(req: Request) {
   }
 
   const publicLeadId = lead.leadId!;
+
+  let cpEoiSubmitted = false;
+  let cpEoiId: string | null = null;
+  if (submitAsCpEoi && lead.eoi?.id) {
+    cpEoiId = lead.eoi.id;
+    const eoiDocName = parsed.data.eoiDocumentFileName || "eoi-document.pdf";
+    const chequeName = parsed.data.chequeDocumentFileName || "cancelled-cheque.pdf";
+    await prisma.document.createMany({
+      data: [
+        {
+          eoiId: lead.eoi.id,
+          cpId,
+          type: "EOI_DOCUMENT",
+          fileName: eoiDocName,
+          fileUrl: parsed.data.eoiDocumentUrl!,
+          fileSize: parsed.data.eoiDocumentFileSize ?? null,
+          mimeType: parsed.data.eoiDocumentMimeType ?? DocumentService.mimeTypeFromFileName(eoiDocName),
+        },
+        {
+          eoiId: lead.eoi.id,
+          cpId,
+          type: "CHEQUE",
+          fileName: chequeName,
+          fileUrl: parsed.data.chequeDocumentUrl!,
+          fileSize: parsed.data.chequeDocumentFileSize ?? null,
+          mimeType: parsed.data.chequeDocumentMimeType ?? DocumentService.mimeTypeFromFileName(chequeName),
+        },
+      ],
+    });
+    await prisma.eOI.update({
+      where: { id: lead.eoi.id },
+      data: { chequeUploaded: true },
+    });
+    await EOIEngine.transition({
+      eoiId: lead.eoi.id,
+      toStatus: "SUBMITTED",
+      actorId: session!.user.id,
+      chequeUploaded: true,
+      expectedStatus: "PENDING_SUBMISSION",
+    });
+    cpEoiSubmitted = true;
+  }
 
   const acceptUrl = getCustomerConfirmUrl(inviteToken, "accept");
   const rejectUrl = getCustomerConfirmUrl(inviteToken, "reject");
@@ -813,6 +911,8 @@ async function postPartnerLead(req: Request) {
     // Optimistic: confirmation is queued; actual send happens in background.
     sentConfirmation: sendConfirmation,
     emailQueued: sendConfirmation,
+    cpEoiSubmitted,
+    eoiId: cpEoiId,
     crmSynced,
     crmError,
     lockExpiresAt: lockExpiresAtIso,

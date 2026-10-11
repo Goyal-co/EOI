@@ -132,6 +132,7 @@ export function useCustomerEOI(eoiId?: string | null) {
     queryFn: () => fetcher<{
       id: string;
       status: string;
+      filledBy?: "CUSTOMER" | "CP";
       formData?: Record<string, unknown>;
       submittedAt?: string | null;
       approvedAt?: string | null;
