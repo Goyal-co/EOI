@@ -204,6 +204,11 @@ export default function AdminChannelPartnersPage() {
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [cpToAssign, setCpToAssign] = useState<CPProfile | null>(null);
 
+  const [selectedCpIds, setSelectedCpIds] = useState<string[]>([]);
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkProjectIds, setBulkProjectIds] = useState<string[]>([]);
+  const [bulkAssignLoading, setBulkAssignLoading] = useState(false);
+
   const cps = useMemo(() => {
     const byTab =
       tab === "pending" ? allCps.filter((cp) => cp.status === "PENDING") : allCps;
@@ -231,6 +236,63 @@ export default function AdminChannelPartnersPage() {
       return false;
     });
   }, [allCps, tab, search]);
+
+  useEffect(() => {
+    setSelectedCpIds((prev) => prev.filter((id) => allCps.some((cp) => cp.id === id)));
+  }, [allCps]);
+
+  const selectedApprovedCount = useMemo(
+    () => selectedCpIds.filter((id) => allCps.find((cp) => cp.id === id)?.status === "APPROVED").length,
+    [selectedCpIds, allCps],
+  );
+
+  const openBulkAssign = () => {
+    setBulkProjectIds([]);
+    setBulkAssignOpen(true);
+  };
+
+  const toggleBulkProject = (projectId: string) => {
+    setBulkProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId],
+    );
+  };
+
+  const handleBulkAssign = async () => {
+    const approvedIds = selectedCpIds.filter(
+      (id) => allCps.find((cp) => cp.id === id)?.status === "APPROVED",
+    );
+    if (approvedIds.length === 0) {
+      addToast({ type: "error", title: "No approved partners selected" });
+      return;
+    }
+    if (bulkProjectIds.length === 0) {
+      addToast({ type: "error", title: "Select at least one project" });
+      return;
+    }
+    setBulkAssignLoading(true);
+    try {
+      const res = await fetch("/api/admin/channel-partners/bulk-assign-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cpIds: approvedIds, projectIds: bulkProjectIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Bulk assign failed");
+      addToast({
+        type: "success",
+        title: "Projects assigned",
+        message: `Added access for ${approvedIds.length} partner(s) to ${bulkProjectIds.length} project(s). Existing assignments kept.`,
+      });
+      setBulkAssignOpen(false);
+      setSelectedCpIds([]);
+      setBulkProjectIds([]);
+      qc.invalidateQueries({ queryKey: ["admin", "cps"] });
+    } catch (e) {
+      addToast({ type: "error", title: "Bulk assign failed", message: (e as Error).message });
+    } finally {
+      setBulkAssignLoading(false);
+    }
+  };
 
   const viewProfile = async (cp: ChannelPartner) => {
     setDrawerOpen(true);
@@ -503,6 +565,33 @@ export default function AdminChannelPartnersPage() {
         </div>
       </div>
 
+      {selectedCpIds.length > 0 && (
+        <div className="sticky top-2 z-20 flex flex-col gap-3 rounded-xl border border-navy/15 bg-white/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-foreground">
+            <span className="font-semibold">{selectedCpIds.length}</span> selected
+            {selectedApprovedCount < selectedCpIds.length && (
+              <span className="text-muted-foreground">
+                {" "}
+                ({selectedApprovedCount} approved can receive projects)
+              </span>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedCpIds([])}>
+              Clear
+            </Button>
+            <Button
+              variant="gold"
+              size="sm"
+              disabled={selectedApprovedCount === 0}
+              onClick={openBulkAssign}
+            >
+              Assign project(s)
+            </Button>
+          </div>
+        </div>
+      )}
+
       <DataTable
         columns={[
           { key: "name", header: "Name" },
@@ -524,6 +613,11 @@ export default function AdminChannelPartnersPage() {
         ]}
         data={cps}
         loading={isLoading}
+        selectable
+        getRowId={(row) => (row as ChannelPartner).id}
+        selectedIds={selectedCpIds}
+        onSelectionChange={setSelectedCpIds}
+        isRowSelectable={(row) => (row as ChannelPartner).status === "APPROVED"}
         emptyTitle={
           search.trim()
             ? "No matching partners"
@@ -575,6 +669,67 @@ export default function AdminChannelPartnersPage() {
           );
         }}
       />
+
+      <Modal
+        open={bulkAssignOpen}
+        onOpenChange={(open) => {
+          setBulkAssignOpen(open);
+          if (!open) setBulkProjectIds([]);
+        }}
+        title="Assign projects to partners"
+        description={`Add project access for ${selectedApprovedCount} approved partner(s). Existing assignments are kept.`}
+        size="lg"
+      >
+        <div className="space-y-4">
+          {projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No projects available.</p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              <div className="flex items-center justify-between pb-1">
+                <p className="text-sm font-medium text-foreground">Projects</p>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-navy hover:underline"
+                  onClick={() =>
+                    setBulkProjectIds(
+                      bulkProjectIds.length === projects.length ? [] : projects.map((p) => p.id),
+                    )
+                  }
+                >
+                  {bulkProjectIds.length === projects.length ? "Clear all" : "Select all"}
+                </button>
+              </div>
+              {projects.map((project) => (
+                <label
+                  key={project.id}
+                  className="flex items-center gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-blue-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={bulkProjectIds.includes(project.id)}
+                    onChange={() => toggleBulkProject(project.id)}
+                    className="rounded"
+                  />
+                  <span className="text-sm font-medium text-foreground">{project.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setBulkAssignOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="gold"
+              loading={bulkAssignLoading}
+              disabled={bulkProjectIds.length === 0 || selectedApprovedCount === 0}
+              onClick={handleBulkAssign}
+            >
+              Add access
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={approveModalOpen}

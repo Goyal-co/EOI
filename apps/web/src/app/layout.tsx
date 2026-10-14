@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -11,6 +11,14 @@ function getMetadataBase(): URL {
     return new URL(`https://${raw}`);
   }
 }
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#0B1F3A",
+};
 
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),

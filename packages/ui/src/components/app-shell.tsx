@@ -28,7 +28,7 @@ export function AppShell({ sidebar, navbar, children, className }: AppShellProps
   }, [mobileOpen]);
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-background">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
       <Sidebar
         {...sidebar}
         collapsed={collapsed}
@@ -48,10 +48,11 @@ export function AppShell({ sidebar, navbar, children, className }: AppShellProps
           className={cn(
             "flex-1 overflow-x-hidden overflow-y-auto overscroll-contain",
             "p-4 sm:p-6 lg:p-8",
+            "pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-6 lg:pb-8",
             className
           )}
         >
-          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-[1600px]">{children}</div>
         </main>
       </div>
     </div>

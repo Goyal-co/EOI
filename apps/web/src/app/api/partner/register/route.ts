@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@goyal/db";
-import { cpRegisterStep1Schema, cpRegisterStep2Schema, type DocumentType } from "@goyal/types";
+import { cpRegisterStep1Schema, cpRegisterStep2Schema, normalizeReraNumber, type DocumentType } from "@goyal/types";
 import { apiResponse, apiError, withApiRoute } from "@/lib/api";
 import { NotificationService } from "@goyal/email";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -115,8 +115,28 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
   }
 
   if (step === 2) {
-    const parsed = cpRegisterStep2Schema.safeParse(data);
+    const raw = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+    const { email: emailRaw, ...step2Body } = raw;
+    const parsed = cpRegisterStep2Schema.safeParse(step2Body);
     if (!parsed.success) return apiError(parsed.error.errors[0].message);
+
+    const reraNormalized = normalizeReraNumber(parsed.data.reraNumber);
+    let excludeUserId: string | undefined;
+    if (typeof emailRaw === "string" && emailRaw.trim()) {
+      const emailCheck = await checkCpRegistrationEmail(emailRaw);
+      if (emailCheck.resumeUserId) excludeUserId = emailCheck.resumeUserId;
+    }
+
+    const existingRera = await prisma.channelPartner.findFirst({
+      where: {
+        reraNormalized,
+        ...(excludeUserId ? { userId: { not: excludeUserId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existingRera) {
+      return apiError("This RERA number is already registered", 409, "RERA_DUPLICATE");
+    }
     return apiResponse({ valid: true });
   }
 
@@ -134,6 +154,20 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
     const emailCheck = await checkCpRegistrationEmail(step1.data.email);
     if (!emailCheck.allowed) {
       return apiError(emailCheck.message || "Email already registered", 409, emailCheck.code);
+    }
+
+    const reraNormalized = normalizeReraNumber(step2.data.reraNumber);
+    const existingRera = await prisma.channelPartner.findFirst({
+      where: {
+        reraNormalized,
+        ...(emailCheck.resumeUserId
+          ? { userId: { not: emailCheck.resumeUserId } }
+          : {}),
+      },
+      select: { id: true },
+    });
+    if (existingRera) {
+      return apiError("This RERA number is already registered", 409, "RERA_DUPLICATE");
     }
 
     const passwordHash = await bcrypt.hash(step1.data.password, 12);
@@ -155,6 +189,7 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
                 companyName: step2.data.companyName,
                 mobile: step1.data.mobile,
                 reraNumber: step2.data.reraNumber,
+                reraNormalized,
                 panNumber: step2.data.panNumber,
                 gstNumber: step2.data.gstNumber || null,
                 status: "PENDING",
@@ -190,6 +225,7 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
                   companyName: step2.data.companyName,
                   mobile: step1.data.mobile,
                   reraNumber: step2.data.reraNumber,
+                  reraNormalized,
                   panNumber: step2.data.panNumber,
                   gstNumber: step2.data.gstNumber || null,
                   status: "PENDING",
@@ -214,6 +250,7 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
                 companyName: step2.data.companyName,
                 mobile: step1.data.mobile,
                 reraNumber: step2.data.reraNumber,
+                reraNormalized,
                 panNumber: step2.data.panNumber,
                 gstNumber: step2.data.gstNumber || null,
                 status: "PENDING",
@@ -269,6 +306,9 @@ export const POST = withApiRoute("partner.register", async (req: Request) => {
     } catch (error) {
       if (isUniqueConstraintError(error, "email")) {
         return apiError("Email already registered", 409, "DUPLICATE_EMAIL", { cause: error });
+      }
+      if (isUniqueConstraintError(error, "reraNormalized") || isUniqueConstraintError(error, "reraNumber")) {
+        return apiError("This RERA number is already registered", 409, "RERA_DUPLICATE", { cause: error });
       }
       throw error;
     }

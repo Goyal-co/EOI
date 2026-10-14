@@ -35,6 +35,7 @@ async function main() {
           companyName: "Sharma Realty Partners",
           mobile: "9876543210",
           reraNumber: "P52100012345",
+          reraNormalized: "P52100012345",
           panNumber: "AABCS1234F",
           gstNumber: "27AABCS1234F1Z5",
           officeAddress: "101, Business Park, Andheri East",

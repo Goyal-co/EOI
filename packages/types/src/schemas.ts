@@ -23,9 +23,17 @@ export const cpRegisterStep1Schema = z.object({
   path: ["confirmPassword"],
 });
 
+/** Normalize RERA for uniqueness: NFKC, upper, alphanumeric only. */
+export function normalizeReraNumber(value: string): string {
+  return value.normalize("NFKC").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 export const cpRegisterStep2Schema = z.object({
   companyName: z.string().min(2, "Company / Individual name is required"),
-  reraNumber: z.string().min(5, "RERA number is required"),
+  reraNumber: z
+    .string()
+    .min(5, "RERA number is required")
+    .refine((v) => normalizeReraNumber(v).length >= 5, "RERA number is required"),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
   gstNumber: z.string().optional(),
 });
@@ -201,7 +209,11 @@ export const partnerProfileSchema = z.object({
   name: z.string().min(2).optional(),
   mobile: z.string().regex(/^[6-9]\d{9}$/).optional(),
   companyName: z.string().optional(),
-  reraNumber: z.string().min(5).optional(),
+  reraNumber: z
+    .string()
+    .min(5)
+    .refine((v) => normalizeReraNumber(v).length >= 5, "RERA number is required")
+    .optional(),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).optional(),
   gstNumber: z.string().optional(),
   officeAddress: z.string().optional(),
@@ -513,11 +525,61 @@ export const partnerPromotionUpdateSchema = z
   })
   .superRefine((data, ctx) => refinePartnerPromotion(data, ctx, false));
 
+export const supportTicketCategorySchema = z.enum([
+  "PORTAL_LOGIN",
+  "LEAD_EOI",
+  "PROJECT_INFO",
+  "COMMISSION",
+  "OTHER",
+]);
+
+const supportMessageBodySchema = z
+  .string()
+  .trim()
+  .min(1, "Message is required")
+  .max(4000)
+  .transform((v) => v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ""));
+
+export const supportTicketCreateSchema = z.object({
+  category: supportTicketCategorySchema,
+  message: supportMessageBodySchema,
+  projectId: z.string().optional().nullable(),
+  // Client priority is ignored server-side (defaults to MEDIUM).
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+});
+
+export const supportMessageCreateSchema = z.object({
+  body: supportMessageBodySchema,
+  /** Only same-origin stored uploads — never arbitrary external URLs. */
+  attachmentUrl: z.preprocess(
+    (v) => (typeof v === "string" && !v.trim() ? null : v),
+    storedFileUrlSchema
+      .refine((u) => u.startsWith("/api/files/") || u.startsWith("https://"), {
+        message: "Invalid attachment URL",
+      })
+      .optional()
+      .nullable(),
+  ),
+  attachmentName: z.string().max(255).optional().nullable(),
+  attachmentSize: z.number().int().positive().max(25 * 1024 * 1024).optional().nullable(),
+});
+
+export const supportTicketUpdateSchema = z.object({
+  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  /** Pass `"self"` to assign the current admin. */
+  assignedAdminId: z.string().nullable().optional(),
+  projectId: z.string().nullable().optional(),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PortalGuideVideoCreateInput = z.infer<typeof portalGuideVideoCreateSchema>;
 export type PortalGuideVideoUpdateInput = z.infer<typeof portalGuideVideoUpdateSchema>;
 export type PartnerPromotionCreateInput = z.infer<typeof partnerPromotionCreateSchema>;
 export type PartnerPromotionUpdateInput = z.infer<typeof partnerPromotionUpdateSchema>;
+export type SupportTicketCreateInput = z.infer<typeof supportTicketCreateSchema>;
+export type SupportMessageCreateInput = z.infer<typeof supportMessageCreateSchema>;
+export type SupportTicketUpdateInput = z.infer<typeof supportTicketUpdateSchema>;
 export type CPRegisterStep1 = z.infer<typeof cpRegisterStep1Schema>;
 export type CPRegisterStep2 = z.infer<typeof cpRegisterStep2Schema>;
 export type ProjectInput = z.infer<typeof projectSchema>;

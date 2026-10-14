@@ -8,8 +8,9 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useRequirePartnerAccess } from "@/lib/use-require-partner";
+import { PartnerSupportWidget } from "@/components/partner-support-widget";
 
 const allSidebarItems = [
   { label: "Dashboard", href: "/partner", icon: LayoutDashboard, ownerOnly: false },
@@ -25,6 +26,7 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const search = useGlobalSearch();
   const { allowed, isOwner, isTeamLeader } = useRequirePartnerAccess();
 
@@ -45,6 +47,8 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
       ? "Team Leader"
       : "Sales Executive";
   const profileName = session?.user?.name || (isOwner ? "Partner" : "Team Member");
+
+  const openSupport = useCallback(() => setSupportOpen(true), []);
 
   if (!allowed) return <div className="min-h-screen bg-background" />;
 
@@ -75,11 +79,13 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
           profileName,
           profileRole,
           onProfileClick: () => router.push("/partner/profile"),
-          onHelpClick: () => router.push("/partner/portal-guide"),
+          onHelpClick: openSupport,
         }}
       >
         <div className="min-w-0">{children}</div>
       </AppShell>
+
+      <PartnerSupportWidget open={supportOpen} onOpenChange={setSupportOpen} />
 
       <LogoutConfirmModal
         open={logoutOpen}

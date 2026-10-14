@@ -60,7 +60,7 @@ export function Navbar({
             type="button"
             onClick={onMenuClick}
             aria-label="Open navigation menu"
-            className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground lg:hidden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground lg:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -114,11 +114,11 @@ export function Navbar({
               type="button"
               onClick={onNotificationsClick}
               aria-label={`Notifications${notificationCount > 0 ? `, ${notificationCount} unread` : ""}`}
-              className="relative shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
             >
               <Bell className="h-5 w-5" />
               {notificationCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-white">
+                <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-white">
                   {notificationCount}
                 </span>
               )}
@@ -147,7 +147,7 @@ export function Navbar({
               type="button"
               onClick={onHelpClick}
               aria-label="Help"
-              className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-blue-50 hover:text-foreground"
             >
               <HelpCircle className="h-5 w-5" />
             </button>

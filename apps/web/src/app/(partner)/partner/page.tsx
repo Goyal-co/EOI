@@ -6,7 +6,7 @@ import {
   StatCard, ProjectCard, CardSkeleton, DataTable, JourneyStatusBadge, formatDate, PageHeader, Select, Input, FilterBar,
 } from "@goyal/ui";
 import {
-  UserCheck, FileText, CheckCircle, XCircle, Clock,
+  UserCheck, FileText, CheckCircle, XCircle, Clock, Send,
 } from "lucide-react";
 import { usePartnerAnalytics, usePartnerProjects, usePartnerLeads, usePartnerFosNames } from "@/lib/hooks";
 import { partnerVisibleJourneyStatus } from "@/lib/partner-visible-status";
@@ -50,6 +50,7 @@ const KPI_CONFIG = [
   { key: "totalLeads" as const, title: "Total Leads", icon: UserCheck, href: "/partner/leads" },
   { key: "submittedEOIs" as const, title: "EOI's Submitted", icon: FileText, href: "/partner/eois?status=submitted" },
   { key: "eoiPendingCustomer" as const, title: "EOI's Pending (Customer)", icon: Clock, href: "/partner/leads?status=DRAFT" },
+  { key: "confirmationPending" as const, title: "EOI's Confirmation Pending", icon: Send, href: "/partner/leads?status=CONFIRMATION_PENDING" },
   { key: "approvedEOIs" as const, title: "Approved EOI's", icon: CheckCircle, href: "/partner/eois?status=APPROVED" },
   { key: "rejectedEOIs" as const, title: "Rejected EOI's", icon: XCircle, href: "/partner/eois?status=REJECTED" },
 ];
@@ -114,55 +115,66 @@ export default function PartnerDashboardPage() {
     ? projectList.filter((p) => p.id === projectFilter)
     : projectList;
 
+  const leadFiltersBar = (
+    <FilterBar className="mb-3">
+      <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+        <div className="col-span-2 min-w-0 sm:col-auto sm:w-48">
+          <Select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            options={[
+              { value: "", label: "All Projects" },
+              ...projectList.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+            aria-label="Filter by project"
+          />
+        </div>
+        <div className="min-w-0 sm:w-36">
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            aria-label="From date"
+          />
+        </div>
+        <div className="min-w-0 sm:w-36">
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            aria-label="To date"
+          />
+        </div>
+        {isOwner && (
+          <div className="col-span-2 min-w-0 sm:col-auto sm:w-44">
+            <Select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              options={[
+                { value: "", label: "All Teams (FOS)" },
+                ...teamOptions.map((name) => ({ value: name, label: name })),
+              ]}
+              aria-label="Filter by team"
+            />
+          </div>
+        )}
+      </div>
+    </FilterBar>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
+      {/* Hero: promotions first so they are never pushed below filters */}
       <PartnerPromoCarousel />
 
       <PageHeader
         title="Dashboard"
         description="Overview of your partner activity"
+        className="mb-0"
       />
 
-      <FilterBar>
-        <Select
-          label=""
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          options={[
-            { value: "", label: "All Projects" },
-            ...projectList.map((p) => ({ value: p.id, label: p.name })),
-          ]}
-          className="w-48"
-        />
-        <Input
-          type="date"
-          label=""
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          className="w-40"
-        />
-        <Input
-          type="date"
-          label=""
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          className="w-40"
-        />
-        {isOwner && (
-          <Select
-            label=""
-            value={teamFilter}
-            onChange={(e) => setTeamFilter(e.target.value)}
-            options={[
-              { value: "", label: "All Teams (FOS)" },
-              ...teamOptions.map((name) => ({ value: name, label: name })),
-            ]}
-            className="w-48"
-          />
-        )}
-      </FilterBar>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* KPIs immediately after header — primary dashboard signal */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {analyticsLoading ? (
           Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)
         ) : (
@@ -174,48 +186,10 @@ export default function PartnerDashboardPage() {
               icon={icon}
               growth={stats?.[key]?.growth}
               onClick={() => router.push(href)}
+              className="min-w-0"
             />
           ))
         )}
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-section-title">Recent Leads</h2>
-          <button
-            onClick={() => router.push("/partner/leads")}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            View all
-          </button>
-        </div>
-        <DataTable
-          columns={[
-            { key: "customerName", header: "Customer" },
-            {
-              key: "journeyStatus",
-              header: "Journey Status",
-              render: (row) => {
-                const status = partnerVisibleJourneyStatus(row.journeyStatus);
-                return status ? (
-                  <JourneyStatusBadge status={status} />
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                );
-              },
-            },
-            {
-              key: "confirmationSentAt",
-              header: "Confirmation Sent",
-              render: (row) => row.confirmationSentAt ? formatDate(row.confirmationSentAt) : "—",
-            },
-          ]}
-          data={recentLeads}
-          loading={leadsLoading}
-          emptyTitle="No leads yet"
-          emptyDescription="Submit an EOI to register your first lead"
-          onRowClick={() => router.push("/partner/leads")}
-        />
       </div>
 
       <div>
@@ -257,6 +231,78 @@ export default function PartnerDashboardPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Filters scoped to leads only — does not compete with promo/KPIs */}
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-section-title">Recent Leads</h2>
+          <button
+            onClick={() => router.push("/partner/leads")}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            View all
+          </button>
+        </div>
+        {leadFiltersBar}
+        <div className="lg:hidden space-y-3">
+          {leadsLoading ? (
+            <CardSkeleton />
+          ) : recentLeads.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No leads yet
+            </div>
+          ) : (
+            recentLeads.map((lead) => {
+              const status = partnerVisibleJourneyStatus(lead.journeyStatus);
+              return (
+                <button
+                  key={lead.id}
+                  type="button"
+                  onClick={() => router.push("/partner/leads")}
+                  className="flex w-full items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground truncate">{lead.customerName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {lead.confirmationSentAt ? `Sent ${formatDate(lead.confirmationSentAt)}` : "No confirmation sent"}
+                    </p>
+                  </div>
+                  {status ? <JourneyStatusBadge status={status} /> : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <div className="hidden lg:block">
+          <DataTable
+            columns={[
+              { key: "customerName", header: "Customer" },
+              {
+                key: "journeyStatus",
+                header: "Journey Status",
+                render: (row) => {
+                  const status = partnerVisibleJourneyStatus(row.journeyStatus);
+                  return status ? (
+                    <JourneyStatusBadge status={status} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  );
+                },
+              },
+              {
+                key: "confirmationSentAt",
+                header: "Confirmation Sent",
+                render: (row) => row.confirmationSentAt ? formatDate(row.confirmationSentAt) : "—",
+              },
+            ]}
+            data={recentLeads}
+            loading={leadsLoading}
+            emptyTitle="No leads yet"
+            emptyDescription="Submit an EOI to register your first lead"
+            onRowClick={() => router.push("/partner/leads")}
+          />
+        </div>
       </div>
 
       <SubmitEOIModal

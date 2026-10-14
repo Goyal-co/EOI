@@ -17,6 +17,8 @@ const CATEGORY_PREF_MAP: Record<string, string> = {
   EOI_INVITATION: "eoiUpdates",
   CP_REGISTRATION_ACK: "cpRegistration",
   ANNOUNCEMENT: "announcements",
+  SUPPORT_TICKET_CREATED: "supportTickets",
+  SUPPORT_MESSAGE: "supportTickets",
 };
 
 const TRANSACTIONAL_EMAIL_TYPES = new Set([

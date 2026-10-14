@@ -49,7 +49,8 @@ export function Drawer({
           aria-modal="true"
           aria-label={title}
           className={cn(
-            "absolute inset-y-0 flex w-full max-w-lg flex-col bg-surface shadow-modal outline-none",
+            "absolute inset-y-0 flex w-full max-w-full flex-col bg-surface shadow-modal outline-none sm:max-w-lg",
+            "pb-[env(safe-area-inset-bottom)]",
             "animate-in duration-300",
             side === "right"
               ? "right-0 slide-in-from-right"

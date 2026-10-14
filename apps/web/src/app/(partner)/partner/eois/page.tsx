@@ -193,68 +193,74 @@ function PartnerEOIsContent() {
           title={searchQuery ? "No matching EOIs" : "No EOIs yet"}
           description={searchQuery ? "Try a different search term" : "Submit an EOI from a project page to get started"}
         />
-      ) : view === "cards" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {eois.map((eoi) => (
-            <Card
-              key={eoi.id}
-              className={cn(
-                "p-5",
-                eoi.filledBy === "CP" && eoi.status === "CORRECTION_REQUESTED" && "cursor-pointer ring-1 ring-amber-300",
-              )}
-              onClick={() => openCorrection(eoi)}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="text-section-title">{eoi.lead.customerName}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{eoi.project.name}</p>
-                </div>
-                <StatusBadge status={eoi.status} />
-              </div>
-              <div className="space-y-1.5 text-sm text-muted-foreground">
-                <p>{eoi.lead.customerEmail}</p>
-                <p>Created {formatDate(eoi.createdAt)}</p>
-                {eoi.filledBy === "CP" && (
-                  <p className="text-xs font-medium text-amber-800">CP-submitted</p>
-                )}
-                {eoi.status === "CORRECTION_REQUESTED" && eoi.filledBy === "CP" && (
-                  <p className="text-xs font-medium text-amber-900">Tap to fix documents &amp; resubmit</p>
-                )}
-                {eoi.confirmationNumber && (
-                  <p className="text-gold font-medium">#{eoi.confirmationNumber}</p>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
       ) : (
-        <DataTable<EOI>
-          columns={[
-            { key: "customer", header: "Customer", render: (row) => (
-              <div>
-                <p className="font-medium">{row.lead.customerName}</p>
-                <p className="text-xs text-muted-foreground">{row.lead.customerEmail}</p>
-              </div>
-            )},
-            { key: "project", header: "Project", render: (row) => row.project.name },
-            { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-            { key: "createdAt", header: "Created", render: (row) => formatDate(row.createdAt) },
-            { key: "confirmationNumber", header: "Confirmation #", render: (row) => row.confirmationNumber || "—" },
-            {
-              key: "actions",
-              header: "",
-              render: (row) =>
-                row.filledBy === "CP" && row.status === "CORRECTION_REQUESTED" ? (
-                  <Button variant="outline" size="sm" onClick={() => openCorrection(row)}>
-                    Fix &amp; resubmit
-                  </Button>
-                ) : null,
-            },
-          ]}
-          data={eois}
-          loading={isLoading}
-          emptyTitle="No EOIs found"
-        />
+        <>
+          {/* Always cards on phone; honor toggle from lg up */}
+          <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", view === "table" && "lg:hidden")}>
+            {eois.map((eoi) => (
+              <Card
+                key={eoi.id}
+                className={cn(
+                  "p-5",
+                  eoi.filledBy === "CP" && eoi.status === "CORRECTION_REQUESTED" && "cursor-pointer ring-1 ring-amber-300",
+                )}
+                onClick={() => openCorrection(eoi)}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="min-w-0">
+                    <h3 className="text-section-title truncate">{eoi.lead.customerName}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{eoi.project.name}</p>
+                  </div>
+                  <StatusBadge status={eoi.status} />
+                </div>
+                <div className="space-y-1.5 text-sm text-muted-foreground">
+                  <p className="truncate">{eoi.lead.customerEmail}</p>
+                  <p>Created {formatDate(eoi.createdAt)}</p>
+                  {eoi.filledBy === "CP" && (
+                    <p className="text-xs font-medium text-amber-800">CP-submitted</p>
+                  )}
+                  {eoi.status === "CORRECTION_REQUESTED" && eoi.filledBy === "CP" && (
+                    <p className="text-xs font-medium text-amber-900">Tap to fix documents &amp; resubmit</p>
+                  )}
+                  {eoi.confirmationNumber && (
+                    <p className="text-gold font-medium">#{eoi.confirmationNumber}</p>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+          {view === "table" && (
+            <div className="hidden lg:block">
+              <DataTable<EOI>
+                columns={[
+                  { key: "customer", header: "Customer", render: (row) => (
+                    <div>
+                      <p className="font-medium">{row.lead.customerName}</p>
+                      <p className="text-xs text-muted-foreground">{row.lead.customerEmail}</p>
+                    </div>
+                  )},
+                  { key: "project", header: "Project", render: (row) => row.project.name },
+                  { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+                  { key: "createdAt", header: "Created", render: (row) => formatDate(row.createdAt) },
+                  { key: "confirmationNumber", header: "Confirmation #", render: (row) => row.confirmationNumber || "—" },
+                  {
+                    key: "actions",
+                    header: "",
+                    render: (row) =>
+                      row.filledBy === "CP" && row.status === "CORRECTION_REQUESTED" ? (
+                        <Button variant="outline" size="sm" onClick={() => openCorrection(row)}>
+                          Fix &amp; resubmit
+                        </Button>
+                      ) : null,
+                  },
+                ]}
+                data={eois}
+                loading={isLoading}
+                emptyTitle="No EOIs found"
+              />
+            </div>
+          )}
+        </>
       )}
 
       <Modal

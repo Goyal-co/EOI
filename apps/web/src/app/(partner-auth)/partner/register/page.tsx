@@ -90,6 +90,9 @@ export default function PartnerRegisterPage() {
         }
         setStep(1);
       } else {
+        // Pre-validate business details + unique RERA (supports resume-with-same-RERA).
+        await postStep(2, { ...step2, email: step1.email });
+
         const form = new FormData();
         form.append("step", "3");
         form.append("step1", JSON.stringify(step1));

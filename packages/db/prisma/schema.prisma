@@ -115,6 +115,28 @@ enum NotificationType {
   CUSTOMER_CONFIRMATION
   CUSTOMER_REJECTED_CP
   ANNOUNCEMENT
+  SUPPORT_TICKET_CREATED
+  SUPPORT_MESSAGE
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SupportTicketCategory {
+  PORTAL_LOGIN
+  LEAD_EOI
+  PROJECT_INFO
+  COMMISSION
+  OTHER
 }
 
 enum AnnouncementAudience {
@@ -211,6 +233,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   announcementsCreated EoiAnnouncement[]
   teamMemberProfile CPTeamMember?
+  supportMessages   SupportMessage[]
+  supportTicketsAssigned SupportTicket[] @relation("SupportTicketAssignee")
 
   @@index([role])
   @@index([email])
@@ -224,20 +248,22 @@ model Admin {
 }
 
 model ChannelPartner {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companyName   String?
-  mobile        String?
-  reraNumber    String
-  panNumber     String?
-  gstNumber     String?
-  officeAddress String?
-  city          String?
-  status        CPStatus @default(PENDING)
-  blockReason   String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName     String?
+  mobile          String?
+  reraNumber      String
+  /// Trimmed + uppercased + spaces removed; unique across all CP statuses.
+  reraNormalized  String   @unique
+  panNumber       String?
+  gstNumber       String?
+  officeAddress   String?
+  city            String?
+  status          CPStatus @default(PENDING)
+  blockReason     String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   leads         Lead[]
   eois          EOI[]
@@ -245,6 +271,7 @@ model ChannelPartner {
   documents     Document[]
   leadEvents    LeadEvent[]
   teamMembers   CPTeamMember[]
+  supportTickets SupportTicket[]
 
   @@index([status])
   @@index([reraNumber])
@@ -319,6 +346,7 @@ model Project {
   eoiRules       EOIRule[]
   leadEvents     LeadEvent[]
   announcements  EoiAnnouncement[]
+  supportTickets SupportTicket[]
 
   @@index([status])
   @@index([eoiStatus])
@@ -697,4 +725,46 @@ model PartnerPromotion {
   @@index([active, sortOrder])
   @@index([startsAt, endsAt])
   @@map("PartnerPromotion")
+}
+
+model SupportTicket {
+  id              String                @id @default(cuid())
+  number          String                @unique
+  cpId            String
+  cp              ChannelPartner        @relation(fields: [cpId], references: [id], onDelete: Cascade)
+  category        SupportTicketCategory
+  status          SupportTicketStatus   @default(OPEN)
+  priority        SupportTicketPriority @default(MEDIUM)
+  assignedAdminId String?
+  assignedAdmin   User?                 @relation("SupportTicketAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  projectId       String?
+  project         Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  source          String                @default("PARTNER_PORTAL")
+  lastMessageAt   DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([cpId, status])
+  @@index([assignedAdminId])
+}
+
+model SupportMessage {
+  id              String        @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderUserId    String
+  sender          User          @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+  body            String        @db.Text
+  attachmentUrl   String?
+  attachmentName  String?
+  attachmentSize  Int?
+  createdAt       DateTime      @default(now())
+  readByPartnerAt DateTime?
+  readByAdminAt   DateTime?
+
+  @@index([ticketId, createdAt])
+  @@index([senderUserId])
 }

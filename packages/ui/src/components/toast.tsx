@@ -71,7 +71,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
       <div
         role="region"
         aria-label="Notifications"
-        className="fixed bottom-4 right-4 z-[300] flex max-w-[calc(100vw-2rem)] flex-col gap-2"
+        className="fixed bottom-20 right-4 z-[300] flex max-w-[calc(100vw-2rem)] flex-col gap-2 sm:bottom-4"
       >
         {toasts.map((toast) => {
           const Icon = icons[toast.type];
@@ -79,7 +79,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
             <div
               key={toast.id}
               className={cn(
-                "flex items-start gap-3 rounded-lg border p-4 shadow-card animate-in slide-in-from-right-full duration-300 min-w-[320px] bg-surface",
+                "flex w-full min-w-0 items-start gap-3 rounded-lg border p-4 shadow-card animate-in slide-in-from-right-full duration-300 bg-surface sm:min-w-[320px]",
                 styles[toast.type]
               )}
             >

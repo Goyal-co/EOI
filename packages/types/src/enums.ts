@@ -138,8 +138,45 @@ export const NotificationType = {
   EOI_REJECTED: "EOI_REJECTED",
   EOI_INVITATION: "EOI_INVITATION",
   CUSTOMER_SUBMITTED_EOI: "CUSTOMER_SUBMITTED_EOI",
+  CP_APPROVED: "CP_APPROVED",
+  CUSTOMER_CONFIRMATION: "CUSTOMER_CONFIRMATION",
+  CUSTOMER_REJECTED_CP: "CUSTOMER_REJECTED_CP",
+  ANNOUNCEMENT: "ANNOUNCEMENT",
+  SUPPORT_TICKET_CREATED: "SUPPORT_TICKET_CREATED",
+  SUPPORT_MESSAGE: "SUPPORT_MESSAGE",
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+export const SupportTicketStatus = {
+  OPEN: "OPEN",
+  IN_PROGRESS: "IN_PROGRESS",
+  RESOLVED: "RESOLVED",
+} as const;
+export type SupportTicketStatus = (typeof SupportTicketStatus)[keyof typeof SupportTicketStatus];
+
+export const SupportTicketPriority = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+} as const;
+export type SupportTicketPriority = (typeof SupportTicketPriority)[keyof typeof SupportTicketPriority];
+
+export const SupportTicketCategory = {
+  PORTAL_LOGIN: "PORTAL_LOGIN",
+  LEAD_EOI: "LEAD_EOI",
+  PROJECT_INFO: "PROJECT_INFO",
+  COMMISSION: "COMMISSION",
+  OTHER: "OTHER",
+} as const;
+export type SupportTicketCategory = (typeof SupportTicketCategory)[keyof typeof SupportTicketCategory];
+
+export const SUPPORT_CATEGORY_LABELS: Record<SupportTicketCategory, string> = {
+  PORTAL_LOGIN: "Portal & Login Help",
+  LEAD_EOI: "Lead / EOI Issues",
+  PROJECT_INFO: "Project Information",
+  COMMISSION: "Commission & Payouts",
+  OTHER: "Other Query",
+};
 
 export const EOI_TRANSITIONS: Record<EOIStatus, EOIStatus[]> = {
   PENDING_SUBMISSION: ["DRAFT", "SUBMITTED"],

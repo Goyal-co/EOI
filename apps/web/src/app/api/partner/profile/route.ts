@@ -1,7 +1,8 @@
 import { prisma } from "@goyal/db";
-import { partnerProfileSchema } from "@goyal/types";
+import { normalizeReraNumber, partnerProfileSchema } from "@goyal/types";
 import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+import { isUniqueConstraintError } from "@goyal/db";
 
 export const GET = withApiRoute("partner.profile.get", async () => {
   const { error, session } = await withPartnerAuth();
@@ -95,26 +96,46 @@ export const PUT = withApiRoute("partner.profile.put", async (req: Request) => {
     });
   }
 
-  const updated = await prisma.channelPartner.update({
-    where: { id: cp.id },
-    data: {
-      mobile: parsed.data.mobile,
-      companyName: parsed.data.companyName,
-      reraNumber: parsed.data.reraNumber,
-      panNumber: parsed.data.panNumber,
-      gstNumber: parsed.data.gstNumber,
-      officeAddress: parsed.data.officeAddress,
-      city: parsed.data.city,
-    },
-  });
+  let reraNormalized: string | undefined;
+  if (parsed.data.reraNumber !== undefined) {
+    reraNormalized = normalizeReraNumber(parsed.data.reraNumber);
+    const duplicate = await prisma.channelPartner.findFirst({
+      where: { reraNormalized, id: { not: cp.id } },
+      select: { id: true },
+    });
+    if (duplicate) {
+      return apiError("This RERA number is already registered", 409, "RERA_DUPLICATE");
+    }
+  }
 
-  await writeAudit({
-    actorId: session!.user.id,
-    action: "PARTNER_PROFILE_UPDATED",
-    entityType: "ChannelPartner",
-    entityId: cp.id,
-    ipAddress: getIpFromRequest(req),
-  });
+  try {
+    const updated = await prisma.channelPartner.update({
+      where: { id: cp.id },
+      data: {
+        mobile: parsed.data.mobile,
+        companyName: parsed.data.companyName,
+        reraNumber: parsed.data.reraNumber,
+        ...(reraNormalized ? { reraNormalized } : {}),
+        panNumber: parsed.data.panNumber,
+        gstNumber: parsed.data.gstNumber,
+        officeAddress: parsed.data.officeAddress,
+        city: parsed.data.city,
+      },
+    });
 
-  return apiResponse(updated);
+    await writeAudit({
+      actorId: session!.user.id,
+      action: "PARTNER_PROFILE_UPDATED",
+      entityType: "ChannelPartner",
+      entityId: cp.id,
+      ipAddress: getIpFromRequest(req),
+    });
+
+    return apiResponse(updated);
+  } catch (e) {
+    if (isUniqueConstraintError(e, "reraNormalized") || isUniqueConstraintError(e, "reraNumber")) {
+      return apiError("This RERA number is already registered", 409, "RERA_DUPLICATE");
+    }
+    throw e;
+  }
 });

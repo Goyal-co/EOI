@@ -109,7 +109,7 @@ function SidebarInner({
               href={item.href}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-blue-50 text-foreground shadow-sm ring-1 ring-blue-100"
                   : "text-muted-foreground hover:bg-blue-50/80 hover:text-foreground",

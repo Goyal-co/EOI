@@ -100,7 +100,7 @@ export function PartnerPromoCarousel() {
   );
 
   return (
-    <div className="relative w-full overflow-hidden rounded-xl border border-border bg-muted aspect-[4/1]">
+    <div className="relative w-full overflow-hidden rounded-xl border border-border bg-muted shadow-sm aspect-[16/7] sm:aspect-[4/1]">
       {content}
 
       {count > 1 && (

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { documentUploadSchema, projectAssetSchema, projectSchema } from "./schemas";
+import { documentUploadSchema, normalizeReraNumber, projectAssetSchema, projectSchema } from "./schemas";
+
+describe("normalizeReraNumber", () => {
+  it("treats spaced/hyphenated/cased variants as the same key", () => {
+    expect(normalizeReraNumber("prm/ka/rera/1251")).toBe("PRMKARERA1251");
+    expect(normalizeReraNumber("PRM-KA-RERA-1251")).toBe("PRMKARERA1251");
+    expect(normalizeReraNumber("  Prm Ka Rera 1251 ")).toBe("PRMKARERA1251");
+  });
+});
 
 const apiFilesUrl = "/api/files/eoi/admin/user1/brochure.pdf";
 
