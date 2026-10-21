@@ -98,6 +98,21 @@ export async function notifyAdminsSupportTicketCreated(params: {
   );
 }
 
+export async function notifySupportTransfer(params: {
+  recipientUserId: string;
+  ticketId: string;
+  ticketNumber: string;
+}) {
+  await NotificationService.emit({
+    userId: params.recipientUserId,
+    type: "SUPPORT_MESSAGE",
+    title: "Ticket transferred to you",
+    body: `${params.ticketNumber} is now assigned to you`,
+    entityType: "SupportTicket",
+    entityId: params.ticketId,
+  });
+}
+
 export async function notifySupportMessage(params: {
   recipientUserId: string;
   ticketId: string;
@@ -177,11 +192,13 @@ export function mapTicketListItem(ticket: {
     senderUserId: string;
     readByAdminAt: Date | null;
     readByPartnerAt: Date | null;
+    attachmentUrl?: string | null;
+    internal?: boolean;
     sender?: { role?: string } | null;
   }>;
   _count?: { messages: number };
 }) {
-  const last = ticket.messages[0];
+  const last = ticket.messages.find((m) => !m.internal);
   const unreadForAdmin = ticket.messages.filter((m) => {
     if (m.readByAdminAt) return false;
     const role = m.sender?.role;
@@ -211,7 +228,7 @@ export function mapTicketListItem(ticket: {
       companyName: ticket.cp.companyName,
       mobile: ticket.cp.mobile,
     },
-    lastMessagePreview: last?.body?.slice(0, 140) || "",
+    lastMessagePreview: (last?.body || (last?.attachmentUrl ? "Photo" : "")).slice(0, 140),
     unreadCount: unreadForAdmin,
   };
 }

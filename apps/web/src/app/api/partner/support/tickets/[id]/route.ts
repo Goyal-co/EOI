@@ -14,6 +14,7 @@ export const GET = withApiRoute("partner.support.tickets.get", async (_req: Requ
     include: {
       project: { select: { id: true, name: true } },
       messages: {
+        where: { internal: false },
         orderBy: { createdAt: "asc" },
         include: { sender: { select: { id: true, name: true, role: true } } },
       },
@@ -26,6 +27,7 @@ export const GET = withApiRoute("partner.support.tickets.get", async (_req: Requ
     where: {
       ticketId: ticket.id,
       readByPartnerAt: null,
+      internal: false,
       sender: { role: "ADMIN" },
     },
     data: { readByPartnerAt: now },

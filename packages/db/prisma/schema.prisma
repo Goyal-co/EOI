@@ -761,6 +761,8 @@ model SupportMessage {
   attachmentUrl   String?
   attachmentName  String?
   attachmentSize  Int?
+  /** Admin-only note. Never returned on partner ticket APIs. */
+  internal        Boolean       @default(false)
   createdAt       DateTime      @default(now())
   readByPartnerAt DateTime?
   readByAdminAt   DateTime?

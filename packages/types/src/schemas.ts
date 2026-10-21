@@ -548,20 +548,39 @@ export const supportTicketCreateSchema = z.object({
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
 });
 
-export const supportMessageCreateSchema = z.object({
-  body: supportMessageBodySchema,
-  /** Only same-origin stored uploads — never arbitrary external URLs. */
-  attachmentUrl: z.preprocess(
-    (v) => (typeof v === "string" && !v.trim() ? null : v),
-    storedFileUrlSchema
-      .refine((u) => u.startsWith("/api/files/") || u.startsWith("https://"), {
-        message: "Invalid attachment URL",
-      })
+export const supportMessageCreateSchema = z
+  .object({
+    body: z
+      .string()
+      .max(4000)
       .optional()
-      .nullable(),
-  ),
-  attachmentName: z.string().max(255).optional().nullable(),
-  attachmentSize: z.number().int().positive().max(25 * 1024 * 1024).optional().nullable(),
+      .nullable()
+      .transform((v) => (v || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim()),
+    /** Only same-origin stored uploads — never arbitrary external URLs. */
+    attachmentUrl: z.preprocess(
+      (v) => (typeof v === "string" && !v.trim() ? null : v),
+      storedFileUrlSchema
+        .refine((u) => u.startsWith("/api/files/") || u.startsWith("https://"), {
+          message: "Invalid attachment URL",
+        })
+        .optional()
+        .nullable(),
+    ),
+    attachmentName: z.string().max(255).optional().nullable(),
+    attachmentSize: z.number().int().positive().max(25 * 1024 * 1024).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.body && !data.attachmentUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Message or photo is required",
+        path: ["body"],
+      });
+    }
+  });
+
+export const supportNoteCreateSchema = z.object({
+  body: supportMessageBodySchema,
 });
 
 export const supportTicketUpdateSchema = z.object({

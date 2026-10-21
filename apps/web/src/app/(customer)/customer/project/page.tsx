@@ -67,7 +67,7 @@ function CustomerProjectContent() {
 
   return (
     <div className="space-y-6">
-      <div className="relative h-64 rounded-xl overflow-hidden bg-gradient-to-br from-navy/10 via-blue-100 to-gold-light shadow-md">
+      <div className="relative aspect-[16/5] rounded-xl overflow-hidden bg-gradient-to-br from-navy/10 via-blue-100 to-gold-light shadow-md">
         {project.bannerUrl ? (
           <img src={project.bannerUrl} alt={project.name} className="h-full w-full object-cover" />
         ) : (

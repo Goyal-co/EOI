@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Headphones, ChevronLeft, Minimize2 } from "lucide-react";
+import { MessageCircle, X, Send, Headphones, ChevronLeft, Minimize2, ImagePlus } from "lucide-react";
 import { SUPPORT_CATEGORY_LABELS, type SupportTicketCategory } from "@goyal/types";
 import { cn } from "@goyal/ui";
+import { uploadViaPresign } from "@/lib/uploads/client-upload";
+
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 const CATEGORIES = Object.entries(SUPPORT_CATEGORY_LABELS) as [SupportTicketCategory, string][];
 
@@ -26,6 +29,14 @@ interface ThreadMessage {
   createdAt: string;
   mine: boolean;
   senderName: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+}
+
+interface PendingPhoto {
+  url: string;
+  name: string;
+  size: number;
 }
 
 interface PartnerSupportWidgetProps {
@@ -56,6 +67,9 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
     messages: ThreadMessage[];
   } | null>(null);
   const [reply, setReply] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const loadTickets = useCallback(async () => {
@@ -128,19 +142,48 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
     }
   };
 
+  const onPhotoSelected = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > PHOTO_MAX_BYTES) {
+      setError("Photo must be 10 MB or smaller");
+      return;
+    }
+    setUploadingPhoto(true);
+    setError(null);
+    try {
+      const uploaded = await uploadViaPresign(file, "GALLERY");
+      setPendingPhoto({
+        url: uploaded.fileUrl,
+        name: uploaded.fileName,
+        size: uploaded.fileSize,
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
   const sendReply = async () => {
-    if (!activeTicketId || !reply.trim()) return;
+    if (!activeTicketId || (!reply.trim() && !pendingPhoto)) return;
     setSending(true);
     setError(null);
     try {
       const res = await fetch(`/api/partner/support/tickets/${activeTicketId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: reply.trim() }),
+        body: JSON.stringify({
+          body: reply.trim(),
+          attachmentUrl: pendingPhoto?.url,
+          attachmentName: pendingPhoto?.name,
+          attachmentSize: pendingPhoto?.size,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send");
       setReply("");
+      setPendingPhoto(null);
       await loadThread(activeTicketId);
       await loadTickets();
     } catch (e) {
@@ -154,6 +197,15 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
 
   return (
     <>
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-8 right-[5.25rem] z-[250] rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-navy shadow-md"
+        >
+          Need help?
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -315,7 +367,17 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                           m.mine ? "rounded-br-md bg-navy text-white" : "rounded-bl-md bg-white text-foreground",
                         )}
                       >
-                        <p className="whitespace-pre-wrap">{m.body}</p>
+                        {m.attachmentUrl && (
+                          <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={m.attachmentUrl}
+                              alt={m.attachmentName || "Shared photo"}
+                              className="max-h-40 w-full rounded-lg object-cover"
+                            />
+                          </a>
+                        )}
+                        {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
                         <p className={cn("mt-1 text-[10px]", m.mine ? "text-white/70" : "text-muted-foreground")}>
                           {new Date(m.createdAt).toLocaleString()}
                         </p>
@@ -325,28 +387,56 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                   <div ref={bottomRef} />
                 </div>
                 {thread.status !== "RESOLVED" ? (
-                  <div className="flex items-center gap-2 border-t border-border bg-white p-3">
-                    <input
-                      value={reply}
-                      onChange={(e) => setReply(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void sendReply();
-                        }
-                      }}
-                      placeholder="Type your message..."
-                      className="min-w-0 flex-1 rounded-full border border-border bg-slate-50 px-4 py-2 text-sm outline-none focus:border-navy/40"
-                    />
-                    <button
-                      type="button"
-                      disabled={sending || !reply.trim()}
-                      onClick={sendReply}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white disabled:opacity-50"
-                      aria-label="Send"
-                    >
-                      <Send className="h-4 w-4" />
-                    </button>
+                  <div className="border-t border-border bg-white p-3">
+                    {pendingPhoto && (
+                      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                        <span className="min-w-0 flex-1 truncate">{pendingPhoto.name}</span>
+                        <button type="button" className="font-medium text-navy" onClick={() => setPendingPhoto(null)}>
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) => void onPhotoSelected(e.target.files?.[0])}
+                      />
+                      <button
+                        type="button"
+                        disabled={uploadingPhoto || sending}
+                        onClick={() => photoInputRef.current?.click()}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-navy disabled:opacity-50"
+                        aria-label="Attach photo"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                      </button>
+                      <input
+                        value={reply}
+                        onChange={(e) => setReply(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendReply();
+                          }
+                        }}
+                        placeholder={uploadingPhoto ? "Uploading photo…" : "Type your message..."}
+                        className="min-w-0 flex-1 rounded-full border border-border bg-slate-50 px-4 py-2 text-sm outline-none focus:border-navy/40"
+                      />
+                      <button
+                        type="button"
+                        disabled={sending || uploadingPhoto || (!reply.trim() && !pendingPhoto)}
+                        onClick={sendReply}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white disabled:opacity-50"
+                        aria-label="Send"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <p className="border-t border-border bg-white p-3 text-center text-xs text-muted-foreground">

@@ -55,7 +55,7 @@ export function ProjectCard({
       )}
       onClick={onViewDetails}
     >
-      <div className="relative h-40 bg-gradient-to-br from-blue-100 to-blue-200 overflow-hidden">
+      <div className="relative aspect-[16/5] bg-gradient-to-br from-blue-100 to-blue-200 overflow-hidden">
         {imageUrl ? (
           <img src={imageUrl} alt={name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
