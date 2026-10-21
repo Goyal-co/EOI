@@ -118,7 +118,7 @@ export default function ProjectDetailPage() {
         </div>
       ) : null}
 
-      <div className="relative rounded-xl overflow-hidden aspect-[16/5] max-h-72 bg-gradient-to-br from-blue-100 to-blue-200">
+      <div className="relative rounded-xl overflow-hidden aspect-[16/5] bg-gradient-to-br from-blue-100 to-blue-200">
         {project.bannerUrl ? (
           <img src={project.bannerUrl} alt={project.name} className="h-full w-full object-cover" />
         ) : (

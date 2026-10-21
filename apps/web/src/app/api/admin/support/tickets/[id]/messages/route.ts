@@ -46,7 +46,7 @@ export const POST = withApiRoute("admin.support.tickets.messages.create", async 
     recipientUserId: ticket.cp.user.id,
     ticketId: ticket.id,
     ticketNumber: ticket.number,
-    preview: parsed.data.body,
+    preview: parsed.data.body || (parsed.data.attachmentUrl ? "Photo" : ""),
     fromAdmin: true,
   });
 

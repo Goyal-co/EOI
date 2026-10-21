@@ -18,6 +18,7 @@ export const GET = withApiRoute("partner.support.tickets.list", async () => {
     where: { cpId },
     include: {
       messages: {
+        where: { internal: false },
         orderBy: { createdAt: "desc" },
         take: 1,
       },
@@ -27,6 +28,7 @@ export const GET = withApiRoute("partner.support.tickets.list", async () => {
           messages: {
             where: {
               readByPartnerAt: null,
+              internal: false,
               sender: { role: "ADMIN" },
             },
           },
@@ -50,7 +52,7 @@ export const GET = withApiRoute("partner.support.tickets.list", async () => {
         lastMessageAt: t.lastMessageAt,
         createdAt: t.createdAt,
         projectName: t.project?.name || null,
-        lastMessagePreview: last?.body?.slice(0, 140) || "",
+        lastMessagePreview: (last?.body || (last?.attachmentUrl ? "Photo" : "")).slice(0, 140),
         unreadCount: t._count.messages,
       };
     }),

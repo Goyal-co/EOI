@@ -46,7 +46,7 @@ export const POST = withApiRoute("partner.support.tickets.messages.create", asyn
   await notifyAdminsOfPartnerReply({
     ticketId: ticket.id,
     ticketNumber: ticket.number,
-    preview: parsed.data.body,
+    preview: parsed.data.body || (parsed.data.attachmentUrl ? "Photo" : ""),
     assignedAdminId: ticket.assignedAdminId,
   });
 

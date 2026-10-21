@@ -67,7 +67,7 @@ export default function InvitePage() {
 
       <div className="rounded-lg border border-border overflow-hidden mb-6">
         {data.project.bannerUrl && (
-          <div className="h-32 bg-blue-100 overflow-hidden">
+          <div className="aspect-[16/5] bg-blue-100 overflow-hidden">
             <img src={data.project.bannerUrl} alt={data.project.name} className="h-full w-full object-cover" />
           </div>
         )}

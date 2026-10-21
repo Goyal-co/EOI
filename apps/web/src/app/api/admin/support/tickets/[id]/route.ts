@@ -1,8 +1,29 @@
 import { prisma } from "@goyal/db";
 import { supportTicketUpdateSchema } from "@goyal/types";
 import { withAuth, apiResponse, apiError, withApiRoute } from "@/lib/api";
-import { supportCategoryLabel } from "@/lib/services/support";
+import { notifySupportTransfer, supportCategoryLabel } from "@/lib/services/support";
 import { writeAudit, getIpFromRequest } from "@/lib/services/audit";
+
+function historyLabel(action: string, metadata: unknown): { label: string; detail?: string } {
+  const meta = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
+  if (action === "SUPPORT_TICKET_NOTE") {
+    return { label: "Internal note", detail: typeof meta.preview === "string" ? meta.preview : undefined };
+  }
+  if (action === "SUPPORT_TICKET_UPDATED") {
+    const parts: string[] = [];
+    if (typeof meta.status === "string") parts.push(`Status → ${meta.status.replace(/_/g, " ")}`);
+    if (typeof meta.priority === "string") parts.push(`Priority → ${meta.priority}`);
+    if ("assignedAdminId" in meta) {
+      if (!meta.assignedAdminId) parts.push("Unassigned");
+      else if (typeof meta.assignedAdminName === "string" && meta.assignedAdminName) {
+        parts.push(`Transferred to ${meta.assignedAdminName}`);
+      } else parts.push("Transferred");
+    }
+    if (typeof meta.projectId === "string") parts.push("Project updated");
+    return { label: parts.join(" · ") || "Ticket updated" };
+  }
+  return { label: action.replace(/_/g, " ") };
+}
 
 export const GET = withApiRoute("admin.support.tickets.get", async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { error, session } = await withAuth(["ADMIN"]);
@@ -31,9 +52,20 @@ export const GET = withApiRoute("admin.support.tickets.get", async (_req: Reques
       ticketId: ticket.id,
       senderUserId: { not: session!.user.id },
       readByAdminAt: null,
+      internal: false,
     },
     data: { readByAdminAt: now },
   });
+
+  const logs = await prisma.auditLog.findMany({
+    where: { entityType: "SupportTicket", entityId: ticket.id },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    include: { actor: { select: { name: true } } },
+  });
+
+  const publicMessages = ticket.messages.filter((m) => !m.internal);
+  const notes = ticket.messages.filter((m) => m.internal);
 
   return apiResponse({
     id: ticket.id,
@@ -57,7 +89,7 @@ export const GET = withApiRoute("admin.support.tickets.get", async (_req: Reques
       companyName: ticket.cp.companyName,
       mobile: ticket.cp.mobile,
     },
-    messages: ticket.messages.map((m) => ({
+    messages: publicMessages.map((m) => ({
       id: m.id,
       body: m.body,
       createdAt: m.createdAt,
@@ -68,6 +100,31 @@ export const GET = withApiRoute("admin.support.tickets.get", async (_req: Reques
       senderName: m.sender.name || (m.sender.role === "ADMIN" ? "Support" : "Partner"),
       senderRole: m.sender.role,
     })),
+    notes: notes.map((m) => ({
+      id: m.id,
+      body: m.body,
+      createdAt: m.createdAt,
+      senderName: m.sender.name || "Admin",
+    })),
+    history: [
+      {
+        id: "opened",
+        at: ticket.createdAt,
+        actor: ticket.cp.user.name || "Partner",
+        label: "Ticket opened",
+        detail: supportCategoryLabel(ticket.category),
+      },
+      ...logs.map((log) => {
+        const described = historyLabel(log.action, log.metadata);
+        return {
+          id: log.id,
+          at: log.createdAt,
+          actor: log.actor?.name || "Admin",
+          label: described.label,
+          detail: described.detail || null,
+        };
+      }),
+    ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
   });
 });
 
@@ -88,11 +145,14 @@ export const PATCH = withApiRoute("admin.support.tickets.patch", async (req: Req
     assignedAdminId = session!.user.id;
   }
 
+  let assigneeName: string | null = null;
   if (assignedAdminId) {
     const admin = await prisma.user.findFirst({
       where: { id: assignedAdminId, role: "ADMIN", status: "ACTIVE" },
+      select: { id: true, name: true },
     });
     if (!admin) return apiError("Assignee must be an active admin", 400);
+    assigneeName = admin.name || "Admin";
   }
 
   if (parsed.data.projectId) {
@@ -118,9 +178,27 @@ export const PATCH = withApiRoute("admin.support.tickets.patch", async (req: Req
     action: "SUPPORT_TICKET_UPDATED",
     entityType: "SupportTicket",
     entityId: id,
-    metadata: { ...parsed.data, assignedAdminId },
+    metadata: {
+      ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+      ...(parsed.data.priority !== undefined ? { priority: parsed.data.priority } : {}),
+      ...(parsed.data.assignedAdminId !== undefined ? { assignedAdminId, assignedAdminName: assigneeName } : {}),
+      ...(parsed.data.projectId !== undefined ? { projectId: parsed.data.projectId } : {}),
+    },
     ipAddress: getIpFromRequest(req),
   });
+
+  if (
+    parsed.data.assignedAdminId !== undefined &&
+    assignedAdminId &&
+    assignedAdminId !== existing.assignedAdminId &&
+    assignedAdminId !== session!.user.id
+  ) {
+    await notifySupportTransfer({
+      recipientUserId: assignedAdminId,
+      ticketId: id,
+      ticketNumber: existing.number,
+    });
+  }
 
   return apiResponse(updated);
 });

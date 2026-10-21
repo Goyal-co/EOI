@@ -5,10 +5,13 @@ import {
   Button, Input, PageHeader, StatusBadge, useToast, cn, LoadingSkeleton, EmptyState,
 } from "@goyal/ui";
 import {
-  Search, Send, CheckCircle, Filter, MessageSquare,
+  Search, Send, CheckCircle, Filter, MessageSquare, ImagePlus,
 } from "lucide-react";
 import { publicPortalPath } from "@/lib/portal-paths";
 import Link from "next/link";
+import { uploadViaPresign } from "@/lib/uploads/client-upload";
+
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 type StatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED";
 
@@ -44,11 +47,29 @@ interface ThreadMessage {
   mine: boolean;
   senderName: string;
   senderRole: string;
+  attachmentUrl?: string | null;
   attachmentName?: string | null;
+}
+
+interface NoteItem {
+  id: string;
+  body: string;
+  createdAt: string;
+  senderName: string;
+}
+
+interface HistoryItem {
+  id: string;
+  at: string;
+  actor: string;
+  label: string;
+  detail?: string | null;
 }
 
 interface TicketDetail extends TicketListItem {
   messages: ThreadMessage[];
+  notes?: NoteItem[];
+  history?: HistoryItem[];
 }
 
 function initials(name: string) {
@@ -77,9 +98,24 @@ export default function AdminSupportPage() {
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [reply, setReply] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState<{ url: string; name: string; size: number } | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [sending, setSending] = useState(false);
+  const [admins, setAdmins] = useState<{ id: string; name: string | null; email: string }[]>([]);
+  const [note, setNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "chat" | "details">("list");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void fetch("/api/admin/support/assignees")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setAdmins(data);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const loadList = useCallback(async () => {
     try {
@@ -151,24 +187,75 @@ export default function AdminSupportPage() {
       if (!res.ok) throw new Error(data.error || "Update failed");
       await loadDetail(selectedId);
       await loadList();
-      addToast({ type: "success", title: "Ticket updated" });
+      addToast({
+        type: "success",
+        title: "assignedAdminId" in body
+          ? body.assignedAdminId
+            ? "Ticket transferred"
+            : "Ticket unassigned"
+          : "Ticket updated",
+      });
     } catch (e) {
       addToast({ type: "error", title: "Update failed", message: (e as Error).message });
     }
   };
 
+  const addNote = async () => {
+    if (!selectedId || !note.trim()) return;
+    setSavingNote(true);
+    try {
+      const res = await fetch(`/api/admin/support/tickets/${selectedId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: note.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save note");
+      setNote("");
+      await loadDetail(selectedId);
+    } catch (e) {
+      addToast({ type: "error", title: "Note failed", message: (e as Error).message });
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const onPhotoSelected = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > PHOTO_MAX_BYTES) {
+      addToast({ type: "error", title: "Photo too large", message: "Use an image under 10 MB" });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const uploaded = await uploadViaPresign(file, "GALLERY");
+      setPendingPhoto({ url: uploaded.fileUrl, name: uploaded.fileName, size: uploaded.fileSize });
+    } catch (e) {
+      addToast({ type: "error", title: "Upload failed", message: (e as Error).message });
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
   const sendReply = async () => {
-    if (!selectedId || !reply.trim()) return;
+    if (!selectedId || (!reply.trim() && !pendingPhoto)) return;
     setSending(true);
     try {
       const res = await fetch(`/api/admin/support/tickets/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: reply.trim() }),
+        body: JSON.stringify({
+          body: reply.trim(),
+          attachmentUrl: pendingPhoto?.url,
+          attachmentName: pendingPhoto?.name,
+          attachmentSize: pendingPhoto?.size,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Send failed");
       setReply("");
+      setPendingPhoto(null);
       await loadDetail(selectedId);
       await loadList();
     } catch (e) {
@@ -312,10 +399,17 @@ export default function AdminSupportPage() {
                     m.mine ? "rounded-br-md bg-blue-100 text-foreground" : "rounded-bl-md bg-white text-foreground",
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{m.body}</p>
-                  {m.attachmentName && (
-                    <p className="mt-1 text-xs text-muted-foreground">Attachment: {m.attachmentName}</p>
+                  {m.attachmentUrl && (
+                    <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={m.attachmentUrl}
+                        alt={m.attachmentName || "Shared photo"}
+                        className="max-h-48 w-full rounded-lg object-cover"
+                      />
+                    </a>
                   )}
+                  {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
                   <p className="mt-1 text-[10px] text-muted-foreground">
                     {new Date(m.createdAt).toLocaleString()}
                   </p>
@@ -324,29 +418,57 @@ export default function AdminSupportPage() {
             ))}
             <div ref={bottomRef} />
           </div>
-          <div className="flex items-center gap-2 border-t border-border bg-white p-3">
-            <input
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void sendReply();
-                }
-              }}
-              placeholder="Type a message..."
-              className="min-w-0 flex-1 rounded-full border border-border bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-navy/40"
-              disabled={detail.status === "RESOLVED"}
-            />
-            <button
-              type="button"
-              disabled={sending || !reply.trim() || detail.status === "RESOLVED"}
-              onClick={sendReply}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white disabled:opacity-50"
-              aria-label="Send"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+          <div className="border-t border-border bg-white p-3">
+            {pendingPhoto && (
+              <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                <span className="min-w-0 flex-1 truncate">{pendingPhoto.name}</span>
+                <button type="button" className="font-medium text-navy" onClick={() => setPendingPhoto(null)}>
+                  Remove
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => void onPhotoSelected(e.target.files?.[0])}
+              />
+              <button
+                type="button"
+                disabled={uploadingPhoto || sending || detail.status === "RESOLVED"}
+                onClick={() => photoInputRef.current?.click()}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-navy disabled:opacity-50"
+                aria-label="Attach photo"
+              >
+                <ImagePlus className="h-4 w-4" />
+              </button>
+              <input
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendReply();
+                  }
+                }}
+                placeholder={uploadingPhoto ? "Uploading photo…" : "Type a message..."}
+                className="min-w-0 flex-1 rounded-full border border-border bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-navy/40"
+                disabled={detail.status === "RESOLVED"}
+              />
+              <button
+                type="button"
+                disabled={sending || uploadingPhoto || detail.status === "RESOLVED" || (!reply.trim() && !pendingPhoto)}
+                onClick={sendReply}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white disabled:opacity-50"
+                aria-label="Send"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </>
       ) : null}
@@ -392,6 +514,28 @@ export default function AdminSupportPage() {
           </select>
         </div>
         <DetailRow label="Assigned To" value={detail.assignedAdminName || "Unassigned"} />
+        <div className="space-y-1 text-sm">
+          <span className="text-muted-foreground">Transfer</span>
+          <select
+            className="w-full rounded-md border border-border bg-white px-2 py-1.5 text-sm"
+            value={detail.assignedAdminId || ""}
+            onChange={(e) => {
+              const next = e.target.value;
+              void patchTicket(
+                next
+                  ? { assignedAdminId: next, ...(detail.status === "OPEN" ? { status: "IN_PROGRESS" } : {}) }
+                  : { assignedAdminId: null },
+              );
+            }}
+          >
+            <option value="">Unassigned</option>
+            {admins.map((admin) => (
+              <option key={admin.id} value={admin.id}>
+                {admin.name || admin.email}
+              </option>
+            ))}
+          </select>
+        </div>
         <DetailRow label="Source" value={detail.source.replace(/_/g, " ")} />
         <DetailRow label="Project" value={detail.projectName || "—"} />
       </div>
@@ -435,6 +579,49 @@ export default function AdminSupportPage() {
         >
           Mark In Progress
         </Button>
+      </div>
+
+      <div className="rounded-xl border border-border p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Internal notes</h3>
+        <p className="text-xs text-muted-foreground">Visible to admins only. The partner does not see these.</p>
+        {(detail.notes || []).length === 0 && (
+          <p className="text-xs text-muted-foreground">No notes yet.</p>
+        )}
+        <div className="space-y-2">
+          {(detail.notes || []).map((item) => (
+            <div key={item.id} className="rounded-lg bg-amber-50 px-3 py-2 text-sm">
+              <p className="whitespace-pre-wrap text-foreground">{item.body}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {item.senderName} · {new Date(item.createdAt).toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </div>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          placeholder="Add a private note…"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-navy/40"
+        />
+        <Button variant="outline" size="sm" disabled={savingNote || !note.trim()} onClick={() => void addNote()}>
+          {savingNote ? "Saving…" : "Add note"}
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-border p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">History</h3>
+        <div className="space-y-2">
+          {(detail.history || []).map((item) => (
+            <div key={item.id} className="text-sm">
+              <p className="font-medium text-foreground">{item.label}</p>
+              {item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
+              <p className="text-[11px] text-muted-foreground">
+                {item.actor} · {new Date(item.at).toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   ) : (
