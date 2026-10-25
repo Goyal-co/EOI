@@ -163,7 +163,7 @@ export default function PartnerDashboardPage() {
   );
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-5 pb-28 sm:space-y-6 sm:pb-24">
       {/* Hero: promotions first so they are never pushed below filters */}
       <PartnerPromoCarousel />
 

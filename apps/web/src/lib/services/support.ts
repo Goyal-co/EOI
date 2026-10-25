@@ -34,6 +34,9 @@ export async function createSupportTicketWithRetry(params: {
   projectId?: string | null;
   senderUserId: string;
   message: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentSize?: number | null;
 }): Promise<{ id: string; number: string; category: SupportTicketCategory; status: string }> {
   const now = new Date();
   let lastError: unknown;
@@ -52,6 +55,9 @@ export async function createSupportTicketWithRetry(params: {
             create: {
               senderUserId: params.senderUserId,
               body: params.message,
+              attachmentUrl: params.attachmentUrl || null,
+              attachmentName: params.attachmentName || null,
+              attachmentSize: params.attachmentSize || null,
               readByPartnerAt: now,
             },
           },

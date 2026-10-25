@@ -5,10 +5,10 @@ import {
   LayoutDashboard, Building2, UserCheck, FileText, Users, BookOpen,
 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useNotifications } from "@/lib/hooks";
 import { useGlobalSearch } from "@/components/use-global-search";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useRequirePartnerAccess } from "@/lib/use-require-partner";
 import { PartnerSupportWidget } from "@/components/partner-support-widget";
 
@@ -24,6 +24,7 @@ const allSidebarItems = [
 export function PartnerLayout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const { data: notifData } = useNotifications();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -48,7 +49,16 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
       : "Sales Executive";
   const profileName = session?.user?.name || (isOwner ? "Partner" : "Team Member");
 
-  const openSupport = useCallback(() => setSupportOpen(true), []);
+  const onDashboard = pathname === "/partner";
+
+  const openSupport = useCallback(() => {
+    setSupportOpen(true);
+    if (pathname !== "/partner") router.push("/partner");
+  }, [pathname, router]);
+
+  useEffect(() => {
+    if (pathname !== "/partner") setSupportOpen(false);
+  }, [pathname]);
 
   if (!allowed) return <div className="min-h-screen bg-background" />;
 
@@ -85,7 +95,9 @@ export function PartnerLayout({ children }: { children: React.ReactNode }) {
         <div className="min-w-0">{children}</div>
       </AppShell>
 
-      <PartnerSupportWidget open={supportOpen} onOpenChange={setSupportOpen} />
+      {onDashboard && (
+        <PartnerSupportWidget open={supportOpen} onOpenChange={setSupportOpen} />
+      )}
 
       <LogoutConfirmModal
         open={logoutOpen}

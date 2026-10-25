@@ -5,8 +5,8 @@ import { MessageCircle, X, Send, Headphones, ChevronLeft, Minimize2, ImagePlus }
 import { SUPPORT_CATEGORY_LABELS, type SupportTicketCategory } from "@goyal/types";
 import { cn } from "@goyal/ui";
 import { uploadViaPresign } from "@/lib/uploads/client-upload";
-
-const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+import { CHAT_MEDIA_ACCEPT, CHAT_MEDIA_MAX_BYTES, chatMediaKind } from "@/lib/uploads/chat-media";
+import { ChatAttachment } from "@/components/chat-attachment";
 
 const CATEGORIES = Object.entries(SUPPORT_CATEGORY_LABELS) as [SupportTicketCategory, string][];
 
@@ -116,23 +116,31 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
   const startCategory = (cat: SupportTicketCategory) => {
     setCategory(cat);
     setMessage("");
+    setPendingPhoto(null);
     setError(null);
     setView("compose");
   };
 
   const createTicket = async () => {
-    if (!category || !message.trim()) return;
+    if (!category || (!message.trim() && !pendingPhoto)) return;
     setSending(true);
     setError(null);
     try {
       const res = await fetch("/api/partner/support/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, message: message.trim() }),
+        body: JSON.stringify({
+          category,
+          message: message.trim(),
+          attachmentUrl: pendingPhoto?.url,
+          attachmentName: pendingPhoto?.name,
+          attachmentSize: pendingPhoto?.size,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not create ticket");
       setMessage("");
+      setPendingPhoto(null);
       await loadTickets();
       await loadThread(data.id);
     } catch (e) {
@@ -144,14 +152,14 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
 
   const onPhotoSelected = async (file: File | undefined) => {
     if (!file) return;
-    if (file.size > PHOTO_MAX_BYTES) {
-      setError("Photo must be 10 MB or smaller");
+    if (file.size > CHAT_MEDIA_MAX_BYTES) {
+      setError("File must be 100 MB or smaller");
       return;
     }
     setUploadingPhoto(true);
     setError(null);
     try {
-      const uploaded = await uploadViaPresign(file, "GALLERY");
+      const uploaded = await uploadViaPresign(file, "SUPPORT_MEDIA");
       setPendingPhoto({
         url: uploaded.fileUrl,
         name: uploaded.fileName,
@@ -270,6 +278,13 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept={CHAT_MEDIA_ACCEPT}
+              className="hidden"
+              onChange={(e) => void onPhotoSelected(e.target.files?.[0])}
+            />
             {view === "home" && (
               <div className="flex-1 space-y-4 overflow-y-auto p-4">
                 <div className="rounded-xl border border-border/70 bg-white p-4 shadow-sm">
@@ -334,16 +349,39 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                   rows={5}
                   className="w-full flex-1 resize-none rounded-xl border border-border bg-white p-3 text-sm outline-none focus:border-navy/40"
                 />
+                {pendingPhoto && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    {chatMediaKind(pendingPhoto.name) === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                    ) : null}
+                    <span className="min-w-0 flex-1 truncate">{pendingPhoto.name}</span>
+                    <button type="button" className="font-medium text-navy" onClick={() => setPendingPhoto(null)}>
+                      Remove
+                    </button>
+                  </div>
+                )}
                 {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-                <button
-                  type="button"
-                  disabled={sending || !message.trim()}
-                  onClick={createTicket}
-                  className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                  {sending ? "Sending…" : "Start conversation"}
-                </button>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto || sending}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-navy/20 bg-white px-3 text-sm font-semibold text-navy disabled:opacity-50"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    {uploadingPhoto ? "Uploading…" : "Media"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sending || uploadingPhoto || (!message.trim() && !pendingPhoto)}
+                    onClick={createTicket}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" />
+                    {sending ? "Sending…" : "Start conversation"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -355,7 +393,7 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                     {thread.categoryLabel} · {thread.status.replace("_", " ")}
                   </p>
                 </div>
-                <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                   {thread.messages.map((m) => (
                     <div
                       key={m.id}
@@ -368,14 +406,7 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                         )}
                       >
                         {m.attachmentUrl && (
-                          <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mt-1 block">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={m.attachmentUrl}
-                              alt={m.attachmentName || "Shared photo"}
-                              className="max-h-40 w-full rounded-lg object-cover"
-                            />
-                          </a>
+                          <ChatAttachment url={m.attachmentUrl} name={m.attachmentName} />
                         )}
                         {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
                         <p className={cn("mt-1 text-[10px]", m.mine ? "text-white/70" : "text-muted-foreground")}>
@@ -387,11 +418,13 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                   <div ref={bottomRef} />
                 </div>
                 {thread.status !== "RESOLVED" ? (
-                  <div className="border-t border-border bg-white p-3">
+                  <div className="shrink-0 border-t border-border bg-white p-3">
                     {pendingPhoto && (
                       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                        {chatMediaKind(pendingPhoto.name) === "image" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                        ) : null}
                         <span className="min-w-0 flex-1 truncate">{pendingPhoto.name}</span>
                         <button type="button" className="font-medium text-navy" onClick={() => setPendingPhoto(null)}>
                           Remove
@@ -399,21 +432,15 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
                       </div>
                     )}
                     <div className="flex items-center gap-2">
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={(e) => void onPhotoSelected(e.target.files?.[0])}
-                      />
                       <button
                         type="button"
                         disabled={uploadingPhoto || sending}
                         onClick={() => photoInputRef.current?.click()}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-navy disabled:opacity-50"
+                        className="inline-flex h-10 shrink-0 items-center gap-1 rounded-full border border-navy/20 bg-white px-3 text-xs font-semibold text-navy disabled:opacity-50"
                         aria-label="Attach photo"
                       >
                         <ImagePlus className="h-4 w-4" />
+                        Media
                       </button>
                       <input
                         value={reply}

@@ -33,9 +33,9 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 
 const ROLE_ALLOWED_DOC_TYPES: Record<UserRole, DocumentType[]> = {
   CUSTOMER: ["CHEQUE", "PAN", "AADHAAR"],
-  CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD", "EOI_DOCUMENT", "GALLERY"],
-  CP_TEAM_MEMBER: ["CHEQUE", "EOI_DOCUMENT", "GALLERY"],
-  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION"],
+  CHANNEL_PARTNER: ["RERA_CERT", "GST_CERT", "CHEQUE", "PAN", "VISITING_CARD", "EOI_DOCUMENT", "GALLERY", "SUPPORT_MEDIA"],
+  CP_TEAM_MEMBER: ["CHEQUE", "EOI_DOCUMENT", "GALLERY", "SUPPORT_MEDIA"],
+  ADMIN: ["BROCHURE", "COST_SHEET", "FLOOR_PLAN", "BANNER", "GALLERY", "CREATIVE", "WALKTHROUGH", "LOCATION", "SUPPORT_MEDIA"],
 };
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -44,7 +44,14 @@ const MAX_SIZE_BY_TYPE: Partial<Record<DocumentType, number>> = {
   BROCHURE: 20 * 1024 * 1024,
   FLOOR_PLAN: 20 * 1024 * 1024,
   WALKTHROUGH: 100 * 1024 * 1024,
+  SUPPORT_MEDIA: 100 * 1024 * 1024,
 };
+
+function isSupportMediaMime(mimeType: string): boolean {
+  const mime = mimeType.toLowerCase();
+  if (mime === "image/svg+xml" || mime.includes("xml") || mime.includes("html")) return false;
+  return mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/");
+}
 
 export function getMaxFileSizeForType(type: DocumentType): number {
   return MAX_SIZE_BY_TYPE[type] ?? MAX_FILE_SIZE;
@@ -116,8 +123,12 @@ export class DocumentService {
   }
 
   static validateFile(type: DocumentType, mimeType: string, size: number): string | null {
-    const allowed = ALLOWED_TYPES[type];
-    if (!allowed?.includes(mimeType)) return `Invalid file type for ${type}`;
+    if (type === "SUPPORT_MEDIA") {
+      if (!isSupportMediaMime(mimeType)) return "Upload an image, video, or audio file";
+    } else {
+      const allowed = ALLOWED_TYPES[type];
+      if (!allowed?.includes(mimeType)) return `Invalid file type for ${type}`;
+    }
     const maxSize = getMaxFileSizeForType(type);
     if (size <= 0 || size > maxSize) {
       const limitMb = Math.round(maxSize / (1024 * 1024));

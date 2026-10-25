@@ -16,6 +16,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   ...(useStandalone ? { output: "standalone" as const } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
+  },
   transpilePackages: [
     "@goyal/ui",
     "@goyal/auth",

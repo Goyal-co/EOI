@@ -21,11 +21,35 @@ const EXT_MIME: Record<string, string> = {
   webm: "video/webm",
   mov: "video/quicktime",
   qt: "video/quicktime",
+  avi: "video/x-msvideo",
+  mkv: "video/x-matroska",
+  mpeg: "video/mpeg",
+  mpg: "video/mpeg",
+  m4v: "video/mp4",
+  "3gp": "video/3gpp",
+  ogv: "video/ogg",
+  wmv: "video/x-ms-wmv",
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  jfif: "image/jpeg",
   webp: "image/webp",
   gif: "image/gif",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+  avif: "image/avif",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  aac: "audio/aac",
+  m4a: "audio/mp4",
+  flac: "audio/flac",
+  wma: "audio/x-ms-wma",
+  aiff: "audio/aiff",
+  opus: "audio/opus",
   pdf: "application/pdf",
 };
 
@@ -56,7 +80,7 @@ export function inferMimeType(file: File): string {
   if (fromExt) {
     const extFamily = fromExt.split("/")[0];
     const typeFamily = fromType.split("/")[0];
-    if (extFamily !== typeFamily && (extFamily === "image" || extFamily === "video" || fromExt === "application/pdf")) {
+    if (extFamily !== typeFamily && (extFamily === "image" || extFamily === "video" || extFamily === "audio" || fromExt === "application/pdf")) {
       return fromExt;
     }
   }
@@ -67,7 +91,7 @@ export async function uploadViaPresign(file: File, type: DocumentType): Promise<
   const mimeType = inferMimeType(file);
 
   if (mimeType === "application/octet-stream") {
-    throw new Error("Unsupported or unknown file type. Use JPG, PNG, WebP, PDF, MP4, WebM, or MOV.");
+    throw new Error("Upload an image, video, or audio file.");
   }
 
   const form = new FormData();
