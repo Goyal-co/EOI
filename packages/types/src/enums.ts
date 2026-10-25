@@ -105,6 +105,7 @@ export const DocumentType = {
   CREATIVE: "CREATIVE",
   WALKTHROUGH: "WALKTHROUGH",
   LOCATION: "LOCATION",
+  SUPPORT_MEDIA: "SUPPORT_MEDIA",
 } as const;
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
 

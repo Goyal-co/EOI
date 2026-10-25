@@ -89,6 +89,9 @@ export const POST = withApiRoute("partner.support.tickets.create", async (req: R
     projectId: parsed.data.projectId,
     senderUserId: session!.user.id,
     message: parsed.data.message,
+    attachmentUrl: parsed.data.attachmentUrl,
+    attachmentName: parsed.data.attachmentName,
+    attachmentSize: parsed.data.attachmentSize,
   });
 
   await notifyAdminsSupportTicketCreated({

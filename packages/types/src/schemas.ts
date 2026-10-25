@@ -540,13 +540,41 @@ const supportMessageBodySchema = z
   .max(4000)
   .transform((v) => v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ""));
 
-export const supportTicketCreateSchema = z.object({
-  category: supportTicketCategorySchema,
-  message: supportMessageBodySchema,
-  projectId: z.string().optional().nullable(),
-  // Client priority is ignored server-side (defaults to MEDIUM).
-  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-});
+const supportAttachmentUrlSchema = z.preprocess(
+  (v) => (typeof v === "string" && !v.trim() ? null : v),
+  storedFileUrlSchema
+    .refine((u) => u.startsWith("/api/files/") || u.startsWith("https://"), {
+      message: "Invalid attachment URL",
+    })
+    .optional()
+    .nullable(),
+);
+
+export const supportTicketCreateSchema = z
+  .object({
+    category: supportTicketCategorySchema,
+    message: z
+      .string()
+      .max(4000)
+      .optional()
+      .nullable()
+      .transform((v) => (v || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim()),
+    projectId: z.string().optional().nullable(),
+    // Client priority is ignored server-side (defaults to MEDIUM).
+    priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+    attachmentUrl: supportAttachmentUrlSchema,
+    attachmentName: z.string().max(255).optional().nullable(),
+    attachmentSize: z.number().int().positive().max(100 * 1024 * 1024).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.message && !data.attachmentUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Message or photo is required",
+        path: ["message"],
+      });
+    }
+  });
 
 export const supportMessageCreateSchema = z
   .object({
@@ -557,17 +585,9 @@ export const supportMessageCreateSchema = z
       .nullable()
       .transform((v) => (v || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim()),
     /** Only same-origin stored uploads — never arbitrary external URLs. */
-    attachmentUrl: z.preprocess(
-      (v) => (typeof v === "string" && !v.trim() ? null : v),
-      storedFileUrlSchema
-        .refine((u) => u.startsWith("/api/files/") || u.startsWith("https://"), {
-          message: "Invalid attachment URL",
-        })
-        .optional()
-        .nullable(),
-    ),
+    attachmentUrl: supportAttachmentUrlSchema,
     attachmentName: z.string().max(255).optional().nullable(),
-    attachmentSize: z.number().int().positive().max(25 * 1024 * 1024).optional().nullable(),
+    attachmentSize: z.number().int().positive().max(100 * 1024 * 1024).optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (!data.body && !data.attachmentUrl) {

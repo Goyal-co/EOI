@@ -10,8 +10,8 @@ import {
 import { publicPortalPath } from "@/lib/portal-paths";
 import Link from "next/link";
 import { uploadViaPresign } from "@/lib/uploads/client-upload";
-
-const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+import { CHAT_MEDIA_ACCEPT, CHAT_MEDIA_MAX_BYTES, chatMediaKind } from "@/lib/uploads/chat-media";
+import { ChatAttachment } from "@/components/chat-attachment";
 
 type StatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED";
 
@@ -222,13 +222,13 @@ export default function AdminSupportPage() {
 
   const onPhotoSelected = async (file: File | undefined) => {
     if (!file) return;
-    if (file.size > PHOTO_MAX_BYTES) {
-      addToast({ type: "error", title: "Photo too large", message: "Use an image under 10 MB" });
+    if (file.size > CHAT_MEDIA_MAX_BYTES) {
+      addToast({ type: "error", title: "File too large", message: "Use a file under 100 MB" });
       return;
     }
     setUploadingPhoto(true);
     try {
-      const uploaded = await uploadViaPresign(file, "GALLERY");
+      const uploaded = await uploadViaPresign(file, "SUPPORT_MEDIA");
       setPendingPhoto({ url: uploaded.fileUrl, name: uploaded.fileName, size: uploaded.fileSize });
     } catch (e) {
       addToast({ type: "error", title: "Upload failed", message: (e as Error).message });
@@ -400,14 +400,7 @@ export default function AdminSupportPage() {
                   )}
                 >
                   {m.attachmentUrl && (
-                    <a href={m.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={m.attachmentUrl}
-                        alt={m.attachmentName || "Shared photo"}
-                        className="max-h-48 w-full rounded-lg object-cover"
-                      />
-                    </a>
+                    <ChatAttachment url={m.attachmentUrl} name={m.attachmentName} />
                   )}
                   {m.body ? <p className="whitespace-pre-wrap">{m.body}</p> : null}
                   <p className="mt-1 text-[10px] text-muted-foreground">
@@ -418,11 +411,13 @@ export default function AdminSupportPage() {
             ))}
             <div ref={bottomRef} />
           </div>
-          <div className="border-t border-border bg-white p-3">
+          <div className="shrink-0 border-t border-border bg-white p-3">
             {pendingPhoto && (
               <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                {chatMediaKind(pendingPhoto.name) === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={pendingPhoto.url} alt="" className="h-10 w-10 rounded object-cover" />
+                ) : null}
                 <span className="min-w-0 flex-1 truncate">{pendingPhoto.name}</span>
                 <button type="button" className="font-medium text-navy" onClick={() => setPendingPhoto(null)}>
                   Remove
@@ -433,7 +428,7 @@ export default function AdminSupportPage() {
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept={CHAT_MEDIA_ACCEPT}
                 className="hidden"
                 onChange={(e) => void onPhotoSelected(e.target.files?.[0])}
               />
@@ -441,10 +436,11 @@ export default function AdminSupportPage() {
                 type="button"
                 disabled={uploadingPhoto || sending || detail.status === "RESOLVED"}
                 onClick={() => photoInputRef.current?.click()}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-navy disabled:opacity-50"
+                className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full border border-navy/20 bg-white px-3 text-xs font-semibold text-navy disabled:opacity-50"
                 aria-label="Attach photo"
               >
                 <ImagePlus className="h-4 w-4" />
+                Media
               </button>
               <input
                 value={reply}

@@ -5,7 +5,7 @@ import { inferMimeType } from "@/lib/uploads/client-upload";
 import type { DocumentType, UserRole } from "@goyal/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const ADMIN_UPLOAD_LIMIT = 100;
 const ADMIN_UPLOAD_WINDOW_MS = 15 * 60 * 1000;

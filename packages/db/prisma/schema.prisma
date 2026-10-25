@@ -81,6 +81,7 @@ enum DocumentType {
   CREATIVE
   WALKTHROUGH
   LOCATION
+  SUPPORT_MEDIA
 }
 
 /// Who completes / submits the EOI application for a project.
