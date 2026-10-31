@@ -59,7 +59,11 @@ export function ProjectAssetsPanel({ assets, tab, downloadApiPrefix }: ProjectAs
       <Card className="p-6">
         <EmptyState
           title="No files available"
-          description={`${tabLabel} files will appear here when uploaded by admin`}
+          description={
+            tab === "creatives"
+              ? "Ask admin to upload files under Manage Assets → Creative on this existing project. No need to recreate the project."
+              : `${tabLabel} files will appear here when uploaded by admin`
+          }
         />
       </Card>
     );

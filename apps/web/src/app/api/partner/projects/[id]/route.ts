@@ -24,21 +24,22 @@ export const GET = withApiRoute("partner.projects.id.get", async (_req: Request,
 
   const cpId = session!.user.cpId!;
 
-  const access = await prisma.cPProjectAccess.findFirst({
-    where: { cpId, projectId: id },
+  // Existing and new projects use the same path — never require recreating a project.
+  const project = await prisma.project.findUnique({
+    where: { id },
     include: {
-      project: {
-        include: {
-          // Never filter by eoiStatus — creatives/gallery/etc. must show for OPEN and CLOSED.
-          assets: { orderBy: { createdAt: "desc" } },
-        },
-      },
+      // Never filter by eoiStatus — creatives/gallery/etc. must show for OPEN and CLOSED.
+      assets: { orderBy: { createdAt: "desc" } },
     },
   });
+  if (!project) return apiError("Project not found", 404);
 
-  if (!access?.project) return apiError("Project not found or not assigned", 404);
+  const access = await prisma.cPProjectAccess.findFirst({
+    where: { cpId, projectId: id },
+    select: { id: true },
+  });
+  if (!access) return apiError("Project is not assigned to your partner account", 403);
 
-  const project = access.project;
   const leadWhere = await leadScopeWhereAsync(session!);
   const myLeads = await prisma.lead.count({
     where: { cpId, projectId: id, ...leadWhere },
