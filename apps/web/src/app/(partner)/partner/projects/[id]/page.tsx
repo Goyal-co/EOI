@@ -56,8 +56,14 @@ export default function ProjectDetailPage() {
     () => ((listQuery.data as Project[] | undefined) || []).find((p) => p.id === id),
     [listQuery.data, id],
   );
-  // Prefer dedicated detail payload; fall back to list so OPEN/CLOSED projects still open if detail hiccups.
+  // Prefer dedicated detail payload; fall back to list so existing OPEN/CLOSED projects still open.
   const project = (detailQuery.data as Project | undefined) || projectFromList;
+  const stillLoading =
+    !project &&
+    (detailQuery.isLoading ||
+      detailQuery.isFetching ||
+      listQuery.isLoading ||
+      listQuery.isFetching);
 
   const creativeCount = useMemo(
     () => (project?.assets || []).filter((a) => String(a.type || "").toUpperCase() === "CREATIVE").length,
@@ -68,7 +74,7 @@ export default function ProjectDetailPage() {
     router.replace(`/partner/projects/${id}?tab=${tab}`, { scroll: false });
   };
 
-  if (detailQuery.isLoading && listQuery.isLoading && !project) {
+  if (stillLoading) {
     return (
       <div className="space-y-6">
         <CardSkeleton />
@@ -84,7 +90,7 @@ export default function ProjectDetailPage() {
         description={
           detailQuery.error instanceof Error
             ? detailQuery.error.message
-            : "This project may not be assigned to you"
+            : "This project may not be assigned to you. Existing projects do not need to be recreated — ask admin to confirm project access and Creative uploads."
         }
         actionLabel="Back to Projects"
         onAction={() => router.push("/partner/projects")}

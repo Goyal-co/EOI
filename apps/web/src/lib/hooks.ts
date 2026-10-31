@@ -82,8 +82,9 @@ export function usePartnerProject(projectId: string | undefined) {
     queryKey: ["partner", "projects", "detail", id],
     queryFn: () => fetcher<PartnerProject>(`/api/partner/projects/${encodeURIComponent(id!)}`),
     enabled: Boolean(id),
-    staleTime: 30_000,
-    retry: 1,
+    staleTime: 15_000,
+    retry: 2,
+    refetchOnMount: "always",
   });
 }
 
