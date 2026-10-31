@@ -28,12 +28,22 @@ export function normalizeReraNumber(value: string): string {
   return value.normalize("NFKC").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+/** Full RERA: at least 10 alphanumerics after normalize, with both letters and digits. */
+export function isFullReraNumber(value: string): boolean {
+  const normalized = normalizeReraNumber(value);
+  if (normalized.length < 10) return false;
+  return /[A-Z]/.test(normalized) && /[0-9]/.test(normalized);
+}
+
+const fullReraNumberSchema = z
+  .string()
+  .trim()
+  .min(1, "RERA number is required")
+  .refine(isFullReraNumber, "Enter the full RERA registration number");
+
 export const cpRegisterStep2Schema = z.object({
   companyName: z.string().min(2, "Company / Individual name is required"),
-  reraNumber: z
-    .string()
-    .min(5, "RERA number is required")
-    .refine((v) => normalizeReraNumber(v).length >= 5, "RERA number is required"),
+  reraNumber: fullReraNumberSchema,
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format"),
   gstNumber: z.string().optional(),
 });
@@ -209,11 +219,7 @@ export const partnerProfileSchema = z.object({
   name: z.string().min(2).optional(),
   mobile: z.string().regex(/^[6-9]\d{9}$/).optional(),
   companyName: z.string().optional(),
-  reraNumber: z
-    .string()
-    .min(5)
-    .refine((v) => normalizeReraNumber(v).length >= 5, "RERA number is required")
-    .optional(),
+  reraNumber: fullReraNumberSchema.optional(),
   panNumber: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).optional(),
   gstNumber: z.string().optional(),
   officeAddress: z.string().optional(),

@@ -174,7 +174,7 @@ export default function PartnerRegisterPage() {
               label="RERA Number"
               value={step2.reraNumber}
               onChange={(e) => setStep2({ ...step2, reraNumber: e.target.value })}
-              placeholder="Min 5 characters"
+              placeholder="Full RERA registration number"
             />
             <Input
               label="PAN Number"

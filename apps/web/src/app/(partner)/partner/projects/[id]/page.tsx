@@ -7,7 +7,7 @@ import {
   PageHeader, Tabs, TabsList, TabsTrigger, TabsContent,
 } from "@goyal/ui";
 import { MapPin, Calendar } from "lucide-react";
-import { usePartnerProjects } from "@/lib/hooks";
+import { usePartnerProject, usePartnerProjects } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
 import { ProjectAssetsPanel, type ProjectAssetTab } from "@/components/project-assets-panel";
@@ -42,25 +42,33 @@ interface Project {
 const ASSET_TABS = ["walkthrough", "brochure", "floor-plans", "cost-sheet", "gallery", "creatives"] as const;
 
 export default function ProjectDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data, isLoading } = usePartnerProjects();
+  const detailQuery = usePartnerProject(id);
+  const listQuery = usePartnerProjects();
   const [eoiOpen, setEoiOpen] = useState(false);
   const [punchOpen, setPunchOpen] = useState(false);
 
   const activeTab = searchParams.get("tab") || "overview";
+  const projectFromList = useMemo(
+    () => ((listQuery.data as Project[] | undefined) || []).find((p) => p.id === id),
+    [listQuery.data, id],
+  );
+  // Prefer dedicated detail payload; fall back to list so OPEN/CLOSED projects still open if detail hiccups.
+  const project = (detailQuery.data as Project | undefined) || projectFromList;
 
-  const project = useMemo(
-    () => (data as Project[] | undefined)?.find((p) => p.id === id),
-    [data, id]
+  const creativeCount = useMemo(
+    () => (project?.assets || []).filter((a) => String(a.type || "").toUpperCase() === "CREATIVE").length,
+    [project?.assets],
   );
 
   const setTab = (tab: string) => {
     router.replace(`/partner/projects/${id}?tab=${tab}`, { scroll: false });
   };
 
-  if (isLoading) {
+  if (detailQuery.isLoading && listQuery.isLoading && !project) {
     return (
       <div className="space-y-6">
         <CardSkeleton />
@@ -73,7 +81,11 @@ export default function ProjectDetailPage() {
     return (
       <EmptyState
         title="Project not found"
-        description="This project may not be assigned to you"
+        description={
+          detailQuery.error instanceof Error
+            ? detailQuery.error.message
+            : "This project may not be assigned to you"
+        }
         actionLabel="Back to Projects"
         onAction={() => router.push("/partner/projects")}
       />
@@ -145,7 +157,7 @@ export default function ProjectDetailPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex h-auto flex-wrap gap-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="walkthrough">Walkthrough</TabsTrigger>
           <TabsTrigger value="location">Location</TabsTrigger>
@@ -153,7 +165,9 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="floor-plans">Floor Plans</TabsTrigger>
           <TabsTrigger value="cost-sheet">Cost Sheet</TabsTrigger>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
-          <TabsTrigger value="creatives">Creatives</TabsTrigger>
+          <TabsTrigger value="creatives">
+            Creatives{creativeCount > 0 ? ` (${creativeCount})` : ""}
+          </TabsTrigger>
           <TabsTrigger value="faqs">FAQs</TabsTrigger>
         </TabsList>
 

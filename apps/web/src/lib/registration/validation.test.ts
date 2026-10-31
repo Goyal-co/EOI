@@ -40,5 +40,7 @@ describe("registration validation", () => {
   it("validates step 2 via zod", () => {
     expect(cpRegisterStep2Schema.safeParse(validStep2).success).toBe(true);
     expect(cpRegisterStep2Schema.safeParse({ ...validStep2, reraNumber: "123" }).success).toBe(false);
+    expect(cpRegisterStep2Schema.safeParse({ ...validStep2, reraNumber: "1234567890" }).success).toBe(false);
+    expect(cpRegisterStep2Schema.safeParse({ ...validStep2, reraNumber: "P52100012345" }).success).toBe(true);
   });
 });

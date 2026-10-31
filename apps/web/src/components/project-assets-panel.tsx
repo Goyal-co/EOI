@@ -38,7 +38,7 @@ interface ProjectAssetsPanelProps {
 
 function getAssetsForTab(assets: ProjectAssetItem[], tab: ProjectAssetTab) {
   const type = ASSET_TYPE_MAP[tab];
-  return assets.filter((a) => a.type === type);
+  return assets.filter((a) => String(a.type || "").toUpperCase() === type);
 }
 
 function assetPreviewKind(asset: ProjectAssetItem): AssetPreviewKind {

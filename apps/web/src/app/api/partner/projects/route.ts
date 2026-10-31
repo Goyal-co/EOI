@@ -1,7 +1,15 @@
 import { prisma } from "@goyal/db";
 import { withPartnerAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
-import { leadScopeWhere } from "@/lib/partner-scope";
+import { leadScopeWhereAsync } from "@/lib/partner-scope";
+
+async function safeBannerUrl(url: string | null | undefined) {
+  try {
+    return await resolveProjectBannerUrl(url);
+  } catch {
+    return url || null;
+  }
+}
 
 export const GET = withApiRoute("partner.projects.get", async (req: Request) => {
   const { error, session } = await withPartnerAuth();
@@ -40,17 +48,25 @@ export const GET = withApiRoute("partner.projects.get", async (req: Request) => 
     );
   }
 
+  const leadWhere = await leadScopeWhereAsync(session!);
   const access = await prisma.cPProjectAccess.findMany({
     where: { cpId },
     include: {
       project: {
         include: {
-          assets: true,
-          _count: { select: { leads: { where: { cpId, ...leadScopeWhere(session!) } } } },
+          // All asset types for OPEN and CLOSED — do not filter by eoiStatus.
+          assets: { orderBy: { createdAt: "desc" } },
         },
       },
     },
   });
+
+  const leadCounts = await prisma.lead.groupBy({
+    by: ["projectId"],
+    where: { cpId, ...leadWhere },
+    _count: { _all: true },
+  });
+  const leadsByProject = new Map(leadCounts.map((row) => [row.projectId, row._count._all]));
 
   return apiResponse(
     await Promise.all(
@@ -64,16 +80,22 @@ export const GET = withApiRoute("partner.projects.get", async (req: Request) => 
         eoiFormFiller: a.project.eoiFormFiller,
         status: a.project.status,
         tags: a.project.tags ?? [],
-        bannerUrl: await resolveProjectBannerUrl(a.project.bannerUrl),
-        locationImageUrl: await resolveProjectBannerUrl(a.project.locationImageUrl),
+        bannerUrl: await safeBannerUrl(a.project.bannerUrl),
+        locationImageUrl: await safeBannerUrl(a.project.locationImageUrl),
         description: a.project.description,
         amenities: a.project.amenities,
         possessionDate: a.project.possessionDate,
         faqs: (a.project.faqs as Array<{ question: string; answer: string }> | null) || [],
         unitPreferences: a.project.unitPreferences,
-        assets: a.project.assets,
-        myLeads: a.project._count.leads,
-      }))
-    )
+        assets: a.project.assets.map((asset) => ({
+          id: asset.id,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileUrl: asset.fileUrl,
+          fileSize: asset.fileSize,
+        })),
+        myLeads: leadsByProject.get(a.project.id) ?? 0,
+      })),
+    ),
   );
 });
