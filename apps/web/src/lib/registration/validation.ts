@@ -1,4 +1,10 @@
-import { cpRegisterStep1Schema, cpRegisterStep2Schema, type CPRegisterStep1, type CPRegisterStep2 } from "@goyal/types";
+import {
+  cpRegisterStep1Schema,
+  cpRegisterStep2Schema,
+  isFullReraNumber,
+  type CPRegisterStep1,
+  type CPRegisterStep2,
+} from "@goyal/types";
 
 export function isRegistrationStepValid(step: 0 | 1, step1: CPRegisterStep1, step2: CPRegisterStep2): boolean {
   if (step === 0) return cpRegisterStep1Schema.safeParse(step1).success;
@@ -20,7 +26,9 @@ export function getRegistrationStepHints(step: 0 | 1, step1: CPRegisterStep1, st
   if (!step2.companyName || step2.companyName.length < 2) {
     hints.push("Company / Individual name is required");
   }
-  if (step2.reraNumber.length < 5) hints.push("RERA number must be at least 5 characters");
+  if (!isFullReraNumber(step2.reraNumber || "")) {
+    hints.push("Enter the full RERA registration number (letters and digits)");
+  }
   if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(step2.panNumber)) {
     hints.push("PAN must match format ABCDE1234F (5 letters, 4 digits, 1 letter)");
   }

@@ -1,11 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { documentUploadSchema, normalizeReraNumber, projectAssetSchema, projectSchema } from "./schemas";
+import {
+  cpRegisterStep2Schema,
+  documentUploadSchema,
+  isFullReraNumber,
+  normalizeReraNumber,
+  projectAssetSchema,
+  projectSchema,
+} from "./schemas";
 
 describe("normalizeReraNumber", () => {
   it("treats spaced/hyphenated/cased variants as the same key", () => {
     expect(normalizeReraNumber("prm/ka/rera/1251")).toBe("PRMKARERA1251");
     expect(normalizeReraNumber("PRM-KA-RERA-1251")).toBe("PRMKARERA1251");
     expect(normalizeReraNumber("  Prm Ka Rera 1251 ")).toBe("PRMKARERA1251");
+  });
+});
+
+describe("isFullReraNumber", () => {
+  it("accepts complete RERA values", () => {
+    expect(isFullReraNumber("P52100012345")).toBe(true);
+    expect(isFullReraNumber("PRM/KA/RERA/1251")).toBe(true);
+  });
+
+  it("rejects short or incomplete values", () => {
+    expect(isFullReraNumber("12345")).toBe(false);
+    expect(isFullReraNumber("ABCDE")).toBe(false);
+    expect(isFullReraNumber("P52100")).toBe(false);
+    expect(cpRegisterStep2Schema.safeParse({
+      companyName: "Test Agency",
+      reraNumber: "12345",
+      panNumber: "ABCDE1234F",
+    }).success).toBe(false);
   });
 });
 

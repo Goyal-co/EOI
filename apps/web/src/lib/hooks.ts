@@ -75,6 +75,18 @@ export function usePartnerProjects(options?: { slim?: boolean }) {
   });
 }
 
+/** Single assigned project with full assets (CREATIVE included for OPEN and CLOSED). */
+export function usePartnerProject(projectId: string | undefined) {
+  const id = Array.isArray(projectId) ? projectId[0] : projectId;
+  return useQuery({
+    queryKey: ["partner", "projects", "detail", id],
+    queryFn: () => fetcher<PartnerProject>(`/api/partner/projects/${encodeURIComponent(id!)}`),
+    enabled: Boolean(id),
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
 export function usePartnerFosNames(enabled = true) {
   return useQuery({
     queryKey: ["partner", "leads", "fosNames"],
