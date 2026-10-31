@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Button, StatusBadge, Card, CardSkeleton, EmptyState, formatCurrency, formatDate,
   PageHeader, Tabs, TabsList, TabsTrigger, TabsContent,
@@ -11,6 +11,26 @@ import { usePartnerProject, usePartnerProjects } from "@/lib/hooks";
 import { SubmitEOIModal } from "@/components/submit-eoi-modal";
 import { PunchLeadModal } from "@/components/punch-lead-modal";
 import { ProjectAssetsPanel, type ProjectAssetTab } from "@/components/project-assets-panel";
+
+function resolveProjectRouteId(
+  paramsId: string | string[] | undefined,
+  pathname: string,
+  searchProjectId: string | null,
+) {
+  const fromParams = decodeURIComponent(
+    String(Array.isArray(paramsId) ? paramsId[0] : paramsId || ""),
+  ).trim();
+  if (fromParams && fromParams !== "undefined" && fromParams !== "null") return fromParams;
+
+  const fromQuery = decodeURIComponent(String(searchProjectId || "")).trim();
+  if (fromQuery && fromQuery !== "undefined" && fromQuery !== "null") return fromQuery;
+
+  const parts = pathname.split("/").filter(Boolean);
+  const projectsIdx = parts.findIndex((p) => p === "projects");
+  const fromPath = projectsIdx >= 0 ? decodeURIComponent(parts[projectsIdx + 1] || "").trim() : "";
+  if (fromPath && fromPath !== "undefined" && fromPath !== "null") return fromPath;
+  return "";
+}
 
 interface ProjectAsset {
   id: string;
@@ -43,27 +63,46 @@ const ASSET_TABS = ["walkthrough", "brochure", "floor-plans", "cost-sheet", "gal
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const pathname = usePathname() || "";
   const router = useRouter();
   const searchParams = useSearchParams();
-  const detailQuery = usePartnerProject(id);
-  const listQuery = usePartnerProjects();
+  const id = resolveProjectRouteId(params?.id, pathname, searchParams.get("projectId") || searchParams.get("id"));
+  // List is the reliable source for existing projects; by-id refreshes assets/creatives.
+  const listQuery = usePartnerProjects({ refetchOnMount: "always" });
+  const detailQuery = usePartnerProject(id || undefined);
   const [eoiOpen, setEoiOpen] = useState(false);
   const [punchOpen, setPunchOpen] = useState(false);
 
   const activeTab = searchParams.get("tab") || "overview";
-  const projectFromList = useMemo(
-    () => ((listQuery.data as Project[] | undefined) || []).find((p) => p.id === id),
-    [listQuery.data, id],
-  );
-  // Prefer dedicated detail payload; fall back to list so existing OPEN/CLOSED projects still open.
-  const project = (detailQuery.data as Project | undefined) || projectFromList;
-  const stillLoading =
-    !project &&
-    (detailQuery.isLoading ||
-      detailQuery.isFetching ||
-      listQuery.isLoading ||
-      listQuery.isFetching);
+  const projectFromList = useMemo(() => {
+    const rows = (listQuery.data as Project[] | undefined) || [];
+    const needle = id.toLowerCase();
+    return (
+      rows.find((p) => p.id === id)
+      || rows.find((p) => p.id?.toLowerCase() === needle)
+      || rows.find((p) => p.name?.toLowerCase() === needle)
+    );
+  }, [listQuery.data, id]);
+  const projectFromDetail = detailQuery.data as Project | undefined;
+  // Prefer freshest assets from by-id when present; otherwise use list (existing projects).
+  const project = projectFromDetail || projectFromList;
+
+  const refetchDetail = detailQuery.refetch;
+  const refetchList = listQuery.refetch;
+  useEffect(() => {
+    if (activeTab !== "creatives") return;
+    void refetchDetail();
+    void refetchList();
+    const timer = setInterval(() => {
+      void refetchDetail();
+      void refetchList();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [activeTab, refetchDetail, refetchList]);
+
+  const listSettled = !listQuery.isLoading && !listQuery.isFetching;
+  const detailSettled = !detailQuery.isLoading && !detailQuery.isFetching;
+  const stillLoading = Boolean(id) && !project && (!listSettled || !detailSettled);
 
   const creativeCount = useMemo(
     () => (project?.assets || []).filter((a) => String(a.type || "").toUpperCase() === "CREATIVE").length,
@@ -73,6 +112,17 @@ export default function ProjectDetailPage() {
   const setTab = (tab: string) => {
     router.replace(`/partner/projects/${id}?tab=${tab}`, { scroll: false });
   };
+
+  if (!id) {
+    return (
+      <EmptyState
+        title="Project not found"
+        description="This link is missing the project id. Open the project again from Projects — existing projects already have ids; you do not need to recreate them."
+        actionLabel="Back to Projects"
+        onAction={() => router.push("/partner/projects")}
+      />
+    );
+  }
 
   if (stillLoading) {
     return (
@@ -84,14 +134,14 @@ export default function ProjectDetailPage() {
   }
 
   if (!project) {
+    const errMsg =
+      (detailQuery.error instanceof Error && detailQuery.error.message)
+      || (listQuery.error instanceof Error && listQuery.error.message)
+      || "This project may not be assigned to your partner account. Ask admin to assign it — you do not need to recreate the project.";
     return (
       <EmptyState
         title="Project not found"
-        description={
-          detailQuery.error instanceof Error
-            ? detailQuery.error.message
-            : "This project may not be assigned to you. Existing projects do not need to be recreated — ask admin to confirm project access and Creative uploads."
-        }
+        description={errMsg}
         actionLabel="Back to Projects"
         onAction={() => router.push("/partner/projects")}
       />

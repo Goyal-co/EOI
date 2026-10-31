@@ -219,7 +219,10 @@ export default function PartnerDashboardPage() {
                 eoiStatus={project.eoiStatus}
                 tags={project.tags}
                 totalLeads={project.myLeads}
-                onViewDetails={() => router.push(`/partner/projects/${project.id}`)}
+                onViewDetails={() => {
+                  if (!project.id) return;
+                  router.push(`/partner/projects/${encodeURIComponent(project.id)}?projectId=${encodeURIComponent(project.id)}`);
+                }}
                 onSubmitEOI={project.eoiStatus === "OPEN" ? () => setEoiModal({
                   open: true,
                   projectId: project.id,
