@@ -63,7 +63,7 @@ export function usePartnerAnalytics() {
   });
 }
 
-export function usePartnerProjects(options?: { slim?: boolean }) {
+export function usePartnerProjects(options?: { slim?: boolean; refetchOnMount?: boolean | "always" }) {
   const slim = options?.slim === true;
   return useQuery({
     queryKey: ["partner", "projects", slim ? "slim" : "full"],
@@ -71,7 +71,8 @@ export function usePartnerProjects(options?: { slim?: boolean }) {
       fetcher<PartnerProject[]>(
         slim ? "/api/partner/projects?slim=1" : "/api/partner/projects",
       ),
-    staleTime: slim ? 60_000 : 30_000,
+    staleTime: slim ? 60_000 : 15_000,
+    refetchOnMount: options?.refetchOnMount,
   });
 }
 
@@ -79,10 +80,10 @@ export function usePartnerProjects(options?: { slim?: boolean }) {
 export function usePartnerProject(projectId: string | undefined) {
   const id = Array.isArray(projectId) ? projectId[0] : projectId;
   return useQuery({
-    queryKey: ["partner", "projects", "detail", id],
-    queryFn: () => fetcher<PartnerProject>(`/api/partner/projects/${encodeURIComponent(id!)}`),
+    queryKey: ["partner", "projects", "by-id", id],
+    queryFn: () => fetcher<PartnerProject>(`/api/partner/projects?id=${encodeURIComponent(id!)}`),
     enabled: Boolean(id),
-    staleTime: 15_000,
+    staleTime: 10_000,
     retry: 2,
     refetchOnMount: "always",
   });

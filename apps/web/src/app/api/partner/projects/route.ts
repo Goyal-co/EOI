@@ -1,15 +1,6 @@
 import { prisma } from "@goyal/db";
-import { withPartnerAuth, apiResponse, requireApprovedCP, withApiRoute } from "@/lib/api";
-import { resolveProjectBannerUrl } from "@/lib/project-banner";
-import { leadScopeWhereAsync } from "@/lib/partner-scope";
-
-async function safeBannerUrl(url: string | null | undefined) {
-  try {
-    return await resolveProjectBannerUrl(url);
-  } catch {
-    return url || null;
-  }
-}
+import { withPartnerAuth, apiResponse, apiError, requireApprovedCP, withApiRoute } from "@/lib/api";
+import { getAssignedPartnerProject, listAssignedPartnerProjects } from "@/lib/services/partner-projects";
 
 export const GET = withApiRoute("partner.projects.get", async (req: Request) => {
   const { error, session } = await withPartnerAuth();
@@ -18,11 +9,13 @@ export const GET = withApiRoute("partner.projects.get", async (req: Request) => 
   if (cpError) return cpError;
 
   const cpId = session!.user.cpId!;
-  const slim = new URL(req.url).searchParams.get("slim") === "1";
+  const url = new URL(req.url);
+  const slim = url.searchParams.get("slim") === "1";
+  const projectId = (url.searchParams.get("id") || "").trim();
 
   if (slim) {
     const access = await prisma.cPProjectAccess.findMany({
-      where: { cpId },
+      where: { cpId, ...(projectId ? { projectId } : {}) },
       select: {
         project: {
           select: {
@@ -36,66 +29,27 @@ export const GET = withApiRoute("partner.projects.get", async (req: Request) => 
         },
       },
     });
-    return apiResponse(
-      access.map((a) => ({
-        id: a.project.id,
-        name: a.project.name,
-        eoiStatus: a.project.eoiStatus,
-        eoiFormFiller: a.project.eoiFormFiller,
-        status: a.project.status,
-        unitPreferences: a.project.unitPreferences,
-      })),
-    );
+    const rows = access.map((a) => ({
+      id: a.project.id,
+      name: a.project.name,
+      eoiStatus: a.project.eoiStatus,
+      eoiFormFiller: a.project.eoiFormFiller,
+      status: a.project.status,
+      unitPreferences: a.project.unitPreferences,
+    }));
+    if (projectId) {
+      const one = rows[0];
+      if (!one) return apiError("Project not found or not assigned", 404);
+      return apiResponse(one);
+    }
+    return apiResponse(rows);
   }
 
-  const leadWhere = await leadScopeWhereAsync(session!);
-  const access = await prisma.cPProjectAccess.findMany({
-    where: { cpId },
-    include: {
-      project: {
-        include: {
-          // All asset types for OPEN and CLOSED — do not filter by eoiStatus.
-          assets: { orderBy: { createdAt: "desc" } },
-        },
-      },
-    },
-  });
+  if (projectId) {
+    const result = await getAssignedPartnerProject(session!, projectId);
+    if (result.error || !result.project) return apiError(result.error || "Project not found", result.status);
+    return apiResponse(result.project);
+  }
 
-  const leadCounts = await prisma.lead.groupBy({
-    by: ["projectId"],
-    where: { cpId, ...leadWhere },
-    _count: { _all: true },
-  });
-  const leadsByProject = new Map(leadCounts.map((row) => [row.projectId, row._count._all]));
-
-  return apiResponse(
-    await Promise.all(
-      access.map(async (a) => ({
-        id: a.project.id,
-        name: a.project.name,
-        location: a.project.location,
-        locationLink: a.project.locationLink,
-        startingPrice: Number(a.project.startingPrice),
-        eoiStatus: a.project.eoiStatus,
-        eoiFormFiller: a.project.eoiFormFiller,
-        status: a.project.status,
-        tags: a.project.tags ?? [],
-        bannerUrl: await safeBannerUrl(a.project.bannerUrl),
-        locationImageUrl: await safeBannerUrl(a.project.locationImageUrl),
-        description: a.project.description,
-        amenities: a.project.amenities,
-        possessionDate: a.project.possessionDate,
-        faqs: (a.project.faqs as Array<{ question: string; answer: string }> | null) || [],
-        unitPreferences: a.project.unitPreferences,
-        assets: a.project.assets.map((asset) => ({
-          id: asset.id,
-          type: asset.type,
-          fileName: asset.fileName,
-          fileUrl: asset.fileUrl,
-          fileSize: asset.fileSize,
-        })),
-        myLeads: leadsByProject.get(a.project.id) ?? 0,
-      })),
-    ),
-  );
+  return apiResponse(await listAssignedPartnerProjects(session!));
 });
