@@ -57,13 +57,29 @@ export function inlinePreviewUrl(apiPath: string): string {
   return `${path}?${params.toString()}`;
 }
 
+/** Public project media (/api/files/.../brochure|creative|...) — no partner download gate. */
+export function publicFilesUrl(
+  fileUrl: string | null | undefined,
+  disposition: "inline" | "attachment" = "inline",
+): string | null {
+  if (!fileUrl) return null;
+  if (fileUrl.startsWith("/api/files/")) {
+    const base = fileUrl.split("?")[0];
+    return disposition === "attachment" ? `${base}?download=1` : `${base}?inline=1`;
+  }
+  if (/^https?:\/\//i.test(fileUrl) && !fileUrl.includes("amazonaws.com")) {
+    return fileUrl;
+  }
+  return null;
+}
+
 export async function fetchPresignedDownload(apiPath: string): Promise<{
   downloadUrl: string;
   fileName: string;
   mimeType?: string | null;
   type?: string;
 }> {
-  const res = await fetch(apiPath);
+  const res = await fetch(apiPath, { credentials: "include" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Failed to get download URL");
@@ -71,11 +87,37 @@ export async function fetchPresignedDownload(apiPath: string): Promise<{
   return res.json();
 }
 
-export async function openPresignedAsset(apiPath: string): Promise<void> {
-  window.open(inlinePreviewUrl(apiPath), "_blank", "noopener,noreferrer");
+export async function openPresignedAsset(apiPath: string, fileUrl?: string | null): Promise<void> {
+  const direct = publicFilesUrl(fileUrl, "inline");
+  if (direct) {
+    window.open(direct, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const preview = inlinePreviewUrl(apiPath);
+  try {
+    const res = await fetch(preview, { credentials: "include" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Failed to open file (${res.status})`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, "_blank", "noopener,noreferrer");
+    // Revoke after the tab has a chance to load the blob.
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch {
+    // Fallback: navigate directly (cookie auth on same origin).
+    window.open(preview, "_blank", "noopener,noreferrer");
+  }
 }
 
-export async function downloadPresignedAsset(apiPath: string): Promise<void> {
+export async function downloadPresignedAsset(apiPath: string, fileUrl?: string | null): Promise<void> {
+  const direct = publicFilesUrl(fileUrl, "attachment");
+  if (direct) {
+    window.open(direct, "_blank", "noopener,noreferrer");
+    return;
+  }
   const { downloadUrl } = await fetchPresignedDownload(apiPath);
   window.open(downloadUrl, "_blank", "noopener,noreferrer");
 }

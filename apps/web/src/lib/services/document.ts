@@ -341,13 +341,16 @@ export class DocumentService {
     if (isBlobUrl(fileUrl)) {
       const url = await blobGetDownloadUrl(fileUrl);
       const upstream = await fetch(url);
+      if (!upstream.ok) {
+        throw new Error(`Blob storage returned ${upstream.status}`);
+      }
       const headers = new Headers(upstream.headers);
       this.applyResponseHeaders(headers, {
         fileName: inferredName,
         mimeType: opts?.mimeType,
         disposition: opts?.disposition,
       });
-      return new Response(upstream.body, { status: upstream.status, headers });
+      return new Response(upstream.body, { status: 200, headers });
     }
     const object = await this.getS3Object(fileUrl);
     const body = object.Body;

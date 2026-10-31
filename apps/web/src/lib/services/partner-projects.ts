@@ -2,12 +2,21 @@ import { prisma } from "@goyal/db";
 import type { Session } from "next-auth";
 import { resolveProjectBannerUrl } from "@/lib/project-banner";
 import { leadScopeWhereAsync } from "@/lib/partner-scope";
+import { DocumentService } from "@/lib/services/document";
 
 async function safeBannerUrl(url: string | null | undefined) {
   try {
     return await resolveProjectBannerUrl(url);
   } catch {
     return url || null;
+  }
+}
+
+async function safeAssetUrl(url: string) {
+  try {
+    return (await DocumentService.resolveAccessibleUrl(url)) || url;
+  } catch {
+    return url;
   }
 }
 
@@ -60,13 +69,16 @@ async function mapPartnerProject(
     possessionDate: project.possessionDate,
     faqs: (project.faqs as Array<{ question: string; answer: string }> | null) || [],
     unitPreferences: project.unitPreferences,
-    assets: project.assets.map((asset) => ({
-      id: asset.id,
-      type: asset.type,
-      fileName: asset.fileName,
-      fileUrl: asset.fileUrl,
-      fileSize: asset.fileSize,
-    })),
+    assets: await Promise.all(
+      project.assets.map(async (asset) => ({
+        id: asset.id,
+        type: asset.type,
+        fileName: asset.fileName,
+        // Prefer /api/files/... for public project media (creative/gallery/etc.)
+        fileUrl: await safeAssetUrl(asset.fileUrl),
+        fileSize: asset.fileSize,
+      })),
+    ),
     myLeads,
   };
 }
