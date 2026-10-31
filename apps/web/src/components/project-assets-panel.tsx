@@ -1,15 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, EmptyState, cn } from "@goyal/ui";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import {
   openPresignedAsset,
   downloadPresignedAsset,
   inlinePreviewUrl,
+  publicFilesUrl,
   resolvePreviewKind,
   type AssetPreviewKind,
 } from "@/lib/files/open-asset";
+
+/** Authenticated preview for img/video — same cookies as fetch, clearer than bare img src. */
+function useAuthedObjectUrl(apiPath: string, enabled = true) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setFailed(false);
+    setSrc(null);
+
+    (async () => {
+      try {
+        const res = await fetch(inlinePreviewUrl(apiPath), { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      } catch {
+        if (!cancelled) setFailed(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [apiPath, enabled]);
+
+  return { src, failed, setFailed };
+}
 
 export interface ProjectAssetItem {
   id: string;
@@ -114,11 +149,11 @@ function FileAssetRow({
         <p className="text-xs text-muted-foreground mt-0.5">{asset.type.replace("_", " ")}</p>
       </div>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+        <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath, asset.fileUrl)}>
           <ExternalLink className="h-4 w-4" />
           View
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => downloadPresignedAsset(apiPath)}>
+        <Button variant="ghost" size="sm" onClick={() => downloadPresignedAsset(apiPath, asset.fileUrl)}>
           <Download className="h-4 w-4" />
         </Button>
       </div>
@@ -134,9 +169,11 @@ function GalleryAssetCard({
   downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
-  const previewUrl = inlinePreviewUrl(apiPath);
   const kind = assetPreviewKind(asset);
-  const [failed, setFailed] = useState(false);
+  const directUrl = publicFilesUrl(asset.fileUrl, "inline");
+  const needsObjectUrl = !directUrl && (kind === "image" || kind === "pdf");
+  const { src: authedSrc, failed, setFailed } = useAuthedObjectUrl(apiPath, needsObjectUrl);
+  const src = directUrl || authedSrc;
 
   if (failed) {
     return (
@@ -145,7 +182,7 @@ function GalleryAssetCard({
           <FileText className="h-5 w-5 shrink-0" />
           <span className="truncate">{asset.fileName}</span>
         </div>
-        <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+        <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath, asset.fileUrl)}>
           <ExternalLink className="h-4 w-4" />
           View
         </Button>
@@ -164,15 +201,15 @@ function GalleryAssetCard({
               <p className="text-xs text-muted-foreground">{kind === "pdf" ? "PDF" : "File"}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath, asset.fileUrl)}>
             <ExternalLink className="h-4 w-4" />
             View
           </Button>
         </div>
-        {kind === "pdf" ? (
+        {kind === "pdf" && src ? (
           <iframe
             title={asset.fileName}
-            src={`${previewUrl}#toolbar=0&navpanes=0`}
+            src={src}
             className="w-full h-48 border-t border-border bg-white"
           />
         ) : null}
@@ -183,15 +220,19 @@ function GalleryAssetCard({
   return (
     <button
       type="button"
-      onClick={() => openPresignedAsset(apiPath)}
+      onClick={() => openPresignedAsset(apiPath, asset.fileUrl)}
       className="block rounded-lg overflow-hidden border border-border hover:shadow-md transition-shadow text-left w-full"
     >
-      <img
-        src={previewUrl}
-        alt={asset.fileName}
-        className="h-48 w-full object-cover bg-muted"
-        onError={() => setFailed(true)}
-      />
+      {src ? (
+        <img
+          src={src}
+          alt={asset.fileName}
+          className="h-48 w-full object-cover bg-muted"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="h-48 w-full bg-muted animate-pulse" />
+      )}
       <p className="p-2 text-xs text-muted-foreground truncate">{asset.fileName}</p>
     </button>
   );
@@ -205,26 +246,28 @@ function WalkthroughAssetCard({
   downloadApiPrefix: ProjectAssetsPanelProps["downloadApiPrefix"];
 }) {
   const apiPath = `${downloadApiPrefix}/${asset.id}/download`;
-  const previewUrl = inlinePreviewUrl(apiPath);
-  const [failed, setFailed] = useState(false);
+  const directUrl = publicFilesUrl(asset.fileUrl, "inline");
+  const { src: authedSrc, failed } = useAuthedObjectUrl(apiPath, !directUrl);
+  const src = directUrl || authedSrc;
 
   return (
     <div className="rounded-lg overflow-hidden border border-border">
-      {!failed ? (
+      {src && !failed ? (
         <video
-          src={previewUrl}
+          src={src}
           controls
           className="w-full max-h-96 bg-black"
-          onError={() => setFailed(true)}
         />
-      ) : (
+      ) : failed ? (
         <div className="flex items-center justify-between p-4">
           <p className="text-sm font-medium truncate">{asset.fileName}</p>
-          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath)}>
+          <Button variant="outline" size="sm" onClick={() => openPresignedAsset(apiPath, asset.fileUrl)}>
             <ExternalLink className="h-4 w-4" />
             View
           </Button>
         </div>
+      ) : (
+        <div className="h-48 w-full bg-muted animate-pulse" />
       )}
       <p className="p-2 text-xs text-muted-foreground truncate">{asset.fileName}</p>
     </div>

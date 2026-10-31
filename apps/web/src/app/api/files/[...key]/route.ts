@@ -10,10 +10,14 @@ const PUBLIC_FOLDERS = new Set([
   "gallery",
   "brochure",
   "floor_plan",
+  "floor-plan",
+  "floorplan",
   "creative",
+  "creatives",
   "walkthrough",
   "location",
   "cost_sheet",
+  "cost-sheet",
 ]);
 
 const ROLE_FOLDERS = new Set(["admin", "customer", "channel_partner"]);
