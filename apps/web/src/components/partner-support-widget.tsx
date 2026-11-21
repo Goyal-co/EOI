@@ -44,13 +44,34 @@ interface PartnerSupportWidgetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+function hasPartnerFormModalOpen() {
+  // @goyal/ui Modal overlay — punch lead / EOI / other form dialogs.
+  return Boolean(document.querySelector(".fixed.inset-0.z-\\[200\\]"));
+}
+
 export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: PartnerSupportWidgetProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [formModalOpen, setFormModalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = (v: boolean) => {
     onOpenChange?.(v);
     if (controlledOpen === undefined) setInternalOpen(v);
   };
+
+  // Hide FAB while punch/EOI (or any) Modal is open so Continue is never covered.
+  useEffect(() => {
+    const sync = () => {
+      const blocked = hasPartnerFormModalOpen();
+      setFormModalOpen(blocked);
+      if (blocked) setOpen(false);
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => mo.disconnect();
+    // setOpen is stable enough for this mount lifecycle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [view, setView] = useState<View>("home");
   const [category, setCategory] = useState<SupportTicketCategory | null>(null);
@@ -203,13 +224,15 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
 
   const unreadTotal = tickets.reduce((n, t) => n + (t.unreadCount || 0), 0);
 
+  if (formModalOpen) return null;
+
   return (
     <>
       {!open && (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-8 right-[5.25rem] z-[250] rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-navy shadow-md"
+          className="fixed bottom-8 right-[5.25rem] z-[90] rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-navy shadow-md"
         >
           Need help?
         </button>
@@ -218,7 +241,8 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "fixed bottom-5 right-5 z-[250] flex h-14 w-14 items-center justify-center rounded-full bg-navy text-white shadow-lg transition hover:bg-navy/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold",
+          // Below Modal (z-200); also unmounted while form modals are open.
+          "fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full bg-navy text-white shadow-lg transition hover:bg-navy/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold",
           "pb-[env(safe-area-inset-bottom)]",
         )}
         aria-label={open ? "Close support chat" : "Open support chat"}
@@ -234,7 +258,7 @@ export function PartnerSupportWidget({ open: controlledOpen, onOpenChange }: Par
       {open && (
         <div
           className={cn(
-            "fixed z-[260] flex flex-col overflow-hidden border border-border bg-white shadow-2xl",
+            "fixed z-[95] flex flex-col overflow-hidden border border-border bg-white shadow-2xl",
             "bottom-[5.5rem] right-4 left-4 max-h-[min(560px,calc(100dvh-7rem))] rounded-2xl sm:left-auto sm:w-[380px]",
             "pb-[env(safe-area-inset-bottom)]",
           )}
